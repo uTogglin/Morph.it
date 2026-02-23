@@ -229,7 +229,7 @@ class mcMapHandler implements FormatHandler {
             }
         }
 
-        if (inputFormat.internal == 'mcmap' && outputFormat.mime == CommonFormats.PNG.mime) {
+        else if (inputFormat.internal == 'mcmap' && outputFormat.mime == CommonFormats.PNG.mime) {
 
             for (const file of inputFiles) {
 
@@ -267,7 +267,7 @@ class mcMapHandler implements FormatHandler {
             }
         }
 
-        if (inputFormat.internal == "mcmap" && outputFormat.internal == "rgb") {
+        else if (inputFormat.internal == "mcmap" && outputFormat.internal == "rgb") {
             for (const file of inputFiles) {
                 try {
                     const result = pako.ungzip(file.bytes);
@@ -291,8 +291,11 @@ class mcMapHandler implements FormatHandler {
                 }
             }
         }
-        if (inputFormat.internal == "rgb" && outputFormat.internal == "mcmap") {
+        else if (inputFormat.internal == "rgb" && outputFormat.internal == "mcmap") {
             throw new Error("Not Implemented")
+        }
+        else {
+            throw new Error("Invalid input-output.")
         }
         return outputFiles;
 
