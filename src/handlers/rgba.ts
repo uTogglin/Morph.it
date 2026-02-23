@@ -156,7 +156,9 @@ class rgbaHandler implements FormatHandler {
                         try {
                             color = [new_file_bytes[0+i*4],new_file_bytes[1+i*4],new_file_bytes[2+i*4]];
                         }
-                        catch {}
+                        catch {
+                            color = [0,0,0];
+                        }
 
                         rgba.push(...color, new_file_bytes[3+i*4]);
                     }
