@@ -93,7 +93,7 @@ class rgbaHandler implements FormatHandler {
 
                 if (outputFormat.internal == "rgba") {
                     // Fill in with 255 in alpha channel
-                    let writer_array = new Uint8Array(new_file_bytes.length * (1/0.75)); // this might cause floating point imprecision errors at super big file sizes
+                    let writer_array = new Uint8Array(new_file_bytes.length + Math.floor(new_file_bytes.length / 3)); // this might cause floating point imprecision errors at super big file sizes
                     let writer_counter = 0;
                     for (let i = 0; i < new_file_bytes.length; i++) {
                         if (i % 3 == 2) {
@@ -123,7 +123,7 @@ class rgbaHandler implements FormatHandler {
 
                 if (outputFormat.internal == "rgb") {
                     // Remove every fourth, byte! Every fourth, byte!
-                    let writer_array = new Uint8Array(new_file_bytes.length * 0.75); // this might cause floating point imprecision errors at super big file sizes
+                    let writer_array = new Uint8Array(new_file_bytes.length - Math.floor(new_file_bytes.length / 4)); // this might cause floating point imprecision errors at super big file sizes
                     let writer_counter = 0;
                     for (let i = 0; i < new_file_bytes.length; i++) {
                         if (i % 4 != 3) {
