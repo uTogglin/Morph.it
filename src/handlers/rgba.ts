@@ -14,7 +14,7 @@ class rgbaHandler implements FormatHandler {
 
     async init () {
         this.supportedFormats = [
-            CommonFormats.PNG.supported("png", true, true, false),
+            CommonFormats.PNG.supported("png", true, true, true),
             {
                 name: "Raw red, green, and blue samples",
                 format: "rgb",
