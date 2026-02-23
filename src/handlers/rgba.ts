@@ -24,7 +24,7 @@ class rgbaHandler implements FormatHandler {
                 to: true,
                 internal: "rgb",
                 category: "image",
-                lossless: true
+                lossless: false
             },
             {
                 name: "Raw red, green, blue, and alpha samples",
@@ -61,7 +61,23 @@ class rgbaHandler implements FormatHandler {
 
             if (inputFormat.mime == CommonFormats.PNG.mime) {
                 if (outputFormat.internal == "rgba") {
-                    // Fill in
+                    // Some code copied from mcmap.ts
+                    const blob = new Blob([file.bytes as BlobPart], { type: inputFormat.mime });
+
+                    const image = new Image();
+                    await new Promise((resolve, reject) => {
+                        image.addEventListener("load", resolve);
+                        image.addEventListener("error", reject);
+                        image.src = URL.createObjectURL(blob);
+                    });
+
+                    this.#canvas.width = image.width;
+                    this.#canvas.height = image.height;
+                    this.#ctx.drawImage(image, 0, 0);
+
+                    const pixels = this.#ctx.getImageData(0, 0, this.#canvas.width, this.#canvas.height);
+
+                    new_file_bytes = new Uint8Array(pixels.data);
                 }
                 else if (outputFormat.internal == "rgb") {
                     throw new Error("This handler doesn't need to convert png to rgb, let ImageMagik do that.");
