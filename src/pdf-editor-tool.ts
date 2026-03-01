@@ -405,6 +405,8 @@ export function initPdfEditorTool() {
   }
 
   /* ── Thumbnails ── */
+  let dragFromIdx: number | null = null;
+
   async function renderThumbnails() {
     if (!pdfDoc) return;
     thumbnailsContainer.innerHTML = "";
@@ -423,6 +425,8 @@ export function initPdfEditorTool() {
       const item = document.createElement("div");
       item.className = "pde-thumb" + (displayIdx === currentPage ? " active" : "") + (entry.source === "merge" ? " pde-thumb-merge" : "");
       item.dataset.page = String(displayIdx);
+      item.dataset.idx = String(idx);
+      item.draggable = true;
 
       const img = document.createElement("img");
       img.src = c.toDataURL();
@@ -464,6 +468,44 @@ export function initPdfEditorTool() {
         rmBtn.addEventListener("click", (e) => { e.stopPropagation(); removePage(idx); });
         controls.appendChild(rmBtn);
       }
+
+      // Drag-and-drop events
+      item.addEventListener("dragstart", (e) => {
+        dragFromIdx = idx;
+        item.classList.add("pde-thumb-dragging");
+        e.dataTransfer!.effectAllowed = "move";
+      });
+      item.addEventListener("dragend", () => {
+        dragFromIdx = null;
+        item.classList.remove("pde-thumb-dragging");
+        document.querySelectorAll(".pde-thumb-drop-above, .pde-thumb-drop-below").forEach(el => {
+          el.classList.remove("pde-thumb-drop-above", "pde-thumb-drop-below");
+        });
+      });
+      item.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        if (dragFromIdx === null || dragFromIdx === idx) return;
+        e.dataTransfer!.dropEffect = "move";
+        const rect = item.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        item.classList.toggle("pde-thumb-drop-above", e.clientY < midY);
+        item.classList.toggle("pde-thumb-drop-below", e.clientY >= midY);
+      });
+      item.addEventListener("dragleave", () => {
+        item.classList.remove("pde-thumb-drop-above", "pde-thumb-drop-below");
+      });
+      item.addEventListener("drop", (e) => {
+        e.preventDefault();
+        item.classList.remove("pde-thumb-drop-above", "pde-thumb-drop-below");
+        if (dragFromIdx === null || dragFromIdx === idx) return;
+        const rect = item.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        let toIdx = e.clientY < midY ? idx : idx + 1;
+        // Adjust if dragging from before the drop target
+        if (dragFromIdx < toIdx) toIdx--;
+        if (dragFromIdx !== toIdx) movePage(dragFromIdx, toIdx);
+        dragFromIdx = null;
+      });
 
       item.appendChild(img);
       item.appendChild(controls);

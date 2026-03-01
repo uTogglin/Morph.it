@@ -4063,6 +4063,15 @@ body[data-tool="image"] #convert-button { display: none !important; }
 .pde-thumb-merge {
   border-left: 3px solid var(--accent);
 }
+.pde-thumb-dragging {
+  opacity: 0.4;
+}
+.pde-thumb-drop-above {
+  box-shadow: 0 -2px 0 0 var(--accent);
+}
+.pde-thumb-drop-below {
+  box-shadow: 0 2px 0 0 var(--accent);
+}
 .pde-tool-disabled {
   opacity: 0.4;
   pointer-events: none;
