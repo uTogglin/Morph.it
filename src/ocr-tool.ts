@@ -499,6 +499,9 @@ export function initOcrTool() {
       ttsProgressText.textContent = "Done!";
       setTimeout(() => { ttsProgress.classList.add("hidden"); }, 400);
       ttsOverlay.classList.remove("hidden");
+      const topBar = document.getElementById("top-bar");
+      if (topBar) document.documentElement.style.setProperty("--top-bar-h", topBar.offsetHeight + "px");
+      document.body.classList.add("ocr-tts-active");
 
     } catch (err: any) {
       console.error("[OCR TTS] Error:", err);
@@ -510,8 +513,7 @@ export function initOcrTool() {
     }
   });
 
-  // Close overlay (Try Another)
-  ttsCloseBtn.addEventListener("click", () => {
+  function closeTtsOverlay() {
     ttsAudio.pause();
     ttsAudio.currentTime = 0;
     cancelAnimationFrame(hlRaf);
@@ -523,6 +525,12 @@ export function initOcrTool() {
     sentenceWordSpans = [];
     ttsSentence.textContent = "";
     ttsOverlay.classList.add("hidden");
+    document.body.classList.remove("ocr-tts-active");
+  }
+
+  // Close overlay (Try Another)
+  ttsCloseBtn.addEventListener("click", () => {
+    closeTtsOverlay();
   });
 
   // Download audio
@@ -535,4 +543,7 @@ export function initOcrTool() {
   });
 
   updateExtractBtn();
+
+  /** Stop TTS audio and close overlay — called when navigating away. */
+  return { stopTts: closeTtsOverlay };
 }

@@ -436,6 +436,7 @@ const ui = {
 // ── Home page / tool navigation ──────────────────────────────────────────────
 /** Which tool view is active, or null when on the home page */
 let activeTool: "convert" | "compress" | "image" | "video" | "speech" | "summarize" | "ocr" | "pdf-editor" | null = null;
+let ocrTool: { stopTts: () => void };
 
 const compressPage = document.querySelector("#compress-page") as HTMLElement;
 const imagePage = document.querySelector("#image-page") as HTMLElement;
@@ -449,6 +450,7 @@ function showHomePage() {
   // Clean up tool state when navigating away
   if (activeTool === "image") imgResetState();
   if (activeTool === "video") vidResetState();
+  if (activeTool === "ocr") ocrTool.stopTts();
   activeTool = null;
   document.body.classList.add("tool-view-hidden");
   document.body.removeAttribute("data-tool");
@@ -467,6 +469,7 @@ function showToolView(tool: "convert" | "compress" | "image" | "video" | "speech
   // Clean up tool state when switching away
   if (activeTool === "image" && tool !== "image") imgResetState();
   if (activeTool === "video" && tool !== "video") vidResetState();
+  if (activeTool === "ocr" && tool !== "ocr") ocrTool.stopTts();
   activeTool = tool;
   document.body.classList.remove("tool-view-hidden");
   document.body.setAttribute("data-tool", tool);
@@ -536,7 +539,7 @@ initSpeechTool();
 initSummarizeTool();
 
 // Initialize OCR tool
-initOcrTool();
+ocrTool = initOcrTool();
 
 // Initialize PDF Editor tool
 initPdfEditorTool();

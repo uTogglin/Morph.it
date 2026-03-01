@@ -3646,6 +3646,15 @@ body[data-tool="image"] #convert-button { display: none !important; }
   flex-direction: column;
   animation: ocrFadeIn 0.25s ease;
 }
+/* When TTS overlay is open, pin the navbar above it */
+body.ocr-tts-active #top-bar {
+  position: fixed;
+  left: 0; right: 0; top: 0;
+  z-index: 1100;
+}
+body.ocr-tts-active .ocr-tts-overlay {
+  padding-top: var(--top-bar-h, 61px);
+}
 .ocr-tts-overlay.hidden { display: none; }
 @keyframes ocrFadeIn {
   from { opacity: 0; }
