@@ -573,7 +573,7 @@ export function initPdfEditorTool() {
             // Already has an edit object on canvas — let user click it normally
           } else {
             // Create a cover rect matching the background color
-            const bgColor = sampleBgColor(hitItem.canvasLeft, hitItem.canvasTop, hitItem.width, hitItem.height);
+            const bgColor = hitItem.bgColor || sampleBgColor(hitItem.canvasLeft, hitItem.canvasTop, hitItem.width, hitItem.height);
             const editId = `textedit-${++textEditCounter}`;
 
             const coverRect = new Rect({
@@ -917,7 +917,7 @@ export function initPdfEditorTool() {
   function findTextItemAtPoint(canvasX: number, canvasY: number): {
     str: string; pdfX: number; pdfY: number; canvasLeft: number; canvasTop: number;
     width: number; height: number; fontFamily: string; fontSize: number; fontSizePt: number;
-    fontName: string; color: string; bold: boolean; italic: boolean;
+    fontName: string; color: string; bold: boolean; italic: boolean; bgColor?: string;
   } | null {
     const textContent = pageTextContent.get(currentPage);
     if (!textContent || !textContent._vpTransform) return null;
@@ -1008,6 +1008,7 @@ export function initPdfEditorTool() {
           width: Math.max(textW, 20) + 2, height: coverH,
           fontFamily, fontSize: Math.max(8, fontSize), fontSizePt: pdfPts,
           fontName, color, bold, italic,
+          bgColor: item._ocrBgColor || undefined,
         };
       }
     }
@@ -1043,11 +1044,11 @@ export function initPdfEditorTool() {
     return "#ffffff";
   }
 
-  /* ── Visual font matching via canvas pixel comparison ── */
+  /* ── Width-calibrated font detection via pixel comparison ── */
   const FONT_CANDIDATES = [
     // Sans-serif
     "Arial", "Helvetica", "Verdana", "Tahoma", "Trebuchet MS", "Segoe UI",
-    "Calibri", "Lucida Sans Unicode", "Open Sans",
+    "Calibri", "Lucida Sans Unicode",
     // Serif
     "Times New Roman", "Georgia", "Palatino Linotype", "Garamond",
     "Book Antiqua", "Cambria",
@@ -1055,25 +1056,45 @@ export function initPdfEditorTool() {
     "Courier New", "Consolas", "Lucida Console",
   ];
 
-  function detectFontByPixels(
+  /** Binary-search the fontSize where measureText(text).width ≈ targetW */
+  function calibrateFontSize(
+    ctx: CanvasRenderingContext2D, text: string, targetW: number,
+    font: string, bold: boolean, italic: boolean,
+  ): number {
+    const weight = bold ? "bold" : "normal";
+    const style = italic ? "italic" : "normal";
+    let lo = 4, hi = targetW; // fontSize can't exceed targetW for any reasonable text
+    for (let i = 0; i < 16; i++) {
+      const mid = (lo + hi) / 2;
+      ctx.font = `${style} ${weight} ${mid}px "${font}"`;
+      if (ctx.measureText(text).width < targetW) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+  }
+
+  /**
+   * Detect font + correct fontSize for an OCR line by:
+   * 1. For each candidate font, calibrate fontSize so rendered width matches source width
+   * 2. Render at calibrated size, compare pixel luminance against source
+   * 3. Return the best-matching font and its calibrated pixel size
+   */
+  function detectFontForLine(
     srcCanvas: HTMLCanvasElement, text: string,
     bbox: { x0: number; y0: number; x1: number; y1: number },
-    fontSize: number, bold: boolean, italic: boolean,
-    candidates: string[],
-  ): string {
-    const w = bbox.x1 - bbox.x0;
-    const h = bbox.y1 - bbox.y0;
-    if (w < 8 || h < 8 || text.length < 2) return "Arial";
+    bold: boolean, italic: boolean, candidates: string[],
+  ): { font: string; fontSizePx: number } {
+    const bw = Math.round(bbox.x1 - bbox.x0);
+    const bh = Math.round(bbox.y1 - bbox.y0);
+    const fallback = { font: "Arial", fontSizePx: bh * 0.92 };
+    if (bw < 10 || bh < 8 || text.length < 2) return fallback;
 
-    // Crop source region luminance
+    // Crop source luminance
     const srcCtx = srcCanvas.getContext("2d")!;
-    const srcData = srcCtx.getImageData(bbox.x0, bbox.y0, w, h).data;
-    const srcLum = new Float32Array(w * h);
-    for (let i = 0; i < w * h; i++) {
+    const srcData = srcCtx.getImageData(Math.round(bbox.x0), Math.round(bbox.y0), bw, bh).data;
+    const srcLum = new Float32Array(bw * bh);
+    for (let i = 0; i < bw * bh; i++) {
       srcLum[i] = srcData[i * 4] * 0.299 + srcData[i * 4 + 1] * 0.587 + srcData[i * 4 + 2] * 0.114;
     }
-
-    // Normalize source to 0-1 range (text = 0, bg = 1 typically)
     let srcMin = 255, srcMax = 0;
     for (let i = 0; i < srcLum.length; i++) {
       if (srcLum[i] < srcMin) srcMin = srcLum[i];
@@ -1082,17 +1103,24 @@ export function initPdfEditorTool() {
     const srcRange = srcMax - srcMin || 1;
 
     const tmpCanvas = document.createElement("canvas");
-    tmpCanvas.width = w;
-    tmpCanvas.height = h;
+    tmpCanvas.width = bw;
+    tmpCanvas.height = bh;
     const tmpCtx = tmpCanvas.getContext("2d")!;
+    const calCanvas = document.createElement("canvas");
+    const calCtx = calCanvas.getContext("2d")!;
 
     let bestFont = "Arial";
+    let bestSize = bh * 0.92;
     let bestScore = Infinity;
 
     for (const font of candidates) {
-      tmpCtx.clearRect(0, 0, w, h);
+      // Step 1: calibrate fontSize so rendered width matches source width
+      const fontSize = calibrateFontSize(calCtx, text, bw, font, bold, italic);
+
+      // Step 2: render at calibrated size, compare pixels
+      tmpCtx.clearRect(0, 0, bw, bh);
       tmpCtx.fillStyle = "#ffffff";
-      tmpCtx.fillRect(0, 0, w, h);
+      tmpCtx.fillRect(0, 0, bw, bh);
       const weight = bold ? "bold" : "normal";
       const style = italic ? "italic" : "normal";
       tmpCtx.font = `${style} ${weight} ${fontSize}px "${font}"`;
@@ -1100,11 +1128,10 @@ export function initPdfEditorTool() {
       tmpCtx.textBaseline = "top";
       tmpCtx.fillText(text, 0, 0);
 
-      const tmpData = tmpCtx.getImageData(0, 0, w, h).data;
+      const tmpData = tmpCtx.getImageData(0, 0, bw, bh).data;
       let diff = 0;
-      for (let i = 0; i < w * h; i++) {
+      for (let i = 0; i < bw * bh; i++) {
         const tLum = tmpData[i * 4] * 0.299 + tmpData[i * 4 + 1] * 0.587 + tmpData[i * 4 + 2] * 0.114;
-        // Normalize both to 0-1
         const s = (srcLum[i] - srcMin) / srcRange;
         const t = tLum / 255;
         diff += (s - t) * (s - t);
@@ -1112,9 +1139,39 @@ export function initPdfEditorTool() {
       if (diff < bestScore) {
         bestScore = diff;
         bestFont = font;
+        bestSize = fontSize;
       }
     }
-    return bestFont;
+    return { font: bestFont, fontSizePx: bestSize };
+  }
+
+  /** Sample background color for an OCR line by reading pixels above/below it */
+  function sampleOcrBgColor(srcCanvas: HTMLCanvasElement, bbox: { x0: number; y0: number; x1: number; y1: number }): string {
+    const ctx = srcCanvas.getContext("2d")!;
+    let totalR = 0, totalG = 0, totalB = 0, count = 0;
+    const w = bbox.x1 - bbox.x0;
+    // Sample 10 points each from 5px above and 5px below the line
+    for (const sy of [bbox.y0 - 5, bbox.y1 + 5]) {
+      if (sy < 0 || sy >= srcCanvas.height) continue;
+      for (let i = 0; i < 10; i++) {
+        const sx = Math.round(bbox.x0 + (w * i) / 9);
+        if (sx < 0 || sx >= srcCanvas.width) continue;
+        const pd = ctx.getImageData(sx, Math.round(sy), 1, 1).data;
+        // Only count light pixels (background), skip if it looks like text
+        const brightness = pd[0] * 0.299 + pd[1] * 0.587 + pd[2] * 0.114;
+        if (brightness > 128) {
+          totalR += pd[0]; totalG += pd[1]; totalB += pd[2];
+          count++;
+        }
+      }
+    }
+    if (count > 0) {
+      const r = Math.round(totalR / count);
+      const g = Math.round(totalG / count);
+      const b = Math.round(totalB / count);
+      return "#" + [r, g, b].map(c => c.toString(16).padStart(2, "0")).join("");
+    }
+    return "#ffffff";
   }
 
   /* ── OCR fallback for image-only pages ── */
@@ -1141,10 +1198,6 @@ export function initPdfEditorTool() {
         const lineW = x1 - x0;
         if (lineH < 4 || lineW < 4) continue;
 
-        // bbox height → font em-square: ~0.92 (line bbox ≈ ascender+descender ≈ 1.08*em)
-        const lineFontPt = (lineH * 0.92) / scale;
-        const lineFontPx = lineH * 0.92;
-
         // Detect bold/italic from majority vote across words
         const lineWords: any[] = line.words || [];
         const boldCount = lineWords.filter((w: any) => w.is_bold).length;
@@ -1152,10 +1205,14 @@ export function initPdfEditorTool() {
         const lineBold = boldCount > lineWords.length / 2;
         const lineItalic = italicCount > lineWords.length / 2;
 
-        // Font detection: compare full line pixels for best accuracy
-        const lineFont = lineText.length >= 2
-          ? detectFontByPixels(canvas, lineText, line.bbox, lineFontPx, lineBold, lineItalic, FONT_CANDIDATES)
-          : "Arial";
+        // Width-calibrated font detection: finds both the best font AND correct size
+        const { font: lineFont, fontSizePx } = lineText.length >= 2
+          ? detectFontForLine(canvas, lineText, line.bbox, lineBold, lineItalic, FONT_CANDIDATES)
+          : { font: "Arial", fontSizePx: lineH * 0.92 };
+        const lineFontPt = fontSizePx / scale;
+
+        // Pre-compute background color from above/below the line (avoids sampling text)
+        const bgColor = sampleOcrBgColor(canvas, line.bbox);
 
         // Baseline: line bottom minus ~20% of line height (descender allowance)
         const baselinePx = y1 - lineH * 0.2;
@@ -1169,6 +1226,7 @@ export function initPdfEditorTool() {
           _ocrFontFamily: lineFont,
           _ocrLineTop: y0,
           _ocrLineBot: y1,
+          _ocrBgColor: bgColor,
         });
         if (li % 5 === 0) updateOcrProgress(50 + Math.round((li / lines.length) * 45), "Detecting fonts");
       }
