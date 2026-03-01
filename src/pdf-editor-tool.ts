@@ -1704,7 +1704,7 @@ export function initPdfEditorTool() {
         outPdf.setProducer("");
         // Remove XMP metadata stream from document catalog
         try {
-          const catalog = outPdf.context.lookup(outPdf.context.trailerInfo.Root);
+          const catalog = outPdf.context.lookup(outPdf.context.trailerInfo.Root) as any;
           if (catalog?.delete) catalog.delete(PDFName.of("Metadata"));
         } catch { /* non-critical */ }
       }
