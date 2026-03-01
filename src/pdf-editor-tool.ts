@@ -2701,6 +2701,7 @@ export function initPdfEditorTool() {
 
     try {
       const { OPS } = await import("pdfjs-dist");
+      const PAINT_JPEG = 83; // OPS.paintJpegImageXObject — not in TS types
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
       let imgCount = 0;
@@ -2710,9 +2711,9 @@ export function initPdfEditorTool() {
         const ops = await page.getOperatorList();
 
         for (let i = 0; i < ops.fnArray.length; i++) {
-          if (ops.fnArray[i] !== OPS.paintImageXObject && ops.fnArray[i] !== OPS.paintJpegImageXObject) continue;
+          if (ops.fnArray[i] !== OPS.paintImageXObject && ops.fnArray[i] !== PAINT_JPEG) continue;
           const imgName = ops.argsArray[i][0];
-          const isJpeg = ops.fnArray[i] === OPS.paintJpegImageXObject;
+          const isJpeg = ops.fnArray[i] === PAINT_JPEG;
 
           try {
             const imgObj: any = await new Promise((resolve, reject) => {
