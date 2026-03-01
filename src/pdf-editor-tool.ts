@@ -1051,7 +1051,7 @@ export function initPdfEditorTool() {
     }
 
     // Restore annotations for this page
-    restoreAnnotations();
+    await restoreAnnotations();
 
     // Update UI
     pageInfo.textContent = `Page ${currentPage} / ${totalPages}`;
@@ -1063,30 +1063,53 @@ export function initPdfEditorTool() {
 
   function saveCurrentAnnotations() {
     if (!fabricCanvas) return;
-    const json = JSON.stringify(fabricCanvas.toJSON(["_pdeTextEditId", "_pdeCoverRect", "_pdeRedact"]));
-    pageAnnotations.set(currentPage, json);
+    pageAnnotations.set(currentPage, serializeFabricState());
   }
 
-  function restoreAnnotations() {
+  async function restoreAnnotations(): Promise<void> {
     if (!fabricCanvas) return;
     skipHistory = true;
     fabricCanvas.clear();
     const saved = pageAnnotations.get(currentPage);
     if (saved) {
-      fabricCanvas.loadFromJSON(saved).then(() => {
-        fabricCanvas.renderAll();
-        skipHistory = false;
-      });
+      await loadFabricState(saved);
     } else {
       fabricCanvas.renderAll();
-      skipHistory = false;
     }
+    skipHistory = false;
   }
 
   /* ── Undo/Redo ── */
+  /** Serialize fabric canvas state with custom properties preserved */
+  function serializeFabricState(): string {
+    const jsonObj = fabricCanvas.toJSON(["_pdeTextEditId", "_pdeCoverRect", "_pdeRedact"]);
+    const objs = fabricCanvas.getObjects();
+    for (let i = 0; i < objs.length && i < jsonObj.objects.length; i++) {
+      const obj = objs[i] as any;
+      if (obj._pdeRedact) jsonObj.objects[i]._pdeRedact = true;
+      if (obj._pdeTextEditId) jsonObj.objects[i]._pdeTextEditId = obj._pdeTextEditId;
+      if (obj._pdeCoverRect) jsonObj.objects[i]._pdeCoverRect = true;
+    }
+    return JSON.stringify(jsonObj);
+  }
+
+  /** Load fabric state and re-apply custom properties */
+  async function loadFabricState(json: string): Promise<void> {
+    const parsed = JSON.parse(json);
+    await fabricCanvas.loadFromJSON(json);
+    const objs = fabricCanvas.getObjects();
+    for (let i = 0; i < parsed.objects.length && i < objs.length; i++) {
+      const src = parsed.objects[i];
+      const obj = objs[i] as any;
+      if (src._pdeRedact) obj._pdeRedact = true;
+      if (src._pdeTextEditId) obj._pdeTextEditId = src._pdeTextEditId;
+      if (src._pdeCoverRect) obj._pdeCoverRect = true;
+    }
+    fabricCanvas.renderAll();
+  }
+
   function pushHistory() {
-    const state = JSON.stringify(fabricCanvas.toJSON(["_pdeTextEditId", "_pdeCoverRect", "_pdeRedact"]));
-    undoStack.push(state);
+    undoStack.push(serializeFabricState());
     redoStack = [];
     if (undoStack.length > 50) undoStack.shift();
     updateUndoRedoButtons();
@@ -1097,32 +1120,26 @@ export function initPdfEditorTool() {
     redoBtn.disabled = redoStack.length <= 0;
   }
 
-  undoBtn.addEventListener("click", () => {
+  undoBtn.addEventListener("click", async () => {
     if (undoStack.length === 0) return;
-    const current = JSON.stringify(fabricCanvas.toJSON());
-    redoStack.push(current);
+    redoStack.push(serializeFabricState());
     const prev = undoStack.pop()!;
     skipHistory = true;
-    fabricCanvas.loadFromJSON(prev).then(() => {
-      fabricCanvas.renderAll();
-      skipHistory = false;
-      updateUndoRedoButtons();
-      scheduleThumbUpdate();
-    });
+    await loadFabricState(prev);
+    skipHistory = false;
+    updateUndoRedoButtons();
+    scheduleThumbUpdate();
   });
 
-  redoBtn.addEventListener("click", () => {
+  redoBtn.addEventListener("click", async () => {
     if (redoStack.length === 0) return;
-    const current = JSON.stringify(fabricCanvas.toJSON());
-    undoStack.push(current);
+    undoStack.push(serializeFabricState());
     const next = redoStack.pop()!;
     skipHistory = true;
-    fabricCanvas.loadFromJSON(next).then(() => {
-      fabricCanvas.renderAll();
-      skipHistory = false;
-      updateUndoRedoButtons();
-      scheduleThumbUpdate();
-    });
+    await loadFabricState(next);
+    skipHistory = false;
+    updateUndoRedoButtons();
+    scheduleThumbUpdate();
   });
 
   /* ── Delete selected ── */
@@ -1411,7 +1428,6 @@ export function initPdfEditorTool() {
       // Navigate to the page to load its annotations on the live canvas
       currentPage = pageNum;
       await renderPage();
-      await new Promise(r => setTimeout(r, 50));
 
       if (hasRedactRects) {
         // Flatten: render PDF background + redaction rects into a single opaque image.
