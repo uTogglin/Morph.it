@@ -1,4 +1,5 @@
 import type { FileData } from "./FormatHandler.ts";
+import { cachedFetch } from "./cached-fetch.ts";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import type { LogEvent } from "@ffmpeg/ffmpeg";
 import { compressVideoWebCodecs, compressVideoVP9, isWebCodecsAvailable } from "./webcodecs-compress.ts";
@@ -161,7 +162,7 @@ async function ensureMagick(): Promise<void> {
   if (!magickReady) {
     magickReady = (async () => {
       const { initializeImageMagick } = await import("@imagemagick/magick-wasm");
-      const wasmResponse = await fetch("/wasm/magick.wasm");
+      const wasmResponse = await cachedFetch("/wasm/magick.wasm");
       const wasmBytes = new Uint8Array(await wasmResponse.arrayBuffer());
       await initializeImageMagick(wasmBytes);
     })();

@@ -13,6 +13,7 @@ import { initSpeechTool } from "./speech-tool.js";
 import { initSummarizeTool } from "./summarize-tool.js";
 import { initOcrTool } from "./ocr-tool.js";
 import { initPdfEditorTool } from "./pdf-editor-tool.js";
+import { cachedFetch, requestPersistentStorage, showCachePrompt, clearModelCache, applyHfCachePolicy } from "./cached-fetch.js";
 
 // ── In-app console log capture ─────────────────────────────────────────────
 interface AppLogEntry { level: "error" | "warn" | "info"; msg: string; time: string; }
@@ -304,6 +305,7 @@ const ui = {
   rescaleHeightInput: document.querySelector("#rescale-height") as HTMLInputElement,
   rescaleLockInput: document.querySelector("#rescale-lock-ratio") as HTMLInputElement,
   privacyToggle: document.querySelector("#privacy-toggle") as HTMLButtonElement,
+  cacheModelsToggle: document.querySelector("#cache-models-toggle") as HTMLButtonElement,
   compressOptions: document.querySelector("#compress-options") as HTMLDivElement,
   compressTargetInput: document.querySelector("#compress-target-mb") as HTMLInputElement,
   compressPresetSelect: document.querySelector("#compress-preset-select") as HTMLSelectElement,
@@ -519,6 +521,10 @@ for (const card of document.querySelectorAll<HTMLButtonElement>(".home-card")) {
 
 // Clicking logo goes home
 document.querySelector("#logo")?.addEventListener("click", showHomePage);
+
+// Apply caching preference early — before any AI model is loaded.
+requestPersistentStorage();
+applyHfCachePolicy();
 
 // Initialize speech tool
 initSpeechTool();
@@ -1173,6 +1179,9 @@ window.hidePopup = function () {
   ui.popupBackground.style.display = "none";
 }
 
+// On first visit, ask user if they want to cache models locally
+showCachePrompt();
+
 const allOptions: Array<{ format: FileFormat, handler: FormatHandler }> = [];
 
 window.supportedFormatCache = new Map();
@@ -1708,6 +1717,24 @@ if (ui.privacyToggle) {
   });
 }
 
+// ──── Cache Models Toggle ────
+if (ui.cacheModelsToggle) {
+  const cacheOn = (() => { try { return localStorage.getItem("convert-cache-models") === "yes"; } catch { return false; } })();
+  ui.cacheModelsToggle.classList.toggle("active", cacheOn);
+  ui.cacheModelsToggle.addEventListener("click", () => {
+    const wasOn = ui.cacheModelsToggle.classList.contains("active");
+    const nowOn = !wasOn;
+    ui.cacheModelsToggle.classList.toggle("active", nowOn);
+    try { localStorage.setItem("convert-cache-models", nowOn ? "yes" : "no"); } catch {}
+    applyHfCachePolicy();
+    if (nowOn) {
+      requestPersistentStorage();
+    } else {
+      clearModelCache();
+    }
+  });
+}
+
 // ──── Compression Settings ────
 
 // Compression is always enabled on the compress tool page (no toggle needed)
@@ -2133,7 +2160,7 @@ async function ensureMagick() {
   if (!magickReady) {
     magickReady = (async () => {
       const { initializeImageMagick } = await import("@imagemagick/magick-wasm");
-      const wasmResponse = await fetch("/wasm/magick.wasm");
+      const wasmResponse = await cachedFetch("/wasm/magick.wasm");
       const wasmBytes = new Uint8Array(await wasmResponse.arrayBuffer());
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await initializeImageMagick(wasmBytes as any);

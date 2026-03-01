@@ -1,4 +1,5 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { cachedFetch } from "../cached-fetch.ts";
 
 interface LibOpenMPTModule {
   __render(fileData: Uint8Array, sampleRate: number): Int16Array;
@@ -87,7 +88,7 @@ class libopenmptHandler implements FormatHandler {
 
   async init (): Promise<void> {
     // Pre-fetch the WASM binary so the Emscripten module can use it directly.
-    const wasmBinary = await fetch("/wasm/libopenmpt.wasm")
+    const wasmBinary = await cachedFetch("/wasm/libopenmpt.wasm")
       .then(r => r.arrayBuffer());
 
     // Set the global that Emscripten picks up:
