@@ -173,7 +173,7 @@ async function ensureMagick(): Promise<void> {
 // ── File type detection ──
 
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif", "avif", "ico", "heif", "heic"]);
-const VIDEO_EXTS = new Set(["mp4", "webm", "avi", "mov", "mkv", "flv", "wmv", "ogv", "m4v", "3gp", "ts", "mts"]);
+const VIDEO_EXTS = new Set(["mp4", "webm", "avi", "mov", "mkv", "flv", "wmv", "ogv", "m4v", "3gp", "ts", "mts", "hevc", "h265"]);
 const AUDIO_EXTS = new Set(["mp3", "ogg", "wav", "flac", "aac", "wma", "m4a", "opus", "oga", "weba"]);
 
 function getExt(name: string): string {

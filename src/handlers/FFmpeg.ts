@@ -190,8 +190,9 @@ class FFmpegHandler implements FormatHandler {
 
     // AV1 doesn't seem to be included in WASM FFmpeg
     this.supportedFormats.splice(this.supportedFormats.findIndex(c => c.mime === "image/avif"), 1);
-    // HEVC stalls when attempted
-    this.supportedFormats.splice(this.supportedFormats.findIndex(c => c.internal === "hevc"), 1);
+    // HEVC encoding stalls in WASM FFmpeg, but decoding works fine
+    const hevcIdx = this.supportedFormats.findIndex(c => c.internal === "hevc");
+    if (hevcIdx !== -1) this.supportedFormats[hevcIdx].to = false;
     // RTSP stalls when attempted
     this.supportedFormats.splice(this.supportedFormats.findIndex(c => c.internal === "rtsp"), 1);
 

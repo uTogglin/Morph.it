@@ -2324,9 +2324,11 @@ function redirectToToolWithFiles(tool: "image" | "compress" | "video") {
       png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
       webp: "image/webp", bmp: "image/bmp", svg: "image/svg+xml", ico: "image/x-icon",
       avif: "image/avif", tiff: "image/tiff", tif: "image/tiff",
+      heif: "image/heif", heic: "image/heic",
       mp4: "video/mp4", webm: "video/webm", avi: "video/x-msvideo", mov: "video/quicktime",
       mkv: "video/x-matroska", flv: "video/x-flv", wmv: "video/x-ms-wmv", ogv: "video/ogg",
       m4v: "video/x-m4v", "3gp": "video/3gpp", ts: "video/mp2t", mts: "video/mp2t",
+      hevc: "video/hevc", h265: "video/hevc",
     };
     const mime = mimeMap[ext] || "application/octet-stream";
     return new File([f.bytes as BlobPart], f.name, { type: mime });
@@ -2794,10 +2796,14 @@ function imgUpdateActionButton() {
   }
 }
 
+const IMAGE_TOOL_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif", "avif", "ico", "heif", "heic"]);
+
 /** Load files into the image tools workspace */
 function imgLoadFiles(files: File[]) {
   // Filter to image files only
-  const imageFiles = files.filter(f => f.type.startsWith("image/"));
+  const imageFiles = files.filter(f =>
+    f.type.startsWith("image/") || IMAGE_TOOL_EXTS.has(f.name.split(".").pop()?.toLowerCase() ?? "")
+  );
   if (imageFiles.length === 0) return;
 
   // Merge with existing, deduplicating
@@ -3056,9 +3062,13 @@ function vidHasEdits(): boolean {
     (vidSubFile !== null && (vidAddSubMux || vidAddSubBurn));
 }
 
+const VIDEO_TOOL_EXTS = new Set(["mp4", "webm", "avi", "mov", "mkv", "flv", "wmv", "ogv", "m4v", "3gp", "ts", "mts", "hevc", "h265"]);
+
 /** Load multiple video files into the editor */
 function vidLoadFiles(files: File[]) {
-  const videoFiles = files.filter(f => f.type.startsWith("video/"));
+  const videoFiles = files.filter(f =>
+    f.type.startsWith("video/") || VIDEO_TOOL_EXTS.has(f.name.split(".").pop()?.toLowerCase() ?? "")
+  );
   if (videoFiles.length === 0) return;
 
   // Deduplicate by name|size
