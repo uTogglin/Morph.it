@@ -225,6 +225,7 @@ export function initPdfEditorTool() {
     const obj = fabricCanvas?.getActiveObject();
     if (obj && (obj.type === "i-text" || obj.type === "textbox" || obj.type === "text")) {
       obj.set("fontFamily", font.family);
+      syncActiveTextEdit();
       fabricCanvas.renderAll();
     }
   }
@@ -257,6 +258,25 @@ export function initPdfEditorTool() {
     const list = fontsourceList || await fetchFontsourceList();
     const entry = list.find(f => f.family.toLowerCase() === family.toLowerCase());
     if (entry) await loadFontsourceFont(entry.id, entry.family);
+  }
+
+  /** Sync fabric text object styling back to its TextEdit record for export. */
+  function syncEditStyle(obj: any, edit: TextEdit) {
+    edit.bold = obj.fontWeight === "bold";
+    edit.italic = obj.fontStyle === "italic";
+    if (obj.fill && typeof obj.fill === "string") edit.color = obj.fill;
+    // Update detected family so export uses the current font
+    if (obj.fontFamily) edit.detectedFamily = obj.fontFamily;
+  }
+
+  /** Sync styling from the active fabric object to its TextEdit (if any). */
+  function syncActiveTextEdit() {
+    const obj = fabricCanvas?.getActiveObject();
+    if (!obj || !obj._pdeTextEditId || obj._pdeCoverRect) return;
+    const edits = pageTextEdits.get(currentPage);
+    if (!edits) return;
+    const edit = edits.find((e: TextEdit) => e.id === obj._pdeTextEditId);
+    if (edit) syncEditStyle(obj, edit);
   }
 
   function getDefaults() {
@@ -491,6 +511,7 @@ export function initPdfEditorTool() {
           if (edit) {
             edit.newStr = obj.text || "";
             edit.deleted = !edit.newStr;
+            syncEditStyle(obj, edit);
           }
         }
       }
@@ -1178,6 +1199,7 @@ export function initPdfEditorTool() {
     if (!obj) return;
     if (obj.type === "i-text" || obj.type === "textbox" || obj.type === "text") {
       obj.set("fill", colorInput.value);
+      syncActiveTextEdit();
       fabricCanvas.renderAll();
     } else if (obj.type === "rect") {
       obj.set("fill", colorInput.value);
@@ -1210,6 +1232,7 @@ export function initPdfEditorTool() {
       const isBold = obj.fontWeight === "bold";
       obj.set("fontWeight", isBold ? "normal" : "bold");
       boldBtn.classList.toggle("active", !isBold);
+      syncActiveTextEdit();
       fabricCanvas.renderAll();
     }
   });
@@ -1221,6 +1244,7 @@ export function initPdfEditorTool() {
       const isItalic = obj.fontStyle === "italic";
       obj.set("fontStyle", isItalic ? "normal" : "italic");
       italicBtn.classList.toggle("active", !isItalic);
+      syncActiveTextEdit();
       fabricCanvas.renderAll();
     }
   });
