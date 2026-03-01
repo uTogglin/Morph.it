@@ -684,18 +684,19 @@ export function initPdfEditorTool() {
         const fabricMod = fabricModule as any;
         const Rect = fabricMod.Rect || fabricMod.default?.Rect;
         const pointer = fabricCanvas.getViewportPoint(opt.e);
-        // Convert hex color to rgba with 35% opacity for highlight
+        // Convert hex color to rgba with user-chosen opacity for highlight
         const hex = colorInput.value;
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);
         const b = parseInt(hex.slice(5, 7), 16);
+        const hlAlpha = parseInt(opacityInput.value) / 100;
         const rect = new Rect({
           left: pointer.x,
           top: pointer.y,
           width: 200,
           height: 30,
-          fill: `rgba(${r}, ${g}, ${b}, 0.35)`,
-          stroke: `rgba(${r}, ${g}, ${b}, 0.5)`,
+          fill: `rgba(${r}, ${g}, ${b}, ${hlAlpha})`,
+          stroke: `rgba(${r}, ${g}, ${b}, ${Math.min(hlAlpha + 0.15, 1)})`,
           strokeWidth: 1,
         });
         fabricCanvas.add(rect);
@@ -1705,6 +1706,13 @@ export function initPdfEditorTool() {
         } else {
           fabricCanvas.defaultCursor = "default";
         }
+      }
+
+      if (tool === "highlight") {
+        colorInput.value = "#ffff00";
+        colorHex.textContent = "#ffff00";
+        opacityInput.value = "20";
+        opacityLabel.textContent = "20%";
       }
 
       if (tool === "image") {
