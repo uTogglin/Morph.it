@@ -46,6 +46,8 @@ export function initPdfEditorTool() {
   const strikeBtn = document.getElementById("pde-strikethrough") as HTMLButtonElement;
   const bulletBtn = document.getElementById("pde-bullet") as HTMLButtonElement;
   const matchTextBtn = document.getElementById("pde-match-text") as HTMLButtonElement;
+  const changeDocFontBtn = document.getElementById("pde-change-doc-font") as HTMLButtonElement;
+  const docFontStatus = document.getElementById("pde-doc-font-status") as HTMLSpanElement;
   const alignBtns = document.querySelectorAll<HTMLButtonElement>("[data-pde-align]");
   const opacityInput = document.getElementById("pde-opacity") as HTMLInputElement;
   const opacityLabel = document.getElementById("pde-opacity-label") as HTMLSpanElement;
@@ -84,6 +86,7 @@ export function initPdfEditorTool() {
     fontSizePt: number;
     fontName: string;
     detectedFamily: string;
+    originalFamily?: string;
     bold: boolean;
     italic: boolean;
     color: string;
@@ -112,6 +115,11 @@ export function initPdfEditorTool() {
   let fontsourceFetching = false;
   let currentFontFamily = "Arial";
   const loadedFonts = new Set<string>();
+
+  // Document-wide font override state
+  let documentFontOverride: FontEntry | null = null;
+  let docFontPickerMode = false;
+  const docFontAppliedPages = new Set<number>();
 
   const SYSTEM_FONTS: FontEntry[] = [
     { id: "_arial", family: "Arial", category: "sans-serif" },
@@ -230,6 +238,14 @@ export function initPdfEditorTool() {
       await loadFontsourceFont(font.id, font.family);
     }
 
+    // Document-wide font override mode
+    if (docFontPickerMode) {
+      docFontPickerMode = false;
+      changeDocFontBtn.classList.remove("active");
+      await applyDocumentFontOverride(font);
+      return;
+    }
+
     // Apply to active text object
     const obj = fabricCanvas?.getActiveObject();
     if (obj && (obj.type === "i-text" || obj.type === "textbox" || obj.type === "text")) {
@@ -258,6 +274,11 @@ export function initPdfEditorTool() {
       fontListEl.classList.remove("open");
       // Restore display to current font if user didn't pick
       fontSearchInput.value = currentFontFamily;
+      // Cancel doc font picker mode if active
+      if (docFontPickerMode) {
+        docFontPickerMode = false;
+        changeDocFontBtn.classList.remove("active");
+      }
     }
   });
 
@@ -327,6 +348,12 @@ export function initPdfEditorTool() {
       pagesWithRedactions.clear();
       ocrPages.clear();
       textEditCounter = 0;
+      documentFontOverride = null;
+      docFontPickerMode = false;
+      docFontAppliedPages.clear();
+      changeDocFontBtn.classList.remove("active");
+      docFontStatus.style.display = "none";
+      docFontStatus.textContent = "";
       undoStack = [];
       redoStack = [];
 
@@ -622,6 +649,7 @@ export function initPdfEditorTool() {
               fontSizePt: hitItem.fontSizePt,
               fontName: hitItem.fontName,
               detectedFamily: hitItem.fontFamily,
+              originalFamily: hitItem.fontFamily,
               bold: hitItem.bold,
               italic: hitItem.italic,
               color: hitItem.color,
@@ -1044,6 +1072,186 @@ export function initPdfEditorTool() {
     return "#ffffff";
   }
 
+  /* ── Document-wide font override ── */
+
+  /** Create TextEdits for all text items on a page, applying the given font family. */
+  function createTextEditsForEntirePage(pageNum: number, fontFamily: string) {
+    const textContent = pageTextContent.get(pageNum);
+    if (!textContent || !textContent._vpTransform) return;
+
+    const scale = zoom * 1.5;
+    const vt = textContent._vpTransform;
+    const existingEdits = pageTextEdits.get(pageNum) || [];
+    const fabricMod = fabricModule as any;
+    const IText = fabricMod.IText || fabricMod.default?.IText;
+    const Rect = fabricMod.Rect || fabricMod.default?.Rect;
+
+    for (const item of textContent.items) {
+      if (!item.str || !item.transform) continue;
+      const pdfX = item.transform[4];
+      const pdfY = item.transform[5];
+
+      // Skip if already has an edit
+      const alreadyEdited = existingEdits.find(e =>
+        Math.abs(e.pdfX - pdfX) < 1 && Math.abs(e.pdfY - pdfY) < 1
+      );
+      if (alreadyEdited) {
+        // Update existing edit's font
+        alreadyEdited.detectedFamily = fontFamily;
+        // Update the corresponding fabric object on current page
+        if (pageNum === currentPage && fabricCanvas) {
+          for (const obj of fabricCanvas.getObjects()) {
+            if ((obj as any)._pdeTextEditId === alreadyEdited.id && !(obj as any)._pdeCoverRect) {
+              obj.set("fontFamily", fontFamily);
+            }
+          }
+        }
+        continue;
+      }
+
+      // Compute canvas coordinates
+      const cx = (vt[0] * pdfX + vt[2] * pdfY + vt[4]) * scale;
+      const cy = (vt[1] * pdfX + vt[3] * pdfY + vt[5]) * scale;
+      const pdfPts = Math.abs(item.transform[0]) || Math.abs(item.transform[3]);
+      const glyphH = pdfPts * scale;
+      const textW = (item.width ?? 0) * scale;
+      const boxLeft = cx;
+      const boxTop = cy - glyphH;
+
+      // Detect original font info
+      let origFamily = "Arial";
+      let bold = false;
+      let italic = false;
+      const fontName = item.fontName || "";
+      if (item._ocrBold !== undefined) {
+        bold = !!item._ocrBold;
+        italic = !!item._ocrItalic;
+        if (item._ocrFontFamily) origFamily = item._ocrFontFamily;
+      } else if (fontName) {
+        const style = detectFontStyle(fontName);
+        bold = style.bold;
+        italic = style.italic;
+        if (textContent.styles?.[fontName]) {
+          origFamily = mapFontFamily(textContent.styles[fontName].fontFamily || fontName);
+        } else {
+          origFamily = mapFontFamily(fontName);
+        }
+      }
+
+      // Sample text color
+      let color = "#000000";
+      try {
+        const ctx = bgCanvas.getContext("2d")!;
+        let darkest = 255;
+        let darkR = 0, darkG = 0, darkB = 0;
+        for (let dy = -0.6; dy <= -0.1; dy += 0.12) {
+          for (let dx = 0.2; dx <= 0.8; dx += 0.15) {
+            const sx = Math.round(cx + glyphH * dx);
+            const sy = Math.round(cy + glyphH * dy);
+            if (sx < 0 || sy < 0 || sx >= bgCanvas.width || sy >= bgCanvas.height) continue;
+            const px = ctx.getImageData(sx, sy, 1, 1).data;
+            const brightness = px[0] * 0.299 + px[1] * 0.587 + px[2] * 0.114;
+            if (brightness < darkest) {
+              darkest = brightness;
+              darkR = px[0]; darkG = px[1]; darkB = px[2];
+            }
+          }
+        }
+        if (darkest < 200) {
+          color = "#" + [darkR, darkG, darkB].map(c => c.toString(16).padStart(2, "0")).join("");
+        }
+      } catch { /* default black */ }
+
+      const fontSize = Math.max(8, pdfPts * scale);
+      let coverTop = boxTop;
+      let coverH = glyphH * 1.3;
+      if (item._ocrLineTop !== undefined) {
+        coverTop = item._ocrLineTop - 1;
+        coverH = (item._ocrLineBot - item._ocrLineTop) + 1;
+      }
+      const canvasLeft = boxLeft - 1;
+      const coverWidth = Math.max(textW, 20) + 2;
+
+      const editId = `textedit-${++textEditCounter}`;
+      const bgColor = item._ocrBgColor || sampleBgColor(canvasLeft, coverTop, coverWidth, coverH);
+
+      // Only create fabric objects if this is the current page
+      if (pageNum === currentPage && fabricCanvas) {
+        const coverRect = new Rect({
+          left: Math.round(canvasLeft),
+          top: Math.round(coverTop),
+          width: Math.ceil(coverWidth),
+          height: Math.ceil(coverH),
+          fill: bgColor,
+          stroke: bgColor,
+          strokeWidth: 0,
+          selectable: false,
+          evented: false,
+        });
+        (coverRect as any)._pdeTextEditId = editId;
+        (coverRect as any)._pdeCoverRect = true;
+        fabricCanvas.add(coverRect);
+
+        const editText = new IText(item.str, {
+          left: canvasLeft,
+          top: coverTop,
+          fontSize,
+          fill: color,
+          fontFamily,
+          fontWeight: bold ? "bold" : "normal",
+          fontStyle: italic ? "italic" : "normal",
+          editable: true,
+        });
+        (editText as any)._pdeTextEditId = editId;
+        (editText as any)._pdeCoverRect = false;
+        fabricCanvas.add(editText);
+      }
+
+      const textEdit: TextEdit = {
+        id: editId,
+        originalStr: item.str,
+        pdfX,
+        pdfY,
+        fontSizePt: pdfPts,
+        fontName,
+        detectedFamily: fontFamily,
+        originalFamily: origFamily,
+        bold,
+        italic,
+        color,
+        newStr: item.str,
+        deleted: false,
+        ocrBased: ocrPages.has(pageNum),
+      };
+      if (!pageTextEdits.has(pageNum)) pageTextEdits.set(pageNum, []);
+      pageTextEdits.get(pageNum)!.push(textEdit);
+    }
+
+    docFontAppliedPages.add(pageNum);
+    if (pageNum === currentPage && fabricCanvas) {
+      saveCurrentAnnotations();
+      fabricCanvas.renderAll();
+    }
+  }
+
+  /** Apply a document-wide font override — process current page, mark for lazy apply. */
+  async function applyDocumentFontOverride(font: FontEntry) {
+    documentFontOverride = font;
+    docFontAppliedPages.clear();
+
+    // Load the font
+    if (!font.id.startsWith("_")) {
+      await loadFontsourceFont(font.id, font.family);
+    }
+
+    // Apply to current page
+    createTextEditsForEntirePage(currentPage, font.family);
+
+    // Update status label
+    docFontStatus.textContent = `Document font: ${font.family}`;
+    docFontStatus.style.display = "";
+  }
+
   /* ── Width-calibrated font detection via pixel comparison ── */
   const FONT_CANDIDATES = [
     // Sans-serif
@@ -1337,6 +1545,11 @@ export function initPdfEditorTool() {
 
     // Restore annotations for this page
     await restoreAnnotations();
+
+    // Lazy-apply document font override to newly visited pages
+    if (documentFontOverride && !docFontAppliedPages.has(currentPage) && pageTextContent.has(currentPage)) {
+      createTextEditsForEntirePage(currentPage, documentFontOverride.family);
+    }
 
     // Update UI
     pageInfo.textContent = `Page ${currentPage} / ${totalPages}`;
@@ -1651,6 +1864,21 @@ export function initPdfEditorTool() {
     fabricCanvas.renderAll();
   });
 
+  // Change Document Font — enters picker mode
+  changeDocFontBtn.addEventListener("click", async () => {
+    docFontPickerMode = !docFontPickerMode;
+    changeDocFontBtn.classList.toggle("active", docFontPickerMode);
+    if (docFontPickerMode) {
+      // Open font picker
+      await fetchFontsourceList();
+      fontSearchInput.value = "";
+      renderFontList("");
+      fontListEl.classList.add("open");
+      fontSearchInput.focus();
+    } else {
+      fontListEl.classList.remove("open");
+    }
+  });
 
   // Redact color
   redactColorInput.addEventListener("input", () => {
@@ -1862,6 +2090,33 @@ export function initPdfEditorTool() {
       for (let p = 1; p <= totalPages; p++) pagesToProcess.add(p);
     }
 
+    // If document font override is active, process ALL pages
+    if (documentFontOverride) {
+      for (let p = 1; p <= totalPages; p++) pagesToProcess.add(p);
+
+      // Create TextEdits for unvisited pages on-the-fly
+      for (let p = 1; p <= totalPages; p++) {
+        if (docFontAppliedPages.has(p)) continue;
+        // Load text content for this page if not cached
+        if (!pageTextContent.has(p)) {
+          try {
+            const pg = await pdfDoc.getPage(p);
+            const tc = await pg.getTextContent();
+            const hasText = tc.items?.some((it: any) => it.str && it.str.trim());
+            if (hasText) {
+              const rawVp = pg.getViewport({ scale: 1 });
+              tc._vpTransform = rawVp.transform;
+              pageTextContent.set(p, tc);
+            }
+          } catch { /* skip */ }
+        }
+        if (pageTextContent.has(p)) {
+          // Create edits without fabric objects (pageNum !== currentPage)
+          createTextEditsForEntirePage(p, documentFontOverride.family);
+        }
+      }
+    }
+
     for (const pageNum of pagesToProcess) {
       const pageIdx = pageNum - 1;
       if (pageIdx < 0 || pageIdx >= pages.length) continue;
@@ -1870,7 +2125,7 @@ export function initPdfEditorTool() {
       // Collect text edit deletions (skip OCR-based — no content stream text to remove)
       const textEdits = pageTextEdits.get(pageNum) || [];
       const deleteEdits = textEdits
-        .filter(e => !e.ocrBased && (e.deleted || e.newStr !== e.originalStr))
+        .filter(e => !e.ocrBased && (e.deleted || e.newStr !== e.originalStr || (e.originalFamily && e.detectedFamily !== e.originalFamily)))
         .map(e => ({ pdfX: e.pdfX, pdfY: e.pdfY, tolerance: 2.0, delete: true }));
 
       // Collect redaction region deletions
@@ -1957,7 +2212,8 @@ export function initPdfEditorTool() {
       for (const edit of textEdits) {
         if (edit.ocrBased) continue; // OCR edits rendered via overlay, not content stream
         if (edit.deleted) continue;
-        if (edit.newStr === edit.originalStr) continue;
+        const fontChanged = edit.originalFamily && edit.detectedFamily !== edit.originalFamily;
+        if (edit.newStr === edit.originalStr && !fontChanged) continue;
         if (!edit.newStr) continue;
 
         try {
@@ -1998,7 +2254,7 @@ export function initPdfEditorTool() {
       // Check if there are any text edits or redactions
       let hasTextEdits = false;
       for (const [, edits] of pageTextEdits) {
-        if (edits.some(e => e.deleted || e.newStr !== e.originalStr)) {
+        if (edits.some(e => e.deleted || e.newStr !== e.originalStr || (e.originalFamily && e.detectedFamily !== e.originalFamily))) {
           hasTextEdits = true;
           break;
         }

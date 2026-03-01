@@ -4104,6 +4104,11 @@ body[data-tool="image"] #convert-button { display: none !important; }
   color: var(--text-main);
   border-color: var(--accent);
 }
+.pde-match-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+}
 .pde-prop-hint {
   font-size: 0.72rem;
   color: var(--text-muted);
