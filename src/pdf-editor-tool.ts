@@ -577,12 +577,12 @@ export function initPdfEditorTool() {
             const editId = `textedit-${++textEditCounter}`;
 
             const coverRect = new Rect({
-              left: hitItem.canvasLeft,
-              top: hitItem.canvasTop,
-              width: hitItem.width,
-              height: hitItem.height,
+              left: Math.round(hitItem.canvasLeft),
+              top: Math.round(hitItem.canvasTop),
+              width: Math.ceil(hitItem.width),
+              height: Math.ceil(hitItem.height),
               fill: bgColor,
-              stroke: "transparent",
+              stroke: bgColor,
               strokeWidth: 0,
               selectable: false,
               evented: false,
@@ -1145,30 +1145,41 @@ export function initPdfEditorTool() {
     return { font: bestFont, fontSizePx: bestSize };
   }
 
-  /** Sample background color for an OCR line by reading pixels above/below it */
+  /** Sample background color for an OCR line by reading pixels around it and from page margins */
   function sampleOcrBgColor(srcCanvas: HTMLCanvasElement, bbox: { x0: number; y0: number; x1: number; y1: number }): string {
     const ctx = srcCanvas.getContext("2d")!;
-    let totalR = 0, totalG = 0, totalB = 0, count = 0;
+    const samples: [number, number, number][] = [];
     const w = bbox.x1 - bbox.x0;
-    // Sample 10 points each from 5px above and 5px below the line
-    for (const sy of [bbox.y0 - 5, bbox.y1 + 5]) {
+    const midY = Math.round((bbox.y0 + bbox.y1) / 2);
+
+    // Sample from 15px above and below the line (far enough to avoid anti-aliased text)
+    for (const sy of [bbox.y0 - 15, bbox.y1 + 15]) {
       if (sy < 0 || sy >= srcCanvas.height) continue;
       for (let i = 0; i < 10; i++) {
         const sx = Math.round(bbox.x0 + (w * i) / 9);
         if (sx < 0 || sx >= srcCanvas.width) continue;
         const pd = ctx.getImageData(sx, Math.round(sy), 1, 1).data;
-        // Only count light pixels (background), skip if it looks like text
         const brightness = pd[0] * 0.299 + pd[1] * 0.587 + pd[2] * 0.114;
-        if (brightness > 128) {
-          totalR += pd[0]; totalG += pd[1]; totalB += pd[2];
-          count++;
-        }
+        if (brightness > 200) samples.push([pd[0], pd[1], pd[2]]);
       }
     }
-    if (count > 0) {
-      const r = Math.round(totalR / count);
-      const g = Math.round(totalG / count);
-      const b = Math.round(totalB / count);
+    // Sample from left/right page margins at the same Y level as the text
+    for (const sx of [5, 15, srcCanvas.width - 15, srcCanvas.width - 5]) {
+      if (sx < 0 || sx >= srcCanvas.width) continue;
+      const pd = ctx.getImageData(sx, midY, 1, 1).data;
+      const brightness = pd[0] * 0.299 + pd[1] * 0.587 + pd[2] * 0.114;
+      if (brightness > 200) samples.push([pd[0], pd[1], pd[2]]);
+    }
+
+    if (samples.length > 0) {
+      // Use the brightest samples (top half) to avoid any residual text influence
+      samples.sort((a, b) => (b[0] + b[1] + b[2]) - (a[0] + a[1] + a[2]));
+      const top = samples.slice(0, Math.max(1, Math.ceil(samples.length / 2)));
+      let tR = 0, tG = 0, tB = 0;
+      for (const [r, g, b] of top) { tR += r; tG += g; tB += b; }
+      const r = Math.round(tR / top.length);
+      const g = Math.round(tG / top.length);
+      const b = Math.round(tB / top.length);
       return "#" + [r, g, b].map(c => c.toString(16).padStart(2, "0")).join("");
     }
     return "#ffffff";
