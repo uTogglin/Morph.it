@@ -4128,6 +4128,63 @@ body[data-tool="image"] #convert-button { display: none !important; }
   cursor: not-allowed;
 }
 
+/* ── Font picker ── */
+.pde-font-picker {
+  position: relative;
+  width: 100%;
+}
+.pde-font-search {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--input-bg);
+  color: var(--text-main);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  outline: none;
+}
+.pde-font-search:focus { border-color: var(--accent); }
+.pde-font-list {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  background: var(--surface-color);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  margin-top: 2px;
+  z-index: 100;
+  box-shadow: var(--shadow-md);
+}
+.pde-font-list.open { display: block; }
+.pde-font-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  transition: background 0.1s;
+}
+.pde-font-item:hover { background: var(--list-hover); }
+.pde-font-item.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.pde-font-category {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  background: var(--input-bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
 /* ── PDF Editor responsive ── */
 @media (max-width: 900px) {
   .pde-sidebar-left { width: 110px; }

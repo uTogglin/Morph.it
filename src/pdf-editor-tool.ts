@@ -38,7 +38,8 @@ export function initPdfEditorTool() {
   const brushInput = document.getElementById("pde-brush-size") as HTMLInputElement;
   const brushLabel = document.getElementById("pde-brush-label") as HTMLSpanElement;
   const fontInput = document.getElementById("pde-font-size") as HTMLInputElement;
-  const fontFamilySelect = document.getElementById("pde-font-family") as HTMLSelectElement;
+  const fontSearchInput = document.getElementById("pde-font-search") as HTMLInputElement;
+  const fontListEl = document.getElementById("pde-font-list") as HTMLDivElement;
   const boldBtn = document.getElementById("pde-bold") as HTMLButtonElement;
   const italicBtn = document.getElementById("pde-italic") as HTMLButtonElement;
   const underlineBtn = document.getElementById("pde-underline") as HTMLButtonElement;
@@ -95,6 +96,168 @@ export function initPdfEditorTool() {
   // Redact tool state
   let redactDragStart: { x: number; y: number } | null = null;
   let redactDragRect: any = null;
+
+  // ── Font picker state ──
+  interface FontEntry { id: string; family: string; category: string; }
+  let fontsourceList: FontEntry[] | null = null;
+  let fontsourceFetching = false;
+  let currentFontFamily = "Arial";
+  const loadedFonts = new Set<string>();
+
+  const SYSTEM_FONTS: FontEntry[] = [
+    { id: "_arial", family: "Arial", category: "sans-serif" },
+    { id: "_book-antiqua", family: "Book Antiqua", category: "serif" },
+    { id: "_calibri", family: "Calibri", category: "sans-serif" },
+    { id: "_cambria", family: "Cambria", category: "serif" },
+    { id: "_comic-sans-ms", family: "Comic Sans MS", category: "sans-serif" },
+    { id: "_consolas", family: "Consolas", category: "monospace" },
+    { id: "_courier-new", family: "Courier New", category: "monospace" },
+    { id: "_garamond", family: "Garamond", category: "serif" },
+    { id: "_georgia", family: "Georgia", category: "serif" },
+    { id: "_helvetica", family: "Helvetica", category: "sans-serif" },
+    { id: "_impact", family: "Impact", category: "sans-serif" },
+    { id: "_palatino-linotype", family: "Palatino Linotype", category: "serif" },
+    { id: "_segoe-ui", family: "Segoe UI", category: "sans-serif" },
+    { id: "_tahoma", family: "Tahoma", category: "sans-serif" },
+    { id: "_times-new-roman", family: "Times New Roman", category: "serif" },
+    { id: "_trebuchet-ms", family: "Trebuchet MS", category: "sans-serif" },
+    { id: "_verdana", family: "Verdana", category: "sans-serif" },
+  ];
+
+  async function fetchFontsourceList(): Promise<FontEntry[]> {
+    if (fontsourceList) return fontsourceList;
+    if (fontsourceFetching) {
+      // Wait for in-flight fetch
+      return new Promise(resolve => {
+        const check = setInterval(() => {
+          if (fontsourceList) { clearInterval(check); resolve(fontsourceList); }
+        }, 100);
+      });
+    }
+    fontsourceFetching = true;
+    try {
+      const resp = await fetch("https://api.fontsource.org/v1/fonts?subsets=latin");
+      const data: any[] = await resp.json();
+      fontsourceList = data.map(f => ({ id: f.id, family: f.family, category: f.category || "sans-serif" }));
+    } catch (err) {
+      console.warn("[PDF Editor] Failed to fetch Fontsource fonts:", err);
+      fontsourceList = [];
+    }
+    fontsourceFetching = false;
+    return fontsourceList;
+  }
+
+  async function loadFontsourceFont(fontId: string, family: string): Promise<boolean> {
+    if (loadedFonts.has(family)) return true;
+    if (fontId.startsWith("_")) return true; // system font
+    try {
+      const weights = [400, 700];
+      const styles: Array<"normal" | "italic"> = ["normal", "italic"];
+      const promises: Promise<void>[] = [];
+      for (const w of weights) {
+        for (const s of styles) {
+          const url = `https://cdn.jsdelivr.net/fontsource/fonts/${fontId}@latest/latin-${w}-${s}.woff2`;
+          const face = new FontFace(family, `url(${url})`, { weight: String(w), style: s });
+          promises.push(face.load().then(() => { document.fonts.add(face); }));
+        }
+      }
+      await Promise.allSettled(promises);
+      loadedFonts.add(family);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function getAllFonts(): FontEntry[] {
+    const webFonts = fontsourceList || [];
+    // Merge: system fonts first, then web fonts (skip duplicates by family name)
+    const seen = new Set<string>();
+    const result: FontEntry[] = [];
+    for (const f of SYSTEM_FONTS) { seen.add(f.family.toLowerCase()); result.push(f); }
+    for (const f of webFonts) { if (!seen.has(f.family.toLowerCase())) { seen.add(f.family.toLowerCase()); result.push(f); } }
+    return result;
+  }
+
+  function renderFontList(filter: string) {
+    const fonts = getAllFonts();
+    const lower = filter.toLowerCase();
+    const filtered = lower ? fonts.filter(f => f.family.toLowerCase().includes(lower)) : fonts;
+    const capped = filtered.slice(0, 100);
+
+    fontListEl.innerHTML = "";
+    for (const f of capped) {
+      const div = document.createElement("div");
+      div.className = "pde-font-item" + (f.family === currentFontFamily ? " active" : "");
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = f.family;
+      const catSpan = document.createElement("span");
+      catSpan.className = "pde-font-category";
+      catSpan.textContent = f.category;
+      div.appendChild(nameSpan);
+      div.appendChild(catSpan);
+      div.addEventListener("mousedown", (e) => {
+        e.preventDefault(); // prevent blur before click completes
+        selectFont(f);
+      });
+      fontListEl.appendChild(div);
+    }
+    if (capped.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "pde-font-item";
+      empty.textContent = "No fonts found";
+      empty.style.color = "var(--text-muted)";
+      fontListEl.appendChild(empty);
+    }
+  }
+
+  async function selectFont(font: FontEntry) {
+    currentFontFamily = font.family;
+    fontSearchInput.value = font.family;
+    fontListEl.classList.remove("open");
+
+    // Load web font if needed
+    if (!font.id.startsWith("_")) {
+      await loadFontsourceFont(font.id, font.family);
+    }
+
+    // Apply to active text object
+    const obj = fabricCanvas?.getActiveObject();
+    if (obj && (obj.type === "i-text" || obj.type === "textbox" || obj.type === "text")) {
+      obj.set("fontFamily", font.family);
+      fabricCanvas.renderAll();
+    }
+  }
+
+  // Font picker event handlers
+  fontSearchInput.addEventListener("focus", async () => {
+    fontSearchInput.select();
+    await fetchFontsourceList();
+    renderFontList(fontSearchInput.value === currentFontFamily ? "" : fontSearchInput.value);
+    fontListEl.classList.add("open");
+  });
+
+  fontSearchInput.addEventListener("input", () => {
+    renderFontList(fontSearchInput.value);
+    fontListEl.classList.add("open");
+  });
+
+  document.addEventListener("mousedown", (e) => {
+    const picker = document.getElementById("pde-font-picker");
+    if (picker && !picker.contains(e.target as Node)) {
+      fontListEl.classList.remove("open");
+      // Restore display to current font if user didn't pick
+      fontSearchInput.value = currentFontFamily;
+    }
+  });
+
+  /** Try to load a font family from Fontsource (best-effort). Returns the family name. */
+  async function tryLoadFont(family: string): Promise<void> {
+    if (loadedFonts.has(family)) return;
+    const list = fontsourceList || await fetchFontsourceList();
+    const entry = list.find(f => f.family.toLowerCase() === family.toLowerCase());
+    if (entry) await loadFontsourceFont(entry.id, entry.family);
+  }
 
   function getDefaults() {
     const brush = (() => { try { return parseInt(localStorage.getItem("convert-pde-brush") ?? "3"); } catch { return 3; } })();
@@ -231,7 +394,8 @@ export function initPdfEditorTool() {
     redactProps.style.display = activePdeTool === "redact" ? "" : "none";
     // Populate text properties from selected object
     if (isTextObj) {
-      fontFamilySelect.value = obj.fontFamily || "Arial";
+      currentFontFamily = obj.fontFamily || "Arial";
+      fontSearchInput.value = currentFontFamily;
       fontInput.value = String(Math.round(obj.fontSize || 16));
       boldBtn.classList.toggle("active", obj.fontWeight === "bold");
       italicBtn.classList.toggle("active", obj.fontStyle === "italic");
@@ -387,6 +551,9 @@ export function initPdfEditorTool() {
             });
             fabricCanvas.add(coverRect);
 
+            // Load the matched font from Fontsource if it's a web font
+            tryLoadFont(hitItem.fontFamily);
+
             // Create editable IText with matched font
             const editText = new IText(hitItem.str, {
               left: hitItem.canvasLeft,
@@ -434,7 +601,7 @@ export function initPdfEditorTool() {
           top: pointer.y,
           fontSize: parseInt(fontInput.value) || defaults.font,
           fill: colorInput.value,
-          fontFamily: fontFamilySelect.value,
+          fontFamily: currentFontFamily,
           editable: true,
         });
 
@@ -1025,14 +1192,7 @@ export function initPdfEditorTool() {
     }
   });
 
-  // Font family
-  fontFamilySelect.addEventListener("change", () => {
-    const obj = fabricCanvas?.getActiveObject();
-    if (obj && (obj.type === "i-text" || obj.type === "textbox" || obj.type === "text")) {
-      obj.set("fontFamily", fontFamilySelect.value);
-      fabricCanvas.renderAll();
-    }
-  });
+  // Font family change is handled by the font picker selectFont() function
 
   // Font size
   fontInput.addEventListener("input", () => {
@@ -1140,16 +1300,12 @@ export function initPdfEditorTool() {
     obj.set("fontWeight", detected.bold ? "bold" : "normal");
     obj.set("fontStyle", detected.italic ? "italic" : "normal");
 
-    // Ensure the detected font is in the dropdown
-    if (!fontFamilySelect.querySelector(`option[value="${detected.fontFamily}"]`)) {
-      const opt = document.createElement("option");
-      opt.value = detected.fontFamily;
-      opt.textContent = detected.fontFamily;
-      fontFamilySelect.appendChild(opt);
-    }
+    // Load the detected font from Fontsource if available
+    tryLoadFont(detected.fontFamily);
 
     // Update UI controls
-    fontFamilySelect.value = detected.fontFamily;
+    currentFontFamily = detected.fontFamily;
+    fontSearchInput.value = detected.fontFamily;
     fontInput.value = String(Math.round(detected.fontSize));
     colorInput.value = detected.color;
     colorHex.textContent = detected.color;
