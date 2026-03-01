@@ -3912,6 +3912,7 @@ body[data-tool="image"] #convert-button { display: none !important; }
   gap: 6px;
 }
 .pde-thumb {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4024,6 +4025,47 @@ body[data-tool="image"] #convert-button { display: none !important; }
 .pde-merge-item-btn:hover {
   background: var(--card-bg);
   color: var(--accent);
+}
+
+/* ── Thumbnail page controls ── */
+.pde-thumb-controls {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+.pde-thumb:hover .pde-thumb-controls { opacity: 1; }
+.pde-thumb-reorder-btn {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.55rem;
+  padding: 0;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+.pde-thumb-reorder-btn:hover {
+  background: var(--accent);
+}
+.pde-thumb-remove:hover {
+  background: #e74c3c !important;
+}
+.pde-thumb-merge {
+  border-left: 3px solid var(--accent);
+}
+.pde-tool-disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 /* ── Main canvas area ── */
