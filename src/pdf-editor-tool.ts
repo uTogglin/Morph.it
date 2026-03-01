@@ -474,7 +474,9 @@ export function initPdfEditorTool() {
     fabricCanvas.on("object:added", () => { if (!skipHistory) pushHistory(); scheduleThumbUpdate(); });
     fabricCanvas.on("object:modified", () => { if (!skipHistory) pushHistory(); scheduleThumbUpdate(); });
     fabricCanvas.on("object:removed", (opt: any) => {
-      if (!skipHistory) pushHistory();
+      // Skip all side effects during state restoration (clear/loadFromJSON)
+      if (skipHistory) return;
+      pushHistory();
       scheduleThumbUpdate();
       // Handle text edit deletion — mark edit as deleted and remove paired cover rect
       const obj = opt.target;
