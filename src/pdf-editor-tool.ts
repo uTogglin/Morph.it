@@ -994,10 +994,18 @@ export function initPdfEditorTool() {
           }
         } catch { /* default black */ }
 
+        // For OCR items, use stored line bbox for cover rect to fully hide original text
+        let coverTop = boxTop;
+        let coverH = glyphH * 1.3;
+        if (item._ocrLineTop !== undefined) {
+          coverTop = item._ocrLineTop - 2;
+          coverH = (item._ocrLineBot - item._ocrLineTop) + 4;
+        }
+
         return {
           str: item.str, pdfX, pdfY,
-          canvasLeft: boxLeft, canvasTop: boxTop,
-          width: Math.max(textW, 20), height: glyphH * 1.3,
+          canvasLeft: boxLeft - 1, canvasTop: coverTop,
+          width: Math.max(textW, 20) + 2, height: coverH,
           fontFamily, fontSize: Math.max(8, fontSize), fontSizePt: pdfPts,
           fontName, color, bold, italic,
         };
@@ -1126,45 +1134,42 @@ export function initPdfEditorTool() {
       updateOcrProgress(50, "Detecting fonts");
       for (let li = 0; li < lines.length; li++) {
         const line = lines[li];
-        const lineWords: any[] = line.words || [];
-        if (lineWords.length === 0) continue;
-        // Use LINE bbox height for consistent font sizing across all words on a line.
-        const lineH = line.bbox.y1 - line.bbox.y0;
-        // bbox height → font em-square: ~0.72 factor (bbox includes leading/padding)
-        const lineFontPt = (lineH * 0.72) / scale;
-        const lineFontPx = lineH * 0.72;
+        const lineText = line.text?.trim();
+        if (!lineText) continue;
+        const { x0, y0, x1, y1 } = line.bbox;
+        const lineH = y1 - y0;
+        const lineW = x1 - x0;
+        if (lineH < 4 || lineW < 4) continue;
 
-        // Detect bold/italic from majority of words on the line
+        // bbox height → font em-square: ~0.92 (line bbox ≈ ascender+descender ≈ 1.08*em)
+        const lineFontPt = (lineH * 0.92) / scale;
+        const lineFontPx = lineH * 0.92;
+
+        // Detect bold/italic from majority vote across words
+        const lineWords: any[] = line.words || [];
         const boldCount = lineWords.filter((w: any) => w.is_bold).length;
         const italicCount = lineWords.filter((w: any) => w.is_italic).length;
         const lineBold = boldCount > lineWords.length / 2;
         const lineItalic = italicCount > lineWords.length / 2;
 
-        // Pick the longest word (≥3 chars) as representative for font matching
-        let rep = lineWords[0];
-        for (const w of lineWords) {
-          if (w.text.length >= 3 && w.text.length > rep.text.length) rep = w;
-        }
-        const lineFont = rep.text.length >= 2
-          ? detectFontByPixels(canvas, rep.text, rep.bbox, lineFontPx, lineBold, lineItalic, FONT_CANDIDATES)
+        // Font detection: compare full line pixels for best accuracy
+        const lineFont = lineText.length >= 2
+          ? detectFontByPixels(canvas, lineText, line.bbox, lineFontPx, lineBold, lineItalic, FONT_CANDIDATES)
           : "Arial";
 
-        for (const w of lineWords) {
-          const { x0, y0, x1, y1 } = w.bbox;
-          const baselinePx = line.bbox.y1 - lineH * 0.2;
-          const pdfX = x0 / scale;
-          const pdfY = baselinePx / scale;
-          const widthPdf = (x1 - x0) / scale;
-          items.push({
-            str: w.text,
-            transform: [lineFontPt, 0, 0, lineFontPt, pdfX, pdfY],
-            width: widthPdf,
-            fontName: "",
-            _ocrBold: lineBold,
-            _ocrItalic: lineItalic,
-            _ocrFontFamily: lineFont,
-          });
-        }
+        // Baseline: line bottom minus ~20% of line height (descender allowance)
+        const baselinePx = y1 - lineH * 0.2;
+        items.push({
+          str: lineText,
+          transform: [lineFontPt, 0, 0, lineFontPt, x0 / scale, baselinePx / scale],
+          width: lineW / scale,
+          fontName: "",
+          _ocrBold: lineBold,
+          _ocrItalic: lineItalic,
+          _ocrFontFamily: lineFont,
+          _ocrLineTop: y0,
+          _ocrLineBot: y1,
+        });
         if (li % 5 === 0) updateOcrProgress(50 + Math.round((li / lines.length) * 45), "Detecting fonts");
       }
 
