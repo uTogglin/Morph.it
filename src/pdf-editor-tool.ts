@@ -952,7 +952,12 @@ export function initPdfEditorTool() {
         let bold = false;
         let italic = false;
         let fontName = item.fontName || "";
-        if (fontName) {
+        if (item._ocrBold !== undefined) {
+          // OCR-detected item — use Tesseract font flags directly
+          bold = !!item._ocrBold;
+          italic = !!item._ocrItalic;
+          if (fontName) fontFamily = mapFontFamily(fontName);
+        } else if (fontName) {
           const style = detectFontStyle(fontName);
           bold = style.bold;
           italic = style.italic;
@@ -1053,11 +1058,15 @@ export function initPdfEditorTool() {
         const pdfX = x0 / scale;
         const pdfY = baselinePx / scale;
         const widthPdf = (x1 - x0) / scale;
+        // Encode Tesseract font info so findTextItemAtPoint can use it
+        const fontName = w.font_name || "";
         items.push({
           str: w.text,
           transform: [fontSizePt, 0, 0, fontSizePt, pdfX, pdfY],
           width: widthPdf,
-          fontName: "",
+          fontName,
+          _ocrBold: !!w.is_bold,
+          _ocrItalic: !!w.is_italic,
         });
       }
 
