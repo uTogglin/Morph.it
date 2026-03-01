@@ -3938,6 +3938,94 @@ body[data-tool="image"] #convert-button { display: none !important; }
   font-weight: 600;
 }
 
+/* ── Merge PDFs ── */
+.pde-merge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--input-border);
+}
+.pde-merge-add-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--input-border);
+  border-radius: 50%;
+  background: var(--input-bg);
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+.pde-merge-add-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.pde-merge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  overflow-y: auto;
+  max-height: 180px;
+}
+.pde-merge-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  font-size: 0.68rem;
+  color: var(--text-main);
+}
+.pde-merge-item-index {
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  min-width: 14px;
+  text-align: center;
+}
+.pde-merge-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.pde-merge-item-actions {
+  display: flex;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.pde-merge-item-btn {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.68rem;
+  padding: 0;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+.pde-merge-item-btn:hover {
+  background: var(--card-bg);
+  color: var(--accent);
+}
+
 /* ── Main canvas area ── */
 .pde-main {
   flex: 1;

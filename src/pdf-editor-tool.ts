@@ -52,6 +52,9 @@ export function initPdfEditorTool() {
   const opacityInput = document.getElementById("pde-opacity") as HTMLInputElement;
   const opacityLabel = document.getElementById("pde-opacity-label") as HTMLSpanElement;
   const thumbnailsContainer = document.getElementById("pde-thumbnails") as HTMLDivElement;
+  const mergeFileInput = document.getElementById("pde-merge-file-input") as HTMLInputElement;
+  const mergeAddBtn = document.getElementById("pde-merge-add") as HTMLButtonElement;
+  const mergeListEl = document.getElementById("pde-merge-list") as HTMLDivElement;
 
   /* ── State ── */
   let pdfDoc: any = null;
@@ -76,6 +79,9 @@ export function initPdfEditorTool() {
 
   // Font detection state
   const pageTextContent: Map<number, any> = new Map();
+
+  // Merge PDFs state
+  let pdfMergeFiles: { name: string; bytes: Uint8Array }[] = [];
 
   // Text editing state
   interface TextEdit {
@@ -356,6 +362,8 @@ export function initPdfEditorTool() {
       docFontStatus.textContent = "";
       undoStack = [];
       redoStack = [];
+      pdfMergeFiles = [];
+      renderMergeList();
 
       uploadSection.classList.add("hidden");
       editorSection.classList.remove("hidden");
@@ -439,6 +447,78 @@ export function initPdfEditorTool() {
     if (fabricEl) ctx.drawImage(fabricEl, 0, 0, tw, th);
 
     thumbEl.src = c.toDataURL();
+  }
+
+  /* ── Merge PDFs ── */
+  mergeAddBtn.addEventListener("click", () => mergeFileInput.click());
+  mergeFileInput.addEventListener("change", async () => {
+    const files = mergeFileInput.files;
+    if (!files) return;
+    for (const f of Array.from(files)) {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      pdfMergeFiles.push({ name: f.name, bytes });
+    }
+    mergeFileInput.value = "";
+    renderMergeList();
+  });
+
+  function renderMergeList() {
+    mergeListEl.innerHTML = "";
+    pdfMergeFiles.forEach((entry, i) => {
+      const item = document.createElement("div");
+      item.className = "pde-merge-item";
+
+      const indexSpan = document.createElement("span");
+      indexSpan.className = "pde-merge-item-index";
+      indexSpan.textContent = `#${i + 1}`;
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "pde-merge-item-name";
+      nameSpan.textContent = entry.name;
+      nameSpan.title = entry.name;
+
+      const actions = document.createElement("span");
+      actions.className = "pde-merge-item-actions";
+
+      if (i > 0) {
+        const upBtn = document.createElement("button");
+        upBtn.className = "pde-merge-item-btn";
+        upBtn.title = "Move up";
+        upBtn.textContent = "\u25B2";
+        upBtn.addEventListener("click", () => {
+          [pdfMergeFiles[i - 1], pdfMergeFiles[i]] = [pdfMergeFiles[i], pdfMergeFiles[i - 1]];
+          renderMergeList();
+        });
+        actions.appendChild(upBtn);
+      }
+
+      if (i < pdfMergeFiles.length - 1) {
+        const downBtn = document.createElement("button");
+        downBtn.className = "pde-merge-item-btn";
+        downBtn.title = "Move down";
+        downBtn.textContent = "\u25BC";
+        downBtn.addEventListener("click", () => {
+          [pdfMergeFiles[i], pdfMergeFiles[i + 1]] = [pdfMergeFiles[i + 1], pdfMergeFiles[i]];
+          renderMergeList();
+        });
+        actions.appendChild(downBtn);
+      }
+
+      const rmBtn = document.createElement("button");
+      rmBtn.className = "pde-merge-item-btn";
+      rmBtn.title = "Remove";
+      rmBtn.textContent = "\u00D7";
+      rmBtn.addEventListener("click", () => {
+        pdfMergeFiles.splice(i, 1);
+        renderMergeList();
+      });
+      actions.appendChild(rmBtn);
+
+      item.appendChild(indexSpan);
+      item.appendChild(nameSpan);
+      item.appendChild(actions);
+      mergeListEl.appendChild(item);
+    });
   }
 
   /* ── Properties panel ── */
@@ -2273,8 +2353,8 @@ export function initPdfEditorTool() {
       // Capture all annotated pages as PNGs (excluding text-edit objects)
       const { overlays, flatRedacted } = await capturePageAnnotations();
 
-      if (overlays.size === 0 && flatRedacted.size === 0 && !hasTextEdits) {
-        // No annotations, text edits, or redactions — just download the original
+      if (overlays.size === 0 && flatRedacted.size === 0 && !hasTextEdits && pdfMergeFiles.length === 0) {
+        // No annotations, text edits, redactions, or merge files — just download the original
         const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
@@ -2343,8 +2423,29 @@ export function initPdfEditorTool() {
         });
       }
 
-      const modifiedBytes = await outPdf.save();
-      const blob = new Blob([modifiedBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+      let finalOutput: Uint8Array = await outPdf.save();
+
+      // Merge additional PDFs if any
+      if (pdfMergeFiles.length > 0) {
+        const merger = await PDFDocument.create();
+        // Copy pages from primary (edited) PDF
+        const primaryDoc = await PDFDocument.load(finalOutput);
+        const primaryPages = await merger.copyPages(primaryDoc, primaryDoc.getPageIndices());
+        primaryPages.forEach(p => merger.addPage(p));
+        // Copy pages from each additional PDF
+        for (const mergeFile of pdfMergeFiles) {
+          try {
+            const extraDoc = await PDFDocument.load(mergeFile.bytes);
+            const extraPages = await merger.copyPages(extraDoc, extraDoc.getPageIndices());
+            extraPages.forEach(p => merger.addPage(p));
+          } catch (err) {
+            console.warn(`[PDF Editor] Failed to merge "${mergeFile.name}":`, err);
+          }
+        }
+        finalOutput = await merger.save();
+      }
+
+      const blob = new Blob([finalOutput.buffer as ArrayBuffer], { type: "application/pdf" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = pdfFileName.replace(/\.pdf$/i, "") + "-edited.pdf";

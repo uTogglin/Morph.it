@@ -1644,6 +1644,11 @@
         <aside class="pde-sidebar pde-sidebar-left">
           <div class="pde-sidebar-header"><span>Pages</span></div>
           <div class="pde-thumb-list" id="pde-thumbnails"></div>
+          <div class="pde-sidebar-header pde-merge-header">
+            <span>Merge PDFs</span>
+            <button id="pde-merge-add" class="pde-merge-add-btn" title="Add PDFs">+</button>
+          </div>
+          <div id="pde-merge-list" class="pde-merge-list"></div>
         </aside>
 
         <!-- Center: Canvas -->
@@ -1758,6 +1763,7 @@
 
     <input id="pde-file-input" type="file" accept=".pdf" style="display:none">
     <input id="pde-img-input" type="file" accept="image/*" style="display:none">
+    <input id="pde-merge-file-input" type="file" accept=".pdf" multiple style="display:none">
   </section>
 
   <div id="format-containers">
