@@ -30,6 +30,7 @@ export async function getKokoro(onProgress?: (pct: number, msg: string) => void)
     console.log(`[Kokoro TTS] Using device=${device}, dtype=${dtype}`);
     onProgress?.(0, `Loading Kokoro model (${device})...`);
 
+    let lastKokoroUpdate = 0;
     kokoroInstance = await KokoroTTS.from_pretrained(
       "onnx-community/Kokoro-82M-v1.0-ONNX",
       {
@@ -37,7 +38,13 @@ export async function getKokoro(onProgress?: (pct: number, msg: string) => void)
         device: device as any,
         progress_callback: (info: any) => {
           if (info.status === "progress" && typeof info.progress === "number") {
-            onProgress?.(Math.round(info.progress), `Downloading Kokoro model (${device})...`);
+            const now = performance.now();
+            if (now - lastKokoroUpdate < 200) return;
+            lastKokoroUpdate = now;
+            const loaded = info.loaded ? (info.loaded / 1024 / 1024).toFixed(0) : "";
+            const total = info.total ? (info.total / 1024 / 1024).toFixed(0) : "";
+            const sizeInfo = loaded && total ? ` — ${loaded} / ${total} MB` : "";
+            onProgress?.(Math.round(info.progress), `Downloading Kokoro model${sizeInfo}`);
           }
         },
       },
@@ -546,12 +553,12 @@ export function initSpeechTool() {
 
     try {
       const tts = await getKokoro((pct, msg) => {
-        ttsProgressFill.style.width = `${Math.round(pct * 0.6)}%`;
+        ttsProgressFill.style.width = `${Math.round(pct * 0.5)}%`;
         ttsProgressText.textContent = msg;
       });
 
       ttsProgressText.textContent = "Generating speech...";
-      ttsProgressFill.style.width = "65%";
+      ttsProgressFill.style.width = "55%";
       freezeWarning.classList.remove("hidden");
 
       const voice = ttsVoice.value;
@@ -590,7 +597,7 @@ export function initSpeechTool() {
         ttsProgressText.textContent = chunks.length > 1
           ? `Generating speech (${i + 1}/${chunks.length})...`
           : "Generating speech (this may take a moment)...";
-        ttsProgressFill.style.width = `${Math.min(95, 65 + (i / chunks.length) * 30)}%`;
+        ttsProgressFill.style.width = `${Math.min(92, 55 + ((i + 1) / chunks.length) * 37)}%`;
 
         const t0 = performance.now();
         let result: any;
@@ -620,7 +627,7 @@ export function initSpeechTool() {
       }
       console.log("[Kokoro TTS] All chunks generated");
 
-      ttsProgressFill.style.width = "95%";
+      ttsProgressFill.style.width = "94%";
       ttsProgressText.textContent = "Encoding audio...";
       freezeWarning.classList.add("hidden");
 

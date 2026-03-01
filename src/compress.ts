@@ -433,7 +433,7 @@ async function compressVideo(
       `<p>${file.name}</p>` +
       `<p style="color:var(--text-muted);font-size:0.85rem">WebCodecs couldn't hit target size. Using ffmpeg for tighter control.</p>` +
       `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
-        `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.3s;border-radius:8px"></div>` +
+        `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
       `</div>` +
       `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`
     );
@@ -494,7 +494,7 @@ async function compressVideo(
           `<p>${file.name}</p>` +
           `<p style="color:var(--text-muted);font-size:0.85rem">H.265 is not supported in this browser build. Re-encoding with H.264 instead.</p>` +
           `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
-            `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.3s;border-radius:8px"></div>` +
+            `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
           `</div>` +
           `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`
         );
@@ -555,7 +555,7 @@ async function compressVideo(
         `<p>${file.name}</p>` +
         `<p style="color:var(--text-muted);font-size:0.85rem">H.265 is not supported in this browser build. Compressing with H.264 instead.</p>` +
         `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
-          `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.3s;border-radius:8px"></div>` +
+          `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
         `</div>` +
         `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`
       );
@@ -587,7 +587,7 @@ async function compressVideo(
         `<p>${file.name}</p>` +
         `<p style="color:var(--text-muted);font-size:0.85rem">Original codec couldn't hit target. Trying VP9 — output will be WebM.</p>` +
         `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
-          `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.3s;border-radius:8px"></div>` +
+          `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
         `</div>` +
         `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`
       );
@@ -727,7 +727,7 @@ export async function applyFileCompression(
       heading +
       (toProcess.length > 1 ? `<p style="color:var(--text-muted);font-size:0.85rem">File ${idx} of ${toProcess.length}</p>` : "") +
       `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
-        `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.3s;border-radius:8px"></div>` +
+        `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
       `</div>` +
       `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`
     );

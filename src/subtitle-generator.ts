@@ -113,6 +113,7 @@ export async function generateSubtitles(
         // Track per-file bytes for smooth overall progress
         const fileProgress: Map<string, { loaded: number; total: number }> = new Map();
         let fromCache = true;
+        let lastProgressCall = 0;
 
         whisperPipeline = await pipeline(
           "automatic-speech-recognition",
@@ -127,28 +128,22 @@ export async function generateSubtitles(
                   fileProgress.set(fname, { loaded: info.loaded, total: info.total });
                   if (info.loaded < info.total * 0.95) fromCache = false;
                 }
-                // Compute overall progress across all files
+                // Throttle UI updates to ~5/sec so text doesn't flicker
+                const now = performance.now();
+                if (now - lastProgressCall < 200) return;
+                lastProgressCall = now;
+
                 let totalLoaded = 0, totalSize = 0;
                 for (const fp of fileProgress.values()) {
                   totalLoaded += fp.loaded;
                   totalSize += fp.total;
                 }
                 const overallPct = totalSize > 0 ? totalLoaded / totalSize : 0;
-                // Map 0-1 overall to 10-50% progress range
                 const pct = Math.round(10 + overallPct * 40);
-                const file = fname.split("/").pop() || "";
                 const loaded = (totalLoaded / 1024 / 1024).toFixed(0);
                 const total = (totalSize / 1024 / 1024).toFixed(0);
                 const action = fromCache ? "Loading" : "Downloading";
-                const msg = `${action} ${cfg.label} — ${file} (${loaded}/${total} MB)`;
-                console.log(`[Whisper STT] ${msg} [${Math.round(overallPct * 100)}%]`);
-                onProgress?.(msg, pct);
-              } else if (info.status === "initiate") {
-                const file = info.file ? info.file.split("/").pop() : "";
-                console.log(`[Whisper STT] Loading: ${file}`);
-              } else if (info.status === "done") {
-                const file = info.file ? info.file.split("/").pop() : "";
-                console.log(`[Whisper STT] Ready: ${file}`);
+                onProgress?.(`${action} ${cfg.label} model — ${loaded} / ${total} MB`, pct);
               } else if (info.status === "ready") {
                 console.log(`[Whisper STT] Model ${cfg.label} ready (${device}, ${dtypeLabel})`);
                 onProgress?.(`${cfg.label} model loaded!`, 50);

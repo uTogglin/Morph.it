@@ -43,12 +43,19 @@ async function getSummarizer(onProgress?: (pct: number, msg: string) => void): P
     onProgress?.(0, `Loading ${modelInfo.label} (${device})...`);
     console.log(`[Summarize] Using device=${device}, dtype=${dtype}`);
 
+    let lastSumUpdate = 0;
     summarizer = await pipeline("summarization", modelInfo.id, {
       device,
       dtype,
       progress_callback: (info: any) => {
         if (info.status === "progress" && typeof info.progress === "number") {
-          onProgress?.(Math.round(info.progress), `Downloading ${modelInfo.label} (${device})...`);
+          const now = performance.now();
+          if (now - lastSumUpdate < 200) return;
+          lastSumUpdate = now;
+          const loaded = info.loaded ? (info.loaded / 1024 / 1024).toFixed(0) : "";
+          const total = info.total ? (info.total / 1024 / 1024).toFixed(0) : "";
+          const sizeInfo = loaded && total ? ` — ${loaded} / ${total} MB` : "";
+          onProgress?.(Math.round(info.progress), `Downloading ${modelInfo.label}${sizeInfo}`);
         }
       },
     } as any);
@@ -581,12 +588,12 @@ export function initSummarizeTool() {
 
     try {
       const tts = await getKokoro((pct, msg) => {
-        ttsProgressFill.style.width = `${Math.round(pct * 0.6)}%`;
+        ttsProgressFill.style.width = `${Math.round(pct * 0.5)}%`;
         ttsProgressText.textContent = msg;
       });
 
       ttsProgressText.textContent = "Generating speech...";
-      ttsProgressFill.style.width = "65%";
+      ttsProgressFill.style.width = "55%";
       ttsFreezeWarn.classList.remove("hidden");
 
       const voice = (() => { try { return localStorage.getItem("convert-tts-voice") ?? "af_heart"; } catch { return "af_heart"; } })();
@@ -611,7 +618,7 @@ export function initSummarizeTool() {
         ttsProgressText.textContent = chunks.length > 1
           ? `Generating speech (${i + 1}/${chunks.length})...`
           : "Generating speech (this may take a moment)...";
-        ttsProgressFill.style.width = `${Math.min(95, 65 + (i / chunks.length) * 30)}%`;
+        ttsProgressFill.style.width = `${Math.min(92, 55 + ((i + 1) / chunks.length) * 37)}%`;
 
         const result = await tts.generate(chunks[i], { voice, speed });
         const data: Float32Array = result?.data ?? result?.audio;
@@ -623,7 +630,7 @@ export function initSummarizeTool() {
         chunkMeta.push({ text: chunks[i], samples: data.length });
       }
 
-      ttsProgressFill.style.width = "95%";
+      ttsProgressFill.style.width = "94%";
       ttsProgressText.textContent = "Encoding audio...";
       ttsFreezeWarn.classList.add("hidden");
 
