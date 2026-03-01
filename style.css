@@ -4374,6 +4374,36 @@ body.ocr-tts-active .ocr-tts-overlay {
   margin-left: 6px;
 }
 
+/* ── PDF Editor fullscreen ── */
+#pdf-editor-page:fullscreen,
+#pdf-editor-page:-webkit-full-screen {
+  background: var(--bg-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#pdf-editor-page:fullscreen .speech-page-header,
+#pdf-editor-page:-webkit-full-screen .speech-page-header,
+#pdf-editor-page:fullscreen #pde-upload,
+#pdf-editor-page:-webkit-full-screen #pde-upload {
+  display: none;
+}
+#pdf-editor-page:fullscreen #pde-editor,
+#pdf-editor-page:-webkit-full-screen #pde-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#pdf-editor-page:fullscreen .pde-workspace,
+#pdf-editor-page:-webkit-full-screen .pde-workspace {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  border-radius: 0;
+}
+#pde-fullscreen { margin-right: 6px; }
+
 /* ── PDF Editor responsive ── */
 @media (max-width: 900px) {
   .pde-sidebar-left { width: 110px; }

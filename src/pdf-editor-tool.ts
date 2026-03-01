@@ -24,6 +24,10 @@ export function initPdfEditorTool() {
   const zoomLabel = document.getElementById("pde-zoom-label") as HTMLSpanElement;
   const downloadBtn = document.getElementById("pde-download") as HTMLButtonElement;
   const exportImagesBtn = document.getElementById("pde-export-images") as HTMLButtonElement;
+  const fullscreenBtn = document.getElementById("pde-fullscreen") as HTMLButtonElement;
+  const fsEnterIcon = document.getElementById("pde-fs-enter-icon") as SVGElement;
+  const fsExitIcon = document.getElementById("pde-fs-exit-icon") as SVGElement;
+  const pdfEditorPage = document.getElementById("pdf-editor-page") as HTMLElement;
 
   const undoBtn = document.getElementById("pde-undo") as HTMLButtonElement;
   const redoBtn = document.getElementById("pde-redo") as HTMLButtonElement;
@@ -2203,6 +2207,23 @@ export function initPdfEditorTool() {
     zoom = Math.max(0.25, zoom - 0.25);
     saveCurrentAnnotations();
     renderPage();
+  });
+
+  /* ── Fullscreen ── */
+  fullscreenBtn.addEventListener("click", () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      pdfEditorPage.requestFullscreen();
+    }
+  });
+  document.addEventListener("fullscreenchange", () => {
+    const isFs = document.fullscreenElement === pdfEditorPage;
+    fsEnterIcon.classList.toggle("hidden", isFs);
+    fsExitIcon.classList.toggle("hidden", !isFs);
+    fullscreenBtn.title = isFs ? "Exit Fullscreen" : "Fullscreen";
+    // Re-render after layout change so canvas resizes correctly
+    setTimeout(() => renderPage(), 50);
   });
 
   /* ── Capture annotation overlay as PNG for a given page ── */
