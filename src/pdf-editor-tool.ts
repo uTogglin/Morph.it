@@ -1383,11 +1383,11 @@ export function initPdfEditorTool() {
   });
 
   /* ── Capture annotation overlay as PNG for a given page ── */
-  // Renders annotations on the live fabric canvas by navigating to that page,
-  // captures the canvas, then returns to the original page.
-  // Hides text-edit objects so they don't bake into the image overlay.
-  async function capturePageAnnotations(): Promise<Map<number, string>> {
-    const captures = new Map<number, string>();
+  // For redacted pages: flattens bg + redaction rects into one image (destroys text).
+  // For other annotated pages: captures transparent fabric overlay only.
+  async function capturePageAnnotations(): Promise<{ overlays: Map<number, string>; flatRedacted: Map<number, string> }> {
+    const overlays = new Map<number, string>();
+    const flatRedacted = new Map<number, string>();
     const origPage = currentPage;
     saveCurrentAnnotations();
 
@@ -1397,39 +1397,63 @@ export function initPdfEditorTool() {
       const parsed = JSON.parse(annotJson);
       if (!parsed.objects || parsed.objects.length === 0) continue;
 
-      // Check if this page has only text-edit objects (no regular annotations)
+      const hasRedactRects = parsed.objects.some((o: any) => o._pdeRedact);
       const hasNonEditObjects = parsed.objects.some((o: any) => !o._pdeTextEditId);
-      if (!hasNonEditObjects) continue;
+      if (!hasNonEditObjects && !hasRedactRects) continue;
 
       // Navigate to the page to load its annotations on the live canvas
       currentPage = pageNum;
       await renderPage();
-      // Wait a tick for fabric to finish rendering
       await new Promise(r => setTimeout(r, 50));
 
-      // Temporarily hide text-edit objects before capture
-      const hiddenObjs: any[] = [];
-      for (const obj of fabricCanvas.getObjects()) {
-        if (obj._pdeTextEditId) {
-          obj.set("visible", false);
-          hiddenObjs.push(obj);
+      if (hasRedactRects) {
+        // Flatten: render PDF background + redaction rects into a single opaque image.
+        // This completely destroys all text on the page — no content streams survive.
+        const flatCanvas = document.createElement("canvas");
+        flatCanvas.width = bgCanvas.width;
+        flatCanvas.height = bgCanvas.height;
+        const flatCtx = flatCanvas.getContext("2d")!;
+
+        // Draw the rendered PDF page
+        flatCtx.drawImage(bgCanvas, 0, 0);
+
+        // Draw all fabric objects (annotations + redactions) on top
+        // Hide text-edit objects so they don't appear in the flat image
+        const hiddenObjs: any[] = [];
+        for (const obj of fabricCanvas.getObjects()) {
+          if (obj._pdeTextEditId) {
+            obj.set("visible", false);
+            hiddenObjs.push(obj);
+          }
         }
+        fabricCanvas.renderAll();
+        const fabricEl = fabricCanvas.getElement();
+        flatCtx.drawImage(fabricEl, 0, 0);
+        for (const obj of hiddenObjs) obj.set("visible", true);
+        fabricCanvas.renderAll();
+
+        flatRedacted.set(pageNum, flatCanvas.toDataURL("image/png"));
+      } else if (hasNonEditObjects) {
+        // Non-redacted page: capture annotations as transparent overlay
+        const hiddenObjs: any[] = [];
+        for (const obj of fabricCanvas.getObjects()) {
+          if (obj._pdeTextEditId) {
+            obj.set("visible", false);
+            hiddenObjs.push(obj);
+          }
+        }
+        fabricCanvas.renderAll();
+        const dataUrl = fabricCanvas.toDataURL({ format: "png", multiplier: 1 });
+        overlays.set(pageNum, dataUrl);
+        for (const obj of hiddenObjs) obj.set("visible", true);
+        fabricCanvas.renderAll();
       }
-      fabricCanvas.renderAll();
-
-      // Capture the fabric canvas (annotations only, transparent bg)
-      const dataUrl = fabricCanvas.toDataURL({ format: "png", multiplier: 1 });
-      captures.set(pageNum, dataUrl);
-
-      // Restore visibility
-      for (const obj of hiddenObjs) obj.set("visible", true);
-      fabricCanvas.renderAll();
     }
 
     // Restore original page
     currentPage = origPage;
     await renderPage();
-    return captures;
+    return { overlays, flatRedacted };
   }
 
   /* ── Font mapping for pdf-lib export ── */
@@ -1482,7 +1506,6 @@ export function initPdfEditorTool() {
     // Get redaction rectangles from the fabric JSON
     const redactRects = parsed.objects.filter((o: any) => o._pdeRedact);
     if (redactRects.length === 0) return [];
-    console.log(`[PDF Editor] Page ${pageNum}: ${redactRects.length} redaction rect(s), ${textContent.items.length} text items`);
 
     // For each text item, check if it falls within any redaction rectangle
     for (const item of textContent.items) {
@@ -1501,14 +1524,12 @@ export function initPdfEditorTool() {
         const rh = (rect.height ?? 0) * (rect.scaleY ?? 1);
 
         if (cx >= rl - 2 && cx <= rl + rw + 2 && cy >= rt - 2 && cy <= rt + rh + 2) {
-          console.log(`[PDF Editor] Redact match: "${item.str}" at canvas(${cx.toFixed(1)},${cy.toFixed(1)}) pdf(${pdfX.toFixed(1)},${pdfY.toFixed(1)}) in rect(${rl.toFixed(1)},${rt.toFixed(1)},${rw.toFixed(1)}x${rh.toFixed(1)})`);
           edits.push({ pdfX, pdfY, tolerance: 5.0, delete: true });
           break; // text item matched one rect, no need to check others
         }
       }
     }
 
-    console.log(`[PDF Editor] Page ${pageNum}: ${edits.length} text items matched for redaction`);
     return edits;
   }
 
@@ -1540,8 +1561,6 @@ export function initPdfEditorTool() {
 
       // Collect redaction region deletions
       const redactEdits = hasRedactions ? collectRedactionEdits(pageNum) : [];
-      console.log(`[PDF Editor] Page ${pageNum}: ${deleteEdits.length} text edits, ${redactEdits.length} redaction edits`);
-
       const allEdits = [...deleteEdits, ...redactEdits];
       if (allEdits.length > 0) {
         try {
@@ -1563,11 +1582,9 @@ export function initPdfEditorTool() {
             } else {
               streamRefs.push(contentsRef);
             }
-            console.log(`[PDF Editor] Page ${pageNum}: processing ${streamRefs.length} content stream(s)`);
-
             for (const ref of streamRefs) {
               const streamObj = outPdf.context.lookup(ref);
-              if (!streamObj) { console.warn("[PDF Editor] Stream ref lookup returned null"); continue; }
+              if (!streamObj) continue;
 
               let streamBytes: Uint8Array;
               try {
@@ -1576,11 +1593,9 @@ export function initPdfEditorTool() {
                 } else if (streamObj.contents) {
                   streamBytes = streamObj.contents;
                 } else {
-                  console.warn("[PDF Editor] Stream object has no getContents or contents");
                   continue;
                 }
-              } catch (e) {
-                console.warn("[PDF Editor] Error reading stream contents:", e);
+              } catch {
                 continue;
               }
 
@@ -1595,11 +1610,7 @@ export function initPdfEditorTool() {
               }
 
               const modified = removeTextFromStream(streamText, allEdits);
-              if (modified === streamText) {
-                console.warn(`[PDF Editor] Page ${pageNum}: removeTextFromStream made no changes (stream length ${streamText.length})`);
-                continue;
-              }
-              console.log(`[PDF Editor] Page ${pageNum}: stream modified successfully`);
+              if (modified === streamText) continue;
 
               const modifiedBytes = new Uint8Array(Array.from(modified, c => c.charCodeAt(0)));
               let finalBytes: Uint8Array;
@@ -1688,9 +1699,9 @@ export function initPdfEditorTool() {
       }
 
       // Capture all annotated pages as PNGs (excluding text-edit objects)
-      const captures = await capturePageAnnotations();
+      const { overlays, flatRedacted } = await capturePageAnnotations();
 
-      if (captures.size === 0 && !hasTextEdits && !hasRedactions) {
+      if (overlays.size === 0 && flatRedacted.size === 0 && !hasTextEdits) {
         // No annotations, text edits, or redactions — just download the original
         const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
         const a = document.createElement("a");
@@ -1702,17 +1713,35 @@ export function initPdfEditorTool() {
       }
 
       const pdfLibModule = await import("pdf-lib");
-      const { PDFDocument } = pdfLibModule;
+      const { PDFDocument, PDFName } = pdfLibModule;
       const outPdf = await PDFDocument.load(pdfBytes);
 
-      // Apply text edits and redactions to content streams
-      if (hasTextEdits || hasRedactions) {
-        await applyTextEdits(outPdf, pdfLibModule, hasRedactions);
+      // Apply text edits to content streams (non-redaction edits only)
+      if (hasTextEdits) {
+        await applyTextEdits(outPdf, pdfLibModule, false);
+      }
+
+      // For redacted pages: replace entire page content with flat image
+      // This completely destroys all text — the most reliable redaction method
+      for (const [pageNum, dataUrl] of flatRedacted) {
+        const pngBytes = Uint8Array.from(atob(dataUrl.split(",")[1]), c => c.charCodeAt(0));
+        const pngImage = await outPdf.embedPng(pngBytes);
+
+        const pdfPage = outPdf.getPages()[pageNum - 1];
+        const { width, height } = pdfPage.getSize();
+
+        // Wipe all existing page content (removes all text, vectors, images)
+        const pageNode = pdfPage.node;
+        pageNode.set(PDFName.of("Contents"), outPdf.context.obj([]));
+        // Remove any existing annotations that might contain text
+        pageNode.delete(PDFName.of("Annots"));
+
+        // Draw the flat image as the sole page content
+        pdfPage.drawImage(pngImage, { x: 0, y: 0, width, height });
       }
 
       // Strip all PDF metadata when redactions are present
-      if (hasRedactions) {
-        const { PDFName } = pdfLibModule;
+      if (flatRedacted.size > 0) {
         outPdf.setTitle("");
         outPdf.setSubject("");
         outPdf.setAuthor("");
@@ -1726,8 +1755,8 @@ export function initPdfEditorTool() {
         } catch { /* non-critical */ }
       }
 
-      // Composite PNG overlays for non-text annotations
-      for (const [pageNum, dataUrl] of captures) {
+      // Composite PNG overlays for non-redacted annotated pages
+      for (const [pageNum, dataUrl] of overlays) {
         const pngBytes = Uint8Array.from(atob(dataUrl.split(",")[1]), c => c.charCodeAt(0));
         const pngImage = await outPdf.embedPng(pngBytes);
 
