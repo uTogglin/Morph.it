@@ -1,5 +1,5 @@
 import { getKokoro, encodeWav, spokenWeight } from "./speech-tool.js";
-import { getOcrWorker } from "./ocr-worker.js";
+import { getOcrWorker, setOcrProgress } from "./ocr-worker.js";
 
 // ── PDF page-to-image helper ────────────────────────────────────────────────
 async function pdfToImages(bytes: Uint8Array): Promise<HTMLCanvasElement[]> {
@@ -129,6 +129,7 @@ export function initOcrTool() {
         progressFill.style.width = "5%";
         const canvases = await pdfToImages(bytes);
 
+        // Loading phase: 5% → 20%
         const worker = await getOcrWorker(lang, (pct, msg) => {
           progressFill.style.width = `${Math.round(5 + pct * 0.15)}%`;
           progressText.textContent = msg;
@@ -136,21 +137,33 @@ export function initOcrTool() {
 
         const pageTexts: string[] = [];
         for (let i = 0; i < canvases.length; i++) {
+          const pageStart = 20 + (i / canvases.length) * 75;
+          const pageSlice = 75 / canvases.length;
           progressText.textContent = `OCR page ${i + 1}/${canvases.length}...`;
-          progressFill.style.width = `${Math.round(20 + (i / canvases.length) * 75)}%`;
+          progressFill.style.width = `${Math.round(pageStart)}%`;
+          // Remap recognition progress into this page's slice
+          setOcrProgress((pct, _msg) => {
+            progressFill.style.width = `${Math.round(pageStart + (pct / 100) * pageSlice)}%`;
+          });
           const { data } = await worker.recognize(canvases[i]);
           pageTexts.push(data.text.trim());
         }
+        setOcrProgress(null);
         resultText = pageTexts.join("\n\n---\n\n");
       } else {
-        // Image file
+        // Image file — loading phase: 0% → 20%
         const worker = await getOcrWorker(lang, (pct, msg) => {
-          progressFill.style.width = `${Math.round(pct * 0.9)}%`;
+          progressFill.style.width = `${Math.round(pct * 0.2)}%`;
           progressText.textContent = msg;
         });
 
+        // Recognition phase: 20% → 95%
         progressText.textContent = "Recognizing text...";
+        setOcrProgress((pct, _msg) => {
+          progressFill.style.width = `${Math.round(20 + (pct / 100) * 75)}%`;
+        });
         const { data } = await worker.recognize(selectedFile);
+        setOcrProgress(null);
         resultText = data.text.trim();
       }
 
