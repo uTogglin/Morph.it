@@ -1482,6 +1482,7 @@ export function initPdfEditorTool() {
     // Get redaction rectangles from the fabric JSON
     const redactRects = parsed.objects.filter((o: any) => o._pdeRedact);
     if (redactRects.length === 0) return [];
+    console.log(`[PDF Editor] Page ${pageNum}: ${redactRects.length} redaction rect(s), ${textContent.items.length} text items`);
 
     // For each text item, check if it falls within any redaction rectangle
     for (const item of textContent.items) {
@@ -1500,12 +1501,14 @@ export function initPdfEditorTool() {
         const rh = (rect.height ?? 0) * (rect.scaleY ?? 1);
 
         if (cx >= rl - 2 && cx <= rl + rw + 2 && cy >= rt - 2 && cy <= rt + rh + 2) {
+          console.log(`[PDF Editor] Redact match: "${item.str}" at canvas(${cx.toFixed(1)},${cy.toFixed(1)}) pdf(${pdfX.toFixed(1)},${pdfY.toFixed(1)}) in rect(${rl.toFixed(1)},${rt.toFixed(1)},${rw.toFixed(1)}x${rh.toFixed(1)})`);
           edits.push({ pdfX, pdfY, tolerance: 5.0, delete: true });
           break; // text item matched one rect, no need to check others
         }
       }
     }
 
+    console.log(`[PDF Editor] Page ${pageNum}: ${edits.length} text items matched for redaction`);
     return edits;
   }
 
@@ -1537,12 +1540,19 @@ export function initPdfEditorTool() {
 
       // Collect redaction region deletions
       const redactEdits = hasRedactions ? collectRedactionEdits(pageNum) : [];
+      console.log(`[PDF Editor] Page ${pageNum}: ${deleteEdits.length} text edits, ${redactEdits.length} redaction edits`);
 
       const allEdits = [...deleteEdits, ...redactEdits];
       if (allEdits.length > 0) {
         try {
           const pageNode = page.node;
-          const contentsRef = pageNode.get(PDFName.of("Contents"));
+          let contentsRef = pageNode.get(PDFName.of("Contents"));
+
+          // Dereference if it's an indirect reference to an array
+          if (contentsRef && !(contentsRef instanceof PDFArray) && typeof contentsRef === "object" && "objectNumber" in contentsRef) {
+            const deref = outPdf.context.lookup(contentsRef);
+            if (deref instanceof PDFArray) contentsRef = deref;
+          }
 
           if (contentsRef) {
             const streamRefs: any[] = [];
@@ -1553,10 +1563,11 @@ export function initPdfEditorTool() {
             } else {
               streamRefs.push(contentsRef);
             }
+            console.log(`[PDF Editor] Page ${pageNum}: processing ${streamRefs.length} content stream(s)`);
 
             for (const ref of streamRefs) {
               const streamObj = outPdf.context.lookup(ref);
-              if (!streamObj) continue;
+              if (!streamObj) { console.warn("[PDF Editor] Stream ref lookup returned null"); continue; }
 
               let streamBytes: Uint8Array;
               try {
@@ -1565,9 +1576,11 @@ export function initPdfEditorTool() {
                 } else if (streamObj.contents) {
                   streamBytes = streamObj.contents;
                 } else {
+                  console.warn("[PDF Editor] Stream object has no getContents or contents");
                   continue;
                 }
-              } catch {
+              } catch (e) {
+                console.warn("[PDF Editor] Error reading stream contents:", e);
                 continue;
               }
 
@@ -1582,7 +1595,11 @@ export function initPdfEditorTool() {
               }
 
               const modified = removeTextFromStream(streamText, allEdits);
-              if (modified === streamText) continue;
+              if (modified === streamText) {
+                console.warn(`[PDF Editor] Page ${pageNum}: removeTextFromStream made no changes (stream length ${streamText.length})`);
+                continue;
+              }
+              console.log(`[PDF Editor] Page ${pageNum}: stream modified successfully`);
 
               const modifiedBytes = new Uint8Array(Array.from(modified, c => c.charCodeAt(0)));
               let finalBytes: Uint8Array;

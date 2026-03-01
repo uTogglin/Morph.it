@@ -396,20 +396,32 @@ export function removeTextFromStream(streamText: string, edits: TextEditPosition
   const instructions = parse(tokens);
   const textItems = resolveTextPositions(instructions);
 
+  console.log(`[PDF CS] ${textItems.length} text operators found in stream, matching against ${edits.length} edits`);
+  for (const item of textItems) {
+    console.log(`[PDF CS]   text op at (${item.x.toFixed(2)}, ${item.y.toFixed(2)}) [${item.operator}]`);
+  }
+  for (const edit of edits) {
+    console.log(`[PDF CS]   edit target: (${edit.pdfX.toFixed(2)}, ${edit.pdfY.toFixed(2)}) tol=${edit.tolerance}`);
+  }
+
   // Find instructions to zero out
   const toZero = new Set<number>();
 
   for (const edit of edits) {
     const tolerance = edit.tolerance ?? 2.0;
     for (const item of textItems) {
-      if (Math.abs(item.x - edit.pdfX) < tolerance && Math.abs(item.y - edit.pdfY) < tolerance) {
+      const dx = Math.abs(item.x - edit.pdfX);
+      const dy = Math.abs(item.y - edit.pdfY);
+      if (dx < tolerance && dy < tolerance) {
         if (edit.delete) {
+          console.log(`[PDF CS]   MATCH: op(${item.x.toFixed(2)},${item.y.toFixed(2)}) ↔ edit(${edit.pdfX.toFixed(2)},${edit.pdfY.toFixed(2)}) dx=${dx.toFixed(2)} dy=${dy.toFixed(2)}`);
           toZero.add(item.instructionIndex);
         }
       }
     }
   }
 
+  console.log(`[PDF CS] ${toZero.size} instructions to zero out`);
   if (toZero.size === 0) return streamText;
 
   // Rebuild the stream, replacing matched text operators with zeroed versions
