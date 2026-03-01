@@ -93,7 +93,8 @@ export function initPdfEditorTool() {
   const pageTextEdits: Map<number, TextEdit[]> = new Map();
   let textEditCounter = 0;
 
-  // Redact tool state
+  // Redact tool state — track independently of fabric serialization
+  const pagesWithRedactions = new Set<number>();
   let redactDragStart: { x: number; y: number } | null = null;
   let redactDragRect: any = null;
 
@@ -315,6 +316,7 @@ export function initPdfEditorTool() {
       pageAnnotations.clear();
       pageTextContent.clear();
       pageTextEdits.clear();
+      pagesWithRedactions.clear();
       textEditCounter = 0;
       undoStack = [];
       redoStack = [];
@@ -490,6 +492,11 @@ export function initPdfEditorTool() {
             break;
           }
         }
+      }
+      // If a redact rect was removed, check if page still has any
+      if (obj?._pdeRedact) {
+        const stillHasRedacts = fabricCanvas.getObjects().some((o: any) => o._pdeRedact);
+        if (!stillHasRedacts) pagesWithRedactions.delete(currentPage);
       }
     });
 
@@ -698,6 +705,7 @@ export function initPdfEditorTool() {
       } else {
         redactDragRect.set({ selectable: true, evented: true });
         fabricCanvas.setActiveObject(redactDragRect);
+        pagesWithRedactions.add(currentPage);
       }
       redactDragStart = null;
       redactDragRect = null;
@@ -1392,14 +1400,13 @@ export function initPdfEditorTool() {
     saveCurrentAnnotations();
 
     for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      const hasRedactRects = pagesWithRedactions.has(pageNum);
       const annotJson = pageAnnotations.get(pageNum);
-      if (!annotJson) continue;
-      const parsed = JSON.parse(annotJson);
-      if (!parsed.objects || parsed.objects.length === 0) continue;
+      const parsed = annotJson ? JSON.parse(annotJson) : { objects: [] };
+      const hasAnnotations = parsed.objects?.length > 0;
+      const hasNonEditObjects = parsed.objects?.some((o: any) => !o._pdeTextEditId);
 
-      const hasRedactRects = parsed.objects.some((o: any) => o._pdeRedact);
-      const hasNonEditObjects = parsed.objects.some((o: any) => !o._pdeTextEditId);
-      if (!hasNonEditObjects && !hasRedactRects) continue;
+      if (!hasRedactRects && !hasNonEditObjects) continue;
 
       // Navigate to the page to load its annotations on the live canvas
       currentPage = pageNum;
@@ -1689,14 +1696,7 @@ export function initPdfEditorTool() {
         }
       }
 
-      let hasRedactions = false;
-      for (const [, json] of pageAnnotations) {
-        const parsed = JSON.parse(json);
-        if (parsed.objects?.some((o: any) => o._pdeRedact)) {
-          hasRedactions = true;
-          break;
-        }
-      }
+      const hasRedactions = pagesWithRedactions.size > 0;
 
       // Capture all annotated pages as PNGs (excluding text-edit objects)
       const { overlays, flatRedacted } = await capturePageAnnotations();
