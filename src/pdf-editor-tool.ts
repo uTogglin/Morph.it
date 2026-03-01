@@ -25,8 +25,8 @@ export function initPdfEditorTool() {
   const downloadBtn = document.getElementById("pde-download") as HTMLButtonElement;
   const exportImagesBtn = document.getElementById("pde-export-images") as HTMLButtonElement;
   const fullscreenBtn = document.getElementById("pde-fullscreen") as HTMLButtonElement;
-  const fsEnterIcon = document.getElementById("pde-fs-enter-icon") as SVGElement;
-  const fsExitIcon = document.getElementById("pde-fs-exit-icon") as SVGElement;
+  const fsEnterIcon = document.getElementById("pde-fs-enter-icon") as HTMLElement;
+  const fsExitIcon = document.getElementById("pde-fs-exit-icon") as HTMLElement;
   const pdfEditorPage = document.getElementById("pdf-editor-page") as HTMLElement;
 
   const undoBtn = document.getElementById("pde-undo") as HTMLButtonElement;
