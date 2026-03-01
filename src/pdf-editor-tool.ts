@@ -568,9 +568,9 @@ export function initPdfEditorTool() {
               strokeWidth: 0,
               selectable: false,
               evented: false,
-              _pdeTextEditId: editId,
-              _pdeCoverRect: true,
             });
+            (coverRect as any)._pdeTextEditId = editId;
+            (coverRect as any)._pdeCoverRect = true;
             fabricCanvas.add(coverRect);
 
             // Load the matched font from Fontsource if it's a web font
@@ -586,9 +586,9 @@ export function initPdfEditorTool() {
               fontWeight: hitItem.bold ? "bold" : "normal",
               fontStyle: hitItem.italic ? "italic" : "normal",
               editable: true,
-              _pdeTextEditId: editId,
-              _pdeCoverRect: false,
             });
+            (editText as any)._pdeTextEditId = editId;
+            (editText as any)._pdeCoverRect = false;
 
             fabricCanvas.add(editText);
             fabricCanvas.setActiveObject(editText);
@@ -670,8 +670,8 @@ export function initPdfEditorTool() {
           selectable: false,
           evented: false,
           opacity: 1,
-          _pdeRedact: true,
         });
+        redactDragRect._pdeRedact = true;
         fabricCanvas.add(redactDragRect);
       }
     });
