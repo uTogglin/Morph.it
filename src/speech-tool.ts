@@ -669,6 +669,9 @@ export function initSpeechTool() {
 
       setTimeout(() => { ttsProgress.classList.add("hidden"); }, 400);
       ttsOverlay.classList.remove("hidden");
+      const topBar = document.getElementById("top-bar");
+      if (topBar) document.documentElement.style.setProperty("--top-bar-h", topBar.offsetHeight + "px");
+      document.body.classList.add("ocr-tts-active");
 
     } catch (err: any) {
       console.error("TTS generation failed:", err);
@@ -701,8 +704,7 @@ export function initSpeechTool() {
     activeSentenceIdx = -1;
   });
 
-  // Try Another — close overlay
-  ttsBackBtn.addEventListener("click", () => {
+  function closeTtsOverlay() {
     audio.pause();
     audio.currentTime = 0;
     cancelAnimationFrame(highlightRaf);
@@ -714,7 +716,11 @@ export function initSpeechTool() {
     sentenceWordSpans = [];
     ttsSentenceEl.textContent = "";
     ttsOverlay.classList.add("hidden");
-  });
+    document.body.classList.remove("ocr-tts-active");
+  }
+
+  // Try Another — close overlay
+  ttsBackBtn.addEventListener("click", closeTtsOverlay);
 
   skipBack.addEventListener("click", () => { audio.currentTime = Math.max(0, audio.currentTime - 10); });
   skipForward.addEventListener("click", () => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10); });
@@ -992,4 +998,7 @@ export function initSpeechTool() {
       document.execCommand("copy");
     }
   });
+
+  /** Stop TTS audio and close overlay — called when navigating away. */
+  return { stopTts: closeTtsOverlay };
 }
