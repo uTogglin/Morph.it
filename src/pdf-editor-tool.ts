@@ -2701,57 +2701,73 @@ export function initPdfEditorTool() {
 
     try {
       const { OPS } = await import("pdfjs-dist");
-      const PAINT_JPEG = 83; // OPS.paintJpegImageXObject — not in TS types
+      const A = OPS as any;
+      // All image-painting operators (some missing from TS types)
+      const namedOps = new Set([OPS.paintImageXObject, A.paintJpegImageXObject, A.paintImageMaskXObject].filter(Boolean));
+      const inlineOps = new Set([A.paintInlineImageXObject, A.paintInlineImageXObjectGroup].filter(Boolean));
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
       let imgCount = 0;
+      const seen = new Set<string>(); // deduplicate by image object name
+
+      async function imgToBlob(imgObj: any): Promise<Blob | null> {
+        const c = document.createElement("canvas");
+        const ctx = c.getContext("2d")!;
+        if (imgObj instanceof ImageBitmap) {
+          c.width = imgObj.width; c.height = imgObj.height;
+          ctx.drawImage(imgObj, 0, 0);
+        } else if (imgObj instanceof HTMLImageElement) {
+          c.width = imgObj.naturalWidth || imgObj.width;
+          c.height = imgObj.naturalHeight || imgObj.height;
+          ctx.drawImage(imgObj, 0, 0);
+        } else if (imgObj.bitmap instanceof ImageBitmap) {
+          c.width = imgObj.bitmap.width; c.height = imgObj.bitmap.height;
+          ctx.drawImage(imgObj.bitmap, 0, 0);
+        } else if (imgObj.data && imgObj.width && imgObj.height) {
+          c.width = imgObj.width; c.height = imgObj.height;
+          ctx.putImageData(new ImageData(new Uint8ClampedArray(imgObj.data), imgObj.width, imgObj.height), 0, 0);
+        } else {
+          return null;
+        }
+        if (c.width < 2 || c.height < 2) return null; // skip tiny masks/spacers
+        return new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
+      }
 
       for (let p = 1; p <= pdfDoc.numPages; p++) {
         const page = await pdfDoc.getPage(p);
         const ops = await page.getOperatorList();
 
         for (let i = 0; i < ops.fnArray.length; i++) {
-          if (ops.fnArray[i] !== OPS.paintImageXObject && ops.fnArray[i] !== PAINT_JPEG) continue;
-          const imgName = ops.argsArray[i][0];
-          const isJpeg = ops.fnArray[i] === PAINT_JPEG;
+          const fn = ops.fnArray[i];
 
           try {
-            const imgObj: any = await new Promise((resolve, reject) => {
-              const timeout = setTimeout(() => reject(new Error("timeout")), 5000);
-              page.objs.get(imgName, (obj: any) => { clearTimeout(timeout); resolve(obj); });
-            });
-            if (!imgObj) continue;
+            if (namedOps.has(fn)) {
+              // Named image object — look up from page.objs or page.commonObjs
+              const imgName = ops.argsArray[i][0];
+              if (seen.has(imgName)) continue;
+              seen.add(imgName);
 
-            let blob: Blob | null = null;
-            const c = document.createElement("canvas");
-            const ctx = c.getContext("2d")!;
+              const imgObj: any = await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error("timeout")), 5000);
+                // Try page.objs first, fall back to page.commonObjs
+                try {
+                  page.objs.get(imgName, (obj: any) => { clearTimeout(timeout); resolve(obj); });
+                } catch {
+                  page.commonObjs.get(imgName, (obj: any) => { clearTimeout(timeout); resolve(obj); });
+                }
+              });
+              if (!imgObj) continue;
 
-            if (imgObj instanceof ImageBitmap) {
-              c.width = imgObj.width;
-              c.height = imgObj.height;
-              ctx.drawImage(imgObj, 0, 0);
-              blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
-            } else if (imgObj instanceof HTMLImageElement) {
-              c.width = imgObj.naturalWidth || imgObj.width;
-              c.height = imgObj.naturalHeight || imgObj.height;
-              ctx.drawImage(imgObj, 0, 0);
-              blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
-            } else if (imgObj.bitmap instanceof ImageBitmap) {
-              c.width = imgObj.bitmap.width;
-              c.height = imgObj.bitmap.height;
-              ctx.drawImage(imgObj.bitmap, 0, 0);
-              blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
-            } else if (imgObj.data && imgObj.width && imgObj.height) {
-              c.width = imgObj.width;
-              c.height = imgObj.height;
-              const imageData = new ImageData(new Uint8ClampedArray(imgObj.data), imgObj.width, imgObj.height);
-              ctx.putImageData(imageData, 0, 0);
-              blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
-            }
+              const blob = await imgToBlob(imgObj);
+              if (blob) { imgCount++; zip.file(`page${p}-img${imgCount}.png`, blob); }
 
-            if (blob) {
-              imgCount++;
-              zip.file(`page${p}-img${imgCount}.png`, blob);
+            } else if (inlineOps.has(fn)) {
+              // Inline image — data is directly in argsArray
+              const imgObj: any = ops.argsArray[i][0];
+              if (!imgObj) continue;
+
+              const blob = await imgToBlob(imgObj);
+              if (blob) { imgCount++; zip.file(`page${p}-img${imgCount}.png`, blob); }
             }
           } catch (_) {
             // Skip images that can't be extracted
