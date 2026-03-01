@@ -2,7 +2,7 @@
 // Renders PDF pages with pdfjs-dist, lets users annotate with Fabric.js,
 // and exports the annotated PDF with pdf-lib.
 
-type PdeTool = "select" | "text" | "draw" | "highlight" | "redact" | "image";
+type PdeTool = "select" | "text" | "draw" | "highlight" | "highlight-pen" | "redact" | "image";
 
 export function initPdfEditorTool() {
   /* ── DOM refs ── */
@@ -40,6 +40,15 @@ export function initPdfEditorTool() {
   const redactProps = document.getElementById("pde-redact-props") as HTMLDivElement;
   const redactColorInput = document.getElementById("pde-redact-color") as HTMLInputElement;
   const redactColorHex = document.getElementById("pde-redact-color-hex") as HTMLSpanElement;
+  const highlightProps = document.getElementById("pde-highlight-props") as HTMLDivElement;
+  const hlColorInput = document.getElementById("pde-hl-color") as HTMLInputElement;
+  const hlColorHex = document.getElementById("pde-hl-color-hex") as HTMLSpanElement;
+  const hlStrengthInput = document.getElementById("pde-hl-strength") as HTMLInputElement;
+  const hlStrengthLabel = document.getElementById("pde-hl-strength-label") as HTMLSpanElement;
+  const hlPenSizeGroup = document.getElementById("pde-hl-pen-size-group") as HTMLDivElement;
+  const hlPenSizeInput = document.getElementById("pde-hl-pen-size") as HTMLInputElement;
+  const hlPenSizeLabel = document.getElementById("pde-hl-pen-size-label") as HTMLSpanElement;
+  const opacityGroup = document.getElementById("pde-opacity-group") as HTMLDivElement;
   const brushInput = document.getElementById("pde-brush-size") as HTMLInputElement;
   const brushLabel = document.getElementById("pde-brush-label") as HTMLSpanElement;
   const fontInput = document.getElementById("pde-font-size") as HTMLInputElement;
@@ -685,11 +694,19 @@ export function initPdfEditorTool() {
     if (!fabricCanvas) return;
     const obj = fabricCanvas.getActiveObject();
     const isTextObj = obj && (obj.type === "i-text" || obj.type === "textbox" || obj.type === "text");
+    const isHighlightTool = activePdeTool === "highlight" || activePdeTool === "highlight-pen";
 
     // Show/hide property sections
     textProps.style.display = (activePdeTool === "text" || isTextObj) ? "" : "none";
     drawProps.style.display = activePdeTool === "draw" ? "" : "none";
     redactProps.style.display = activePdeTool === "redact" ? "" : "none";
+    highlightProps.style.display = isHighlightTool ? "" : "none";
+    hlPenSizeGroup.style.display = activePdeTool === "highlight-pen" ? "" : "none";
+
+    // Hide standard color & opacity when highlight tools are active (they have their own)
+    colorInput.closest(".pde-prop-group")!.style.display = isHighlightTool ? "none" : "";
+    opacityGroup.style.display = isHighlightTool ? "none" : "";
+
     // Populate text properties from selected object
     if (isTextObj) {
       currentFontFamily = obj.fontFamily || "Arial";
@@ -708,11 +725,11 @@ export function initPdfEditorTool() {
     }
 
     // Opacity
-    if (obj) {
+    if (obj && !isHighlightTool) {
       const op = Math.round((obj.opacity ?? 1) * 100);
       opacityInput.value = String(op);
       opacityLabel.textContent = `${op}%`;
-    } else {
+    } else if (!isHighlightTool) {
       opacityInput.value = "100";
       opacityLabel.textContent = "100%";
     }
@@ -933,12 +950,12 @@ export function initPdfEditorTool() {
         const fabricMod = fabricModule as any;
         const Rect = fabricMod.Rect || fabricMod.default?.Rect;
         const pointer = fabricCanvas.getViewportPoint(opt.e);
-        // Convert hex color to rgba with user-chosen opacity for highlight
-        const hex = colorInput.value;
+        // Use highlight-specific color & strength
+        const hex = hlColorInput.value;
         const r = parseInt(hex.slice(1, 3), 16);
         const g = parseInt(hex.slice(3, 5), 16);
         const b = parseInt(hex.slice(5, 7), 16);
-        const hlAlpha = parseInt(opacityInput.value) / 100;
+        const hlAlpha = parseInt(hlStrengthInput.value) / 100;
         const rect = new Rect({
           left: pointer.x,
           top: pointer.y,
@@ -1975,6 +1992,22 @@ export function initPdfEditorTool() {
             fabricCanvas.freeDrawingBrush.color = colorInput.value;
           }
           fabricCanvas.isDrawingMode = true;
+        } else if (tool === "highlight-pen") {
+          // Highlighter pen: semi-transparent free drawing
+          if (!fabricCanvas.freeDrawingBrush && fabricModule) {
+            const PencilBrush = fabricModule.PencilBrush || (fabricModule as any).default?.PencilBrush;
+            if (PencilBrush) fabricCanvas.freeDrawingBrush = new PencilBrush(fabricCanvas);
+          }
+          if (fabricCanvas.freeDrawingBrush) {
+            const hex = hlColorInput.value;
+            const rr = parseInt(hex.slice(1, 3), 16);
+            const gg = parseInt(hex.slice(3, 5), 16);
+            const bb = parseInt(hex.slice(5, 7), 16);
+            const alpha = parseInt(hlStrengthInput.value) / 100;
+            fabricCanvas.freeDrawingBrush.width = parseInt(hlPenSizeInput.value) || 16;
+            fabricCanvas.freeDrawingBrush.color = `rgba(${rr}, ${gg}, ${bb}, ${alpha})`;
+          }
+          fabricCanvas.isDrawingMode = true;
         } else {
           fabricCanvas.isDrawingMode = false;
         }
@@ -1987,13 +2020,6 @@ export function initPdfEditorTool() {
         } else {
           fabricCanvas.defaultCursor = "default";
         }
-      }
-
-      if (tool === "highlight") {
-        colorInput.value = "#ffff00";
-        colorHex.textContent = "#ffff00";
-        opacityInput.value = "20";
-        opacityLabel.textContent = "20%";
       }
 
       if (tool === "image") {
@@ -2176,6 +2202,66 @@ export function initPdfEditorTool() {
     if (obj && obj._pdeRedact) {
       obj.set("fill", redactColorInput.value);
       fabricCanvas.renderAll();
+    }
+  });
+
+  // Highlight color
+  hlColorInput.addEventListener("input", () => {
+    hlColorHex.textContent = hlColorInput.value;
+    // Update highlighter pen brush color if active
+    if (activePdeTool === "highlight-pen" && fabricCanvas?.freeDrawingBrush) {
+      const hex = hlColorInput.value;
+      const rr = parseInt(hex.slice(1, 3), 16);
+      const gg = parseInt(hex.slice(3, 5), 16);
+      const bb = parseInt(hex.slice(5, 7), 16);
+      const alpha = parseInt(hlStrengthInput.value) / 100;
+      fabricCanvas.freeDrawingBrush.color = `rgba(${rr}, ${gg}, ${bb}, ${alpha})`;
+    }
+    // Update selected highlight rect fill
+    const obj = fabricCanvas?.getActiveObject();
+    if (obj && obj.type === "rect" && !obj._pdeRedact && activePdeTool === "highlight") {
+      const hex = hlColorInput.value;
+      const rr = parseInt(hex.slice(1, 3), 16);
+      const gg = parseInt(hex.slice(3, 5), 16);
+      const bb = parseInt(hex.slice(5, 7), 16);
+      const alpha = parseInt(hlStrengthInput.value) / 100;
+      obj.set("fill", `rgba(${rr}, ${gg}, ${bb}, ${alpha})`);
+      obj.set("stroke", `rgba(${rr}, ${gg}, ${bb}, ${Math.min(alpha + 0.15, 1)})`);
+      fabricCanvas.renderAll();
+    }
+  });
+
+  // Highlight strength
+  hlStrengthInput.addEventListener("input", () => {
+    hlStrengthLabel.textContent = `${hlStrengthInput.value}%`;
+    // Update highlighter pen brush opacity if active
+    if (activePdeTool === "highlight-pen" && fabricCanvas?.freeDrawingBrush) {
+      const hex = hlColorInput.value;
+      const rr = parseInt(hex.slice(1, 3), 16);
+      const gg = parseInt(hex.slice(3, 5), 16);
+      const bb = parseInt(hex.slice(5, 7), 16);
+      const alpha = parseInt(hlStrengthInput.value) / 100;
+      fabricCanvas.freeDrawingBrush.color = `rgba(${rr}, ${gg}, ${bb}, ${alpha})`;
+    }
+    // Update selected highlight rect
+    const obj = fabricCanvas?.getActiveObject();
+    if (obj && obj.type === "rect" && !obj._pdeRedact && activePdeTool === "highlight") {
+      const hex = hlColorInput.value;
+      const rr = parseInt(hex.slice(1, 3), 16);
+      const gg = parseInt(hex.slice(3, 5), 16);
+      const bb = parseInt(hex.slice(5, 7), 16);
+      const alpha = parseInt(hlStrengthInput.value) / 100;
+      obj.set("fill", `rgba(${rr}, ${gg}, ${bb}, ${alpha})`);
+      obj.set("stroke", `rgba(${rr}, ${gg}, ${bb}, ${Math.min(alpha + 0.15, 1)})`);
+      fabricCanvas.renderAll();
+    }
+  });
+
+  // Highlight pen size
+  hlPenSizeInput.addEventListener("input", () => {
+    hlPenSizeLabel.textContent = `${hlPenSizeInput.value}px`;
+    if (activePdeTool === "highlight-pen" && fabricCanvas?.freeDrawingBrush) {
+      fabricCanvas.freeDrawingBrush.width = parseInt(hlPenSizeInput.value) || 16;
     }
   });
 
