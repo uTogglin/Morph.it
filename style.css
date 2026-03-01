@@ -4402,6 +4402,8 @@ body.ocr-tts-active .ocr-tts-overlay {
   flex: 1;
   height: auto;
   min-height: 0;
+  max-height: none;
+  border: none;
   border-radius: 0;
 }
 #pdf-editor-page:fullscreen .pde-toolbar,
