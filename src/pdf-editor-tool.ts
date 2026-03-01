@@ -953,10 +953,10 @@ export function initPdfEditorTool() {
         let italic = false;
         let fontName = item.fontName || "";
         if (item._ocrBold !== undefined) {
-          // OCR-detected item — use Tesseract font flags directly
+          // OCR-detected item — use Tesseract bold/italic flags;
+          // font_name from Tesseract is unreliable, keep Arial default
           bold = !!item._ocrBold;
           italic = !!item._ocrItalic;
-          if (fontName) fontFamily = mapFontFamily(fontName);
         } else if (fontName) {
           const style = detectFontStyle(fontName);
           bold = style.bold;
@@ -1044,30 +1044,36 @@ export function initPdfEditorTool() {
       const worker = await getOcrWorker("eng", (pct, msg) => updateOcrProgress(pct, msg));
       updateOcrProgress(25, "Recognizing text");
       const { data } = await worker.recognize(canvas);
-      const words: any[] = data.words || [];
-      if (words.length === 0) { showOcrOverlay(false); return; }
+      const lines: any[] = data.lines || [];
+      if (lines.length === 0) { showOcrOverlay(false); return; }
 
       const scale = currentZoom * 1.5; // must match renderPage scale
       const items: any[] = [];
-      for (const w of words) {
-        const { x0, y0, x1, y1 } = w.bbox;
-        const heightPx = y1 - y0;
-        const fontSizePt = heightPx / scale;
-        // Approximate baseline: bottom of word minus 15% of height
-        const baselinePx = y1 - heightPx * 0.15;
-        const pdfX = x0 / scale;
-        const pdfY = baselinePx / scale;
-        const widthPdf = (x1 - x0) / scale;
-        // Encode Tesseract font info so findTextItemAtPoint can use it
-        const fontName = w.font_name || "";
-        items.push({
-          str: w.text,
-          transform: [fontSizePt, 0, 0, fontSizePt, pdfX, pdfY],
-          width: widthPdf,
-          fontName,
-          _ocrBold: !!w.is_bold,
-          _ocrItalic: !!w.is_italic,
-        });
+      for (const line of lines) {
+        const lineWords: any[] = line.words || [];
+        if (lineWords.length === 0) continue;
+        // Use LINE bbox height for consistent font sizing across all words on a line.
+        // Per-word bbox varies with ascenders/descenders; line bbox is stable.
+        const lineH = line.bbox.y1 - line.bbox.y0;
+        // bbox height → font em-square: ~0.72 factor (bbox includes leading/padding)
+        const lineFontPt = (lineH * 0.72) / scale;
+
+        for (const w of lineWords) {
+          const { x0, y0, x1, y1 } = w.bbox;
+          // Baseline: use line bottom minus ~20% of line height (descender allowance)
+          const baselinePx = line.bbox.y1 - lineH * 0.2;
+          const pdfX = x0 / scale;
+          const pdfY = baselinePx / scale;
+          const widthPdf = (x1 - x0) / scale;
+          items.push({
+            str: w.text,
+            transform: [lineFontPt, 0, 0, lineFontPt, pdfX, pdfY],
+            width: widthPdf,
+            fontName: "",
+            _ocrBold: !!w.is_bold,
+            _ocrItalic: !!w.is_italic,
+          });
+        }
       }
 
       // Identity viewport transform — pdfX * scale = canvasX directly
