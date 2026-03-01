@@ -265,8 +265,9 @@ export function initPdfEditorTool() {
     edit.bold = obj.fontWeight === "bold";
     edit.italic = obj.fontStyle === "italic";
     if (obj.fill && typeof obj.fill === "string") edit.color = obj.fill;
-    // Update detected family so export uses the current font
     if (obj.fontFamily) edit.detectedFamily = obj.fontFamily;
+    // Convert canvas pixel fontSize back to PDF points for export
+    if (obj.fontSize) edit.fontSizePt = obj.fontSize / (zoom * 1.5);
   }
 
   /** Sync styling from the active fabric object to its TextEdit (if any). */
@@ -1221,6 +1222,7 @@ export function initPdfEditorTool() {
     const obj = fabricCanvas?.getActiveObject();
     if (obj && (obj.type === "i-text" || obj.type === "textbox" || obj.type === "text")) {
       obj.set("fontSize", parseInt(fontInput.value) || 16);
+      syncActiveTextEdit();
       fabricCanvas.renderAll();
     }
   });
@@ -1689,6 +1691,22 @@ export function initPdfEditorTool() {
       // Apply text edits and redactions to content streams
       if (hasTextEdits || hasRedactions) {
         await applyTextEdits(outPdf, pdfLibModule, hasRedactions);
+      }
+
+      // Strip all PDF metadata when redactions are present
+      if (hasRedactions) {
+        const { PDFName } = pdfLibModule;
+        outPdf.setTitle("");
+        outPdf.setSubject("");
+        outPdf.setAuthor("");
+        outPdf.setKeywords([]);
+        outPdf.setCreator("");
+        outPdf.setProducer("");
+        // Remove XMP metadata stream from document catalog
+        try {
+          const catalog = outPdf.context.lookup(outPdf.context.trailerInfo.Root);
+          if (catalog?.delete) catalog.delete(PDFName.of("Metadata"));
+        } catch { /* non-critical */ }
       }
 
       // Composite PNG overlays for non-text annotations
