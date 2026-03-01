@@ -149,7 +149,10 @@ export function initOcrTool() {
           pageTexts.push(data.text.trim());
         }
         setOcrProgress(null);
-        resultText = pageTexts.join("\n\n---\n\n");
+        const divider = "━".repeat(40);
+        resultText = pageTexts
+          .map((t, i) => `${divider}\n  Page ${i + 1}\n${divider}\n\n${t}`)
+          .join("\n\n\n");
       } else {
         // Image file — loading phase: 0% → 20%
         const worker = await getOcrWorker(lang, (pct, msg) => {
@@ -413,7 +416,7 @@ export function initOcrTool() {
   window.addEventListener("touchend", () => { ttsSeeking = false; });
 
   readAloudBtn.addEventListener("click", async () => {
-    const text = resultArea.value.trim();
+    const text = resultArea.value.replace(/━+/g, "").replace(/^ *Page (\d+)$/gm, "Moving to page $1.").trim();
     if (!text || ttsGenerating) return;
 
     ttsGenerating = true;
