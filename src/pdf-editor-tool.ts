@@ -89,9 +89,17 @@ export function initPdfEditorTool() {
     color: string;
     newStr: string;
     deleted: boolean;
+    ocrBased?: boolean;
   }
   const pageTextEdits: Map<number, TextEdit[]> = new Map();
   let textEditCounter = 0;
+
+  // OCR fallback state — tracks image-only pages where text was detected via Tesseract
+  const ocrPages = new Set<number>();
+  const ocrOverlay = document.getElementById("pde-ocr-overlay") as HTMLDivElement;
+  const ocrStatus = document.getElementById("pde-ocr-status") as HTMLSpanElement;
+  function showOcrOverlay(show: boolean) { ocrOverlay.classList.toggle("hidden", !show); }
+  function updateOcrProgress(pct: number, msg: string) { ocrStatus.textContent = `${msg} (${pct}%)`; }
 
   // Redact tool state — track independently of fabric serialization
   const pagesWithRedactions = new Set<number>();
@@ -317,6 +325,7 @@ export function initPdfEditorTool() {
       pageTextContent.clear();
       pageTextEdits.clear();
       pagesWithRedactions.clear();
+      ocrPages.clear();
       textEditCounter = 0;
       undoStack = [];
       redoStack = [];
@@ -618,6 +627,7 @@ export function initPdfEditorTool() {
               color: hitItem.color,
               newStr: hitItem.str,
               deleted: false,
+              ocrBased: ocrPages.has(currentPage),
             };
             if (!pageTextEdits.has(currentPage)) pageTextEdits.set(currentPage, []);
             pageTextEdits.get(currentPage)!.push(textEdit);
@@ -1020,6 +1030,48 @@ export function initPdfEditorTool() {
     return "#ffffff";
   }
 
+  /* ── OCR fallback for image-only pages ── */
+  async function runOcrForPage(pageNum: number, canvas: HTMLCanvasElement, currentZoom: number) {
+    try {
+      showOcrOverlay(true);
+      updateOcrProgress(0, "Loading OCR engine");
+      const { getOcrWorker } = await import("./ocr-worker.js");
+      const worker = await getOcrWorker("eng", (pct, msg) => updateOcrProgress(pct, msg));
+      updateOcrProgress(25, "Recognizing text");
+      const { data } = await worker.recognize(canvas);
+      const words: any[] = data.words || [];
+      if (words.length === 0) { showOcrOverlay(false); return; }
+
+      const scale = currentZoom * 1.5; // must match renderPage scale
+      const items: any[] = [];
+      for (const w of words) {
+        const { x0, y0, x1, y1 } = w.bbox;
+        const heightPx = y1 - y0;
+        const fontSizePt = heightPx / scale;
+        // Approximate baseline: bottom of word minus 15% of height
+        const baselinePx = y1 - heightPx * 0.15;
+        const pdfX = x0 / scale;
+        const pdfY = baselinePx / scale;
+        const widthPdf = (x1 - x0) / scale;
+        items.push({
+          str: w.text,
+          transform: [fontSizePt, 0, 0, fontSizePt, pdfX, pdfY],
+          width: widthPdf,
+          fontName: "",
+        });
+      }
+
+      // Identity viewport transform — pdfX * scale = canvasX directly
+      const syntheticTc = { items, styles: {}, _vpTransform: [1, 0, 0, 1, 0, 0] };
+      pageTextContent.set(pageNum, syntheticTc);
+      updateOcrProgress(100, "Done");
+    } catch (err) {
+      console.warn("[PDF Editor] OCR fallback failed:", err);
+    } finally {
+      showOcrOverlay(false);
+    }
+  }
+
   /* ── Render PDF page ── */
   async function renderPage() {
     if (!pdfDoc || !fabricCanvas) return;
@@ -1045,10 +1097,17 @@ export function initPdfEditorTool() {
     if (!pageTextContent.has(currentPage)) {
       try {
         const tc = await page.getTextContent();
-        // Store the viewport transform at scale=1 for coordinate conversion
-        const rawVp = page.getViewport({ scale: 1 });
-        tc._vpTransform = rawVp.transform; // [a, b, c, d, e, f] affine matrix
-        pageTextContent.set(currentPage, tc);
+        const hasText = tc.items?.some((it: any) => it.str && it.str.trim());
+        if (hasText) {
+          // Store the viewport transform at scale=1 for coordinate conversion
+          const rawVp = page.getViewport({ scale: 1 });
+          tc._vpTransform = rawVp.transform; // [a, b, c, d, e, f] affine matrix
+          pageTextContent.set(currentPage, tc);
+        } else {
+          // Image-only page — run OCR fallback
+          ocrPages.add(currentPage);
+          await runOcrForPage(currentPage, bgCanvas, zoom);
+        }
       } catch { /* non-critical */ }
     }
 
@@ -1423,7 +1482,9 @@ export function initPdfEditorTool() {
       const annotJson = pageAnnotations.get(pageNum);
       const parsed = annotJson ? JSON.parse(annotJson) : { objects: [] };
       const hasAnnotations = parsed.objects?.length > 0;
-      const hasNonEditObjects = parsed.objects?.some((o: any) => !o._pdeTextEditId);
+      // OCR-based edit objects count as visible (their cover rect + IText ARE the output)
+      const ocrEditIds = new Set((pageTextEdits.get(pageNum) || []).filter(e => e.ocrBased).map(e => e.id));
+      const hasNonEditObjects = parsed.objects?.some((o: any) => !o._pdeTextEditId || ocrEditIds.has(o._pdeTextEditId));
 
       if (!hasRedactRects && !hasNonEditObjects) continue;
 
@@ -1444,9 +1505,11 @@ export function initPdfEditorTool() {
 
         // Draw all fabric objects (annotations + redactions) on top
         // Hide text-edit objects so they don't appear in the flat image
+        // EXCEPT OCR-based edits — their cover rect + IText ARE the visual edit
         const hiddenObjs: any[] = [];
+        const ocrEditIds = new Set((pageTextEdits.get(pageNum) || []).filter(e => e.ocrBased).map(e => e.id));
         for (const obj of fabricCanvas.getObjects()) {
-          if (obj._pdeTextEditId) {
+          if (obj._pdeTextEditId && !ocrEditIds.has(obj._pdeTextEditId)) {
             obj.set("visible", false);
             hiddenObjs.push(obj);
           }
@@ -1462,8 +1525,9 @@ export function initPdfEditorTool() {
       } else if (hasNonEditObjects) {
         // Non-redacted page: capture annotations as transparent overlay
         const hiddenObjs: any[] = [];
+        const ocrEditIds2 = new Set((pageTextEdits.get(pageNum) || []).filter(e => e.ocrBased).map(e => e.id));
         for (const obj of fabricCanvas.getObjects()) {
-          if (obj._pdeTextEditId) {
+          if (obj._pdeTextEditId && !ocrEditIds2.has(obj._pdeTextEditId)) {
             obj.set("visible", false);
             hiddenObjs.push(obj);
           }
@@ -1579,10 +1643,10 @@ export function initPdfEditorTool() {
       if (pageIdx < 0 || pageIdx >= pages.length) continue;
       const page = pages[pageIdx];
 
-      // Collect text edit deletions
+      // Collect text edit deletions (skip OCR-based — no content stream text to remove)
       const textEdits = pageTextEdits.get(pageNum) || [];
       const deleteEdits = textEdits
-        .filter(e => e.deleted || e.newStr !== e.originalStr)
+        .filter(e => !e.ocrBased && (e.deleted || e.newStr !== e.originalStr))
         .map(e => ({ pdfX: e.pdfX, pdfY: e.pdfY, tolerance: 2.0, delete: true }));
 
       // Collect redaction region deletions
@@ -1667,6 +1731,7 @@ export function initPdfEditorTool() {
       const { rgb } = pdfLibModule;
 
       for (const edit of textEdits) {
+        if (edit.ocrBased) continue; // OCR edits rendered via overlay, not content stream
         if (edit.deleted) continue;
         if (edit.newStr === edit.originalStr) continue;
         if (!edit.newStr) continue;
