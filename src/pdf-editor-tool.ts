@@ -953,10 +953,10 @@ export function initPdfEditorTool() {
         let italic = false;
         let fontName = item.fontName || "";
         if (item._ocrBold !== undefined) {
-          // OCR-detected item — use Tesseract bold/italic flags;
-          // font_name from Tesseract is unreliable, keep Arial default
+          // OCR-detected item — use visually matched font + Tesseract style flags
           bold = !!item._ocrBold;
           italic = !!item._ocrItalic;
+          if (item._ocrFontFamily) fontFamily = item._ocrFontFamily;
         } else if (fontName) {
           const style = detectFontStyle(fontName);
           bold = style.bold;
@@ -1035,6 +1035,80 @@ export function initPdfEditorTool() {
     return "#ffffff";
   }
 
+  /* ── Visual font matching via canvas pixel comparison ── */
+  const FONT_CANDIDATES = [
+    // Sans-serif
+    "Arial", "Helvetica", "Verdana", "Tahoma", "Trebuchet MS", "Segoe UI",
+    "Calibri", "Lucida Sans Unicode", "Open Sans",
+    // Serif
+    "Times New Roman", "Georgia", "Palatino Linotype", "Garamond",
+    "Book Antiqua", "Cambria",
+    // Monospace
+    "Courier New", "Consolas", "Lucida Console",
+  ];
+
+  function detectFontByPixels(
+    srcCanvas: HTMLCanvasElement, text: string,
+    bbox: { x0: number; y0: number; x1: number; y1: number },
+    fontSize: number, bold: boolean, italic: boolean,
+    candidates: string[],
+  ): string {
+    const w = bbox.x1 - bbox.x0;
+    const h = bbox.y1 - bbox.y0;
+    if (w < 8 || h < 8 || text.length < 2) return "Arial";
+
+    // Crop source region luminance
+    const srcCtx = srcCanvas.getContext("2d")!;
+    const srcData = srcCtx.getImageData(bbox.x0, bbox.y0, w, h).data;
+    const srcLum = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      srcLum[i] = srcData[i * 4] * 0.299 + srcData[i * 4 + 1] * 0.587 + srcData[i * 4 + 2] * 0.114;
+    }
+
+    // Normalize source to 0-1 range (text = 0, bg = 1 typically)
+    let srcMin = 255, srcMax = 0;
+    for (let i = 0; i < srcLum.length; i++) {
+      if (srcLum[i] < srcMin) srcMin = srcLum[i];
+      if (srcLum[i] > srcMax) srcMax = srcLum[i];
+    }
+    const srcRange = srcMax - srcMin || 1;
+
+    const tmpCanvas = document.createElement("canvas");
+    tmpCanvas.width = w;
+    tmpCanvas.height = h;
+    const tmpCtx = tmpCanvas.getContext("2d")!;
+
+    let bestFont = "Arial";
+    let bestScore = Infinity;
+
+    for (const font of candidates) {
+      tmpCtx.clearRect(0, 0, w, h);
+      tmpCtx.fillStyle = "#ffffff";
+      tmpCtx.fillRect(0, 0, w, h);
+      const weight = bold ? "bold" : "normal";
+      const style = italic ? "italic" : "normal";
+      tmpCtx.font = `${style} ${weight} ${fontSize}px "${font}"`;
+      tmpCtx.fillStyle = "#000000";
+      tmpCtx.textBaseline = "top";
+      tmpCtx.fillText(text, 0, 0);
+
+      const tmpData = tmpCtx.getImageData(0, 0, w, h).data;
+      let diff = 0;
+      for (let i = 0; i < w * h; i++) {
+        const tLum = tmpData[i * 4] * 0.299 + tmpData[i * 4 + 1] * 0.587 + tmpData[i * 4 + 2] * 0.114;
+        // Normalize both to 0-1
+        const s = (srcLum[i] - srcMin) / srcRange;
+        const t = tLum / 255;
+        diff += (s - t) * (s - t);
+      }
+      if (diff < bestScore) {
+        bestScore = diff;
+        bestFont = font;
+      }
+    }
+    return bestFont;
+  }
+
   /* ── OCR fallback for image-only pages ── */
   async function runOcrForPage(pageNum: number, canvas: HTMLCanvasElement, currentZoom: number) {
     try {
@@ -1049,18 +1123,34 @@ export function initPdfEditorTool() {
 
       const scale = currentZoom * 1.5; // must match renderPage scale
       const items: any[] = [];
-      for (const line of lines) {
+      updateOcrProgress(50, "Detecting fonts");
+      for (let li = 0; li < lines.length; li++) {
+        const line = lines[li];
         const lineWords: any[] = line.words || [];
         if (lineWords.length === 0) continue;
         // Use LINE bbox height for consistent font sizing across all words on a line.
-        // Per-word bbox varies with ascenders/descenders; line bbox is stable.
         const lineH = line.bbox.y1 - line.bbox.y0;
         // bbox height → font em-square: ~0.72 factor (bbox includes leading/padding)
         const lineFontPt = (lineH * 0.72) / scale;
+        const lineFontPx = lineH * 0.72;
+
+        // Detect bold/italic from majority of words on the line
+        const boldCount = lineWords.filter((w: any) => w.is_bold).length;
+        const italicCount = lineWords.filter((w: any) => w.is_italic).length;
+        const lineBold = boldCount > lineWords.length / 2;
+        const lineItalic = italicCount > lineWords.length / 2;
+
+        // Pick the longest word (≥3 chars) as representative for font matching
+        let rep = lineWords[0];
+        for (const w of lineWords) {
+          if (w.text.length >= 3 && w.text.length > rep.text.length) rep = w;
+        }
+        const lineFont = rep.text.length >= 2
+          ? detectFontByPixels(canvas, rep.text, rep.bbox, lineFontPx, lineBold, lineItalic, FONT_CANDIDATES)
+          : "Arial";
 
         for (const w of lineWords) {
           const { x0, y0, x1, y1 } = w.bbox;
-          // Baseline: use line bottom minus ~20% of line height (descender allowance)
           const baselinePx = line.bbox.y1 - lineH * 0.2;
           const pdfX = x0 / scale;
           const pdfY = baselinePx / scale;
@@ -1070,10 +1160,12 @@ export function initPdfEditorTool() {
             transform: [lineFontPt, 0, 0, lineFontPt, pdfX, pdfY],
             width: widthPdf,
             fontName: "",
-            _ocrBold: !!w.is_bold,
-            _ocrItalic: !!w.is_italic,
+            _ocrBold: lineBold,
+            _ocrItalic: lineItalic,
+            _ocrFontFamily: lineFont,
           });
         }
+        if (li % 5 === 0) updateOcrProgress(50 + Math.round((li / lines.length) * 45), "Detecting fonts");
       }
 
       // Identity viewport transform — pdfX * scale = canvasX directly
