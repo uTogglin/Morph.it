@@ -86,15 +86,21 @@ export function initPdfEditorTool() {
     primaryPageNum?: number;    // 1-indexed, only for source==="primary"
     mergeFileIndex?: number;    // index into pdfMergeFiles
     mergePageNum?: number;      // 1-indexed page within merge PDF
+    id: number;                 // unique key for annotation maps
   }
   let pageOrder: PageEntry[] = [];
   let pdfMergeFiles: { name: string; bytes: Uint8Array; doc: any }[] = [];
+  let nextMergePageId = 100000;
 
   function currentEntry(): PageEntry | undefined { return pageOrder[currentPage - 1]; }
   function isCurrentPrimary(): boolean { return currentEntry()?.source === "primary"; }
   function currentPrimaryPageNum(): number | null {
     const e = currentEntry();
     return e?.source === "primary" ? e.primaryPageNum! : null;
+  }
+  /** Returns a unique key for any page (primary or merge) for annotation/redaction maps. */
+  function currentPageKey(): number | null {
+    return currentEntry()?.id ?? null;
   }
   function getDocAndPage(entry: PageEntry): { doc: any; pageNum: number } {
     if (entry.source === "primary") return { doc: pdfDoc, pageNum: entry.primaryPageNum! };
@@ -103,9 +109,10 @@ export function initPdfEditorTool() {
   function initPageOrder() {
     pageOrder = [];
     for (let i = 1; i <= pdfDoc.numPages; i++) {
-      pageOrder.push({ source: "primary", primaryPageNum: i });
+      pageOrder.push({ source: "primary", primaryPageNum: i, id: i });
     }
     totalPages = pageOrder.length;
+    nextMergePageId = 100000;
   }
 
   // Text editing state
@@ -603,11 +610,9 @@ export function initPdfEditorTool() {
     const ctx = c.getContext("2d")!;
     ctx.drawImage(bgCanvas, 0, 0, tw, th);
 
-    // Only draw fabric annotations for primary pages
-    if (isCurrentPrimary()) {
-      const fabricEl = fabricCanvas.getElement();
-      if (fabricEl) ctx.drawImage(fabricEl, 0, 0, tw, th);
-    }
+    // Draw fabric annotations on top
+    const fabricEl = fabricCanvas.getElement();
+    if (fabricEl) ctx.drawImage(fabricEl, 0, 0, tw, th);
 
     thumbEl.src = c.toDataURL();
   }
@@ -624,7 +629,7 @@ export function initPdfEditorTool() {
       const mergeIdx = pdfMergeFiles.length;
       pdfMergeFiles.push({ name: f.name, bytes, doc });
       for (let p = 1; p <= doc.numPages; p++) {
-        pageOrder.push({ source: "merge", mergeFileIndex: mergeIdx, mergePageNum: p });
+        pageOrder.push({ source: "merge", mergeFileIndex: mergeIdx, mergePageNum: p, id: nextMergePageId++ });
       }
     }
     totalPages = pageOrder.length;
@@ -765,10 +770,10 @@ export function initPdfEditorTool() {
       }
       // If a redact rect was removed, check if page still has any
       if (obj?._pdeRedact) {
-        const ppn = currentPrimaryPageNum();
-        if (ppn !== null) {
+        const key = currentPageKey();
+        if (key !== null) {
           const stillHasRedacts = fabricCanvas.getObjects().some((o: any) => o._pdeRedact);
-          if (!stillHasRedacts) pagesWithRedactions.delete(ppn);
+          if (!stillHasRedacts) pagesWithRedactions.delete(key);
         }
       }
     });
@@ -819,7 +824,6 @@ export function initPdfEditorTool() {
 
     // Click to add or edit text
     fabricCanvas.on("mouse:down", (opt: any) => {
-      if (!isCurrentPrimary()) return; // merge pages are view-only
       if (activePdeTool === "text" && !opt.target) {
         const fabricMod = fabricModule as any;
         const IText = fabricMod.IText || fabricMod.default?.IText;
@@ -827,8 +831,8 @@ export function initPdfEditorTool() {
         const defaults = getDefaults();
         const pointer = fabricCanvas.getViewportPoint(opt.e);
 
-        // Check if clicking on existing PDF text
-        const hitItem = findTextItemAtPoint(pointer.x, pointer.y);
+        // Check if clicking on existing PDF text (primary pages only)
+        const hitItem = isCurrentPrimary() ? findTextItemAtPoint(pointer.x, pointer.y) : null;
         if (hitItem) {
           // Check if this text was already edited
           const existingEdits = pageTextEdits.get(currentPrimaryPageNum()!) || [];
@@ -979,7 +983,6 @@ export function initPdfEditorTool() {
     // Redact tool: finish drag
     fabricCanvas.on("mouse:up", () => {
       if (activePdeTool !== "redact" || !redactDragStart || !redactDragRect) return;
-      if (!isCurrentPrimary()) { fabricCanvas.remove(redactDragRect); redactDragStart = null; redactDragRect = null; return; }
       const w = redactDragRect.width;
       const h = redactDragRect.height;
       if (w < 3 && h < 3) {
@@ -987,7 +990,7 @@ export function initPdfEditorTool() {
       } else {
         redactDragRect.set({ selectable: true, evented: true });
         fabricCanvas.setActiveObject(redactDragRect);
-        pagesWithRedactions.add(currentPrimaryPageNum()!);
+        pagesWithRedactions.add(currentPageKey()!);
       }
       redactDragStart = null;
       redactDragRect = null;
@@ -1792,9 +1795,10 @@ export function initPdfEditorTool() {
     ctx.clearRect(0, 0, w, h);
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
 
+    setAnnotationToolsEnabled(true);
+
     if (entry.source === "primary") {
       const ppn = entry.primaryPageNum!;
-      setAnnotationToolsEnabled(true);
 
       // Extract text content for font detection (cache per page)
       if (!pageTextContent.has(ppn)) {
@@ -1812,21 +1816,14 @@ export function initPdfEditorTool() {
         } catch { /* non-critical */ }
       }
 
-      // Restore annotations for this page
-      await restoreAnnotations();
-
       // Lazy-apply document font override to newly visited pages
       if (documentFontOverride && !docFontAppliedPages.has(ppn) && pageTextContent.has(ppn)) {
         createTextEditsForEntirePage(ppn, documentFontOverride.family);
       }
-    } else {
-      // Merge page — clear fabric, disable annotation tools
-      setAnnotationToolsEnabled(false);
-      skipHistory = true;
-      fabricCanvas.clear();
-      fabricCanvas.renderAll();
-      skipHistory = false;
     }
+
+    // Restore annotations for this page (works for both primary and merge)
+    await restoreAnnotations();
 
     // Update UI
     pageInfo.textContent = `Page ${currentPage} / ${totalPages}`;
@@ -1838,17 +1835,17 @@ export function initPdfEditorTool() {
 
   function saveCurrentAnnotations() {
     if (!fabricCanvas) return;
-    const ppn = currentPrimaryPageNum();
-    if (ppn === null) return; // merge pages have no annotations
-    pageAnnotations.set(ppn, serializeFabricState());
+    const key = currentPageKey();
+    if (key === null) return;
+    pageAnnotations.set(key, serializeFabricState());
   }
 
   async function restoreAnnotations(): Promise<void> {
     if (!fabricCanvas) return;
     skipHistory = true;
     fabricCanvas.clear();
-    const ppn = currentPrimaryPageNum();
-    const saved = ppn !== null ? pageAnnotations.get(ppn) : undefined;
+    const key = currentPageKey();
+    const saved = key !== null ? pageAnnotations.get(key) : undefined;
     if (saved) {
       await loadFabricState(saved);
     } else {
@@ -2216,26 +2213,24 @@ export function initPdfEditorTool() {
     const origPage = currentPage;
     saveCurrentAnnotations();
 
-    // Iterate unique primary page numbers present in pageOrder
-    const primaryPages = new Set<number>();
-    for (const e of pageOrder) {
-      if (e.source === "primary") primaryPages.add(e.primaryPageNum!);
-    }
-
-    for (const ppn of primaryPages) {
-      const hasRedactRects = pagesWithRedactions.has(ppn);
-      const annotJson = pageAnnotations.get(ppn);
+    for (let idx = 0; idx < pageOrder.length; idx++) {
+      const entry = pageOrder[idx];
+      const pageId = entry.id;
+      const hasRedactRects = pagesWithRedactions.has(pageId);
+      const annotJson = pageAnnotations.get(pageId);
       const parsed = annotJson ? JSON.parse(annotJson) : { objects: [] };
-      // OCR-based edit objects count as visible (their cover rect + IText ARE the output)
-      const ocrEditIds = new Set((pageTextEdits.get(ppn) || []).filter(e => e.ocrBased).map(e => e.id));
+
+      // For primary pages, OCR-based edit objects count as visible
+      const ppn = entry.source === "primary" ? entry.primaryPageNum! : null;
+      const ocrEditIds = ppn !== null
+        ? new Set((pageTextEdits.get(ppn) || []).filter(e => e.ocrBased).map(e => e.id))
+        : new Set<string>();
       const hasNonEditObjects = parsed.objects?.some((o: any) => !o._pdeTextEditId || ocrEditIds.has(o._pdeTextEditId));
 
       if (!hasRedactRects && !hasNonEditObjects) continue;
 
-      // Navigate to the page's position in pageOrder to load annotations
-      const posIdx = pageOrder.findIndex(e => e.source === "primary" && e.primaryPageNum === ppn);
-      if (posIdx < 0) continue;
-      currentPage = posIdx + 1;
+      // Navigate to this page position to load annotations
+      currentPage = idx + 1;
       await renderPage();
 
       if (hasRedactRects) {
@@ -2246,9 +2241,8 @@ export function initPdfEditorTool() {
         flatCtx.drawImage(bgCanvas, 0, 0);
 
         const hiddenObjs: any[] = [];
-        const ocrIds = new Set((pageTextEdits.get(ppn) || []).filter(e => e.ocrBased).map(e => e.id));
         for (const obj of fabricCanvas.getObjects()) {
-          if (obj._pdeTextEditId && !ocrIds.has(obj._pdeTextEditId)) {
+          if (obj._pdeTextEditId && !ocrEditIds.has(obj._pdeTextEditId)) {
             obj.set("visible", false);
             hiddenObjs.push(obj);
           }
@@ -2259,19 +2253,18 @@ export function initPdfEditorTool() {
         for (const obj of hiddenObjs) obj.set("visible", true);
         fabricCanvas.renderAll();
 
-        flatRedacted.set(ppn, flatCanvas.toDataURL("image/png"));
+        flatRedacted.set(pageId, flatCanvas.toDataURL("image/png"));
       } else if (hasNonEditObjects) {
         const hiddenObjs: any[] = [];
-        const ocrIds2 = new Set((pageTextEdits.get(ppn) || []).filter(e => e.ocrBased).map(e => e.id));
         for (const obj of fabricCanvas.getObjects()) {
-          if (obj._pdeTextEditId && !ocrIds2.has(obj._pdeTextEditId)) {
+          if (obj._pdeTextEditId && !ocrEditIds.has(obj._pdeTextEditId)) {
             obj.set("visible", false);
             hiddenObjs.push(obj);
           }
         }
         fabricCanvas.renderAll();
         const dataUrl = fabricCanvas.toDataURL({ format: "png", multiplier: 1 });
-        overlays.set(ppn, dataUrl);
+        overlays.set(pageId, dataUrl);
         for (const obj of hiddenObjs) obj.set("visible", true);
         fabricCanvas.renderAll();
       }
@@ -2583,12 +2576,14 @@ export function initPdfEditorTool() {
         await applyTextEdits(outPdf, pdfLibModule, false);
       }
 
-      // For redacted pages: replace entire page content with flat image
-      for (const [pageNum, dataUrl] of flatRedacted) {
+      // For redacted primary pages: replace entire page content with flat image
+      // (Primary page ids equal their 1-indexed page numbers)
+      for (const [pageId, dataUrl] of flatRedacted) {
+        if (pageId >= 100000) continue; // merge page — handled later
         const pngBytes = Uint8Array.from(atob(dataUrl.split(",")[1]), c => c.charCodeAt(0));
         const pngImage = await outPdf.embedPng(pngBytes);
 
-        const pdfPage = outPdf.getPages()[pageNum - 1];
+        const pdfPage = outPdf.getPages()[pageId - 1];
         const { width, height } = pdfPage.getSize();
 
         const pageNode = pdfPage.node;
@@ -2598,7 +2593,8 @@ export function initPdfEditorTool() {
       }
 
       // Strip all PDF metadata when redactions are present
-      if (flatRedacted.size > 0) {
+      const hasAnyRedactions = [...pagesWithRedactions].some(id => id < 100000);
+      if (hasAnyRedactions) {
         outPdf.setTitle("");
         outPdf.setSubject("");
         outPdf.setAuthor("");
@@ -2611,12 +2607,13 @@ export function initPdfEditorTool() {
         } catch { /* non-critical */ }
       }
 
-      // Composite PNG overlays for non-redacted annotated pages
-      for (const [pageNum, dataUrl] of overlays) {
+      // Composite PNG overlays for non-redacted annotated primary pages
+      for (const [pageId, dataUrl] of overlays) {
+        if (pageId >= 100000) continue; // merge page — handled later
         const pngBytes = Uint8Array.from(atob(dataUrl.split(",")[1]), c => c.charCodeAt(0));
         const pngImage = await outPdf.embedPng(pngBytes);
 
-        const pdfPage = outPdf.getPages()[pageNum - 1];
+        const pdfPage = outPdf.getPages()[pageId - 1];
         const { width, height } = pdfPage.getSize();
         pdfPage.drawImage(pngImage, { x: 0, y: 0, width, height });
       }
@@ -2643,6 +2640,26 @@ export function initPdfEditorTool() {
               const mDoc = mergeLibDocs[entry.mergeFileIndex!];
               const [copied] = await finalDoc.copyPages(mDoc, [entry.mergePageNum! - 1]);
               finalDoc.addPage(copied);
+
+              // Apply annotations/redactions to this merge page
+              const mergeOverlay = overlays.get(entry.id);
+              const mergeFlat = flatRedacted.get(entry.id);
+              if (mergeFlat || mergeOverlay) {
+                const pageIdx = finalDoc.getPageCount() - 1;
+                const page = finalDoc.getPages()[pageIdx];
+                const { width, height } = page.getSize();
+                const dataUrl = mergeFlat || mergeOverlay!;
+                const pngBytes = Uint8Array.from(atob(dataUrl.split(",")[1]), c => c.charCodeAt(0));
+                const pngImage = await finalDoc.embedPng(pngBytes);
+
+                if (mergeFlat) {
+                  // Redacted: wipe content and replace with flat image
+                  const pageNode = page.node;
+                  pageNode.set(PDFName.of("Contents"), finalDoc.context.obj([]));
+                  pageNode.delete(PDFName.of("Annots"));
+                }
+                page.drawImage(pngImage, { x: 0, y: 0, width, height });
+              }
             } catch (err) {
               console.warn(`[PDF Editor] Failed to copy merge page:`, err);
             }
