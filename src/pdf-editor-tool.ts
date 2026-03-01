@@ -998,8 +998,8 @@ export function initPdfEditorTool() {
         let coverTop = boxTop;
         let coverH = glyphH * 1.3;
         if (item._ocrLineTop !== undefined) {
-          coverTop = item._ocrLineTop - 2;
-          coverH = (item._ocrLineBot - item._ocrLineTop) + 4;
+          coverTop = item._ocrLineTop - 1;
+          coverH = (item._ocrLineBot - item._ocrLineTop) + 1;
         }
 
         return {
@@ -1174,6 +1174,43 @@ export function initPdfEditorTool() {
     return "#ffffff";
   }
 
+  /** Scan an OCR line's bbox to find the actual ink boundaries (dark pixel extents) */
+  function findInkBounds(
+    srcCanvas: HTMLCanvasElement,
+    bbox: { x0: number; y0: number; x1: number; y1: number },
+  ): { top: number; bottom: number; left: number; right: number } {
+    const ctx = srcCanvas.getContext("2d")!;
+    const x = Math.max(0, Math.round(bbox.x0));
+    const y = Math.max(0, Math.round(bbox.y0));
+    const w = Math.min(Math.round(bbox.x1 - bbox.x0), srcCanvas.width - x);
+    const h = Math.min(Math.round(bbox.y1 - bbox.y0), srcCanvas.height - y);
+    if (w < 1 || h < 1) return { top: bbox.y0, bottom: bbox.y1, left: bbox.x0, right: bbox.x1 };
+
+    const data = ctx.getImageData(x, y, w, h).data;
+    let firstRow = h, lastRow = -1, firstCol = w, lastCol = -1;
+
+    for (let row = 0; row < h; row++) {
+      for (let col = 0; col < w; col++) {
+        const i = (row * w + col) * 4;
+        const brightness = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+        if (brightness < 128) {
+          if (row < firstRow) firstRow = row;
+          if (row > lastRow) lastRow = row;
+          if (col < firstCol) firstCol = col;
+          if (col > lastCol) lastCol = col;
+        }
+      }
+    }
+
+    if (lastRow < 0) return { top: bbox.y0, bottom: bbox.y1, left: bbox.x0, right: bbox.x1 };
+    return {
+      top: y + firstRow,
+      bottom: y + lastRow + 1,
+      left: x + firstCol,
+      right: x + lastCol + 1,
+    };
+  }
+
   /* ── OCR fallback for image-only pages ── */
   async function runOcrForPage(pageNum: number, canvas: HTMLCanvasElement, currentZoom: number) {
     try {
@@ -1205,27 +1242,33 @@ export function initPdfEditorTool() {
         const lineBold = boldCount > lineWords.length / 2;
         const lineItalic = italicCount > lineWords.length / 2;
 
-        // Width-calibrated font detection: finds both the best font AND correct size
-        const { font: lineFont, fontSizePx } = lineText.length >= 2
-          ? detectFontForLine(canvas, lineText, line.bbox, lineBold, lineItalic, FONT_CANDIDATES)
-          : { font: "Arial", fontSizePx: lineH * 0.92 };
+        // Find actual ink boundaries for precise cover rect and font matching
+        const inkBounds = findInkBounds(canvas, line.bbox);
+        const inkBbox = { x0: inkBounds.left, y0: inkBounds.top, x1: inkBounds.right, y1: inkBounds.bottom };
+        const inkH = inkBounds.bottom - inkBounds.top;
+        const inkW = inkBounds.right - inkBounds.left;
+
+        // Width-calibrated font detection using tight ink bounds
+        const { font: lineFont, fontSizePx } = lineText.length >= 2 && inkW >= 10 && inkH >= 8
+          ? detectFontForLine(canvas, lineText, inkBbox, lineBold, lineItalic, FONT_CANDIDATES)
+          : { font: "Arial", fontSizePx: inkH * 0.92 };
         const lineFontPt = fontSizePx / scale;
 
         // Pre-compute background color from above/below the line (avoids sampling text)
         const bgColor = sampleOcrBgColor(canvas, line.bbox);
 
-        // Baseline: line bottom minus ~20% of line height (descender allowance)
-        const baselinePx = y1 - lineH * 0.2;
+        // Baseline: ink bottom minus ~20% of ink height (descender allowance)
+        const baselinePx = inkBounds.bottom - inkH * 0.2;
         items.push({
           str: lineText,
-          transform: [lineFontPt, 0, 0, lineFontPt, x0 / scale, baselinePx / scale],
-          width: lineW / scale,
+          transform: [lineFontPt, 0, 0, lineFontPt, inkBounds.left / scale, baselinePx / scale],
+          width: inkW / scale,
           fontName: "",
           _ocrBold: lineBold,
           _ocrItalic: lineItalic,
           _ocrFontFamily: lineFont,
-          _ocrLineTop: y0,
-          _ocrLineBot: y1,
+          _ocrLineTop: inkBounds.top,
+          _ocrLineBot: inkBounds.bottom,
           _ocrBgColor: bgColor,
         });
         if (li % 5 === 0) updateOcrProgress(50 + Math.round((li / lines.length) * 45), "Detecting fonts");
