@@ -3862,6 +3862,16 @@ body[data-tool="image"] #convert-button { display: none !important; }
 }
 .pde-download-btn:hover { background: var(--accent-hover); }
 .pde-download-btn.disabled { opacity: 0.6; pointer-events: none; }
+.pde-export-images-btn {
+  background: var(--input-bg);
+  color: var(--text-main);
+  border: 1px solid var(--input-border);
+}
+.pde-export-images-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
 
 /* ── Workspace: 3-column layout ── */
 .pde-workspace {

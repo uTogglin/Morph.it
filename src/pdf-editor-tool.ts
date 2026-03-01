@@ -23,6 +23,7 @@ export function initPdfEditorTool() {
   const zoomOutBtn = document.getElementById("pde-zoom-out") as HTMLButtonElement;
   const zoomLabel = document.getElementById("pde-zoom-label") as HTMLSpanElement;
   const downloadBtn = document.getElementById("pde-download") as HTMLButtonElement;
+  const exportImagesBtn = document.getElementById("pde-export-images") as HTMLButtonElement;
 
   const undoBtn = document.getElementById("pde-undo") as HTMLButtonElement;
   const redoBtn = document.getElementById("pde-redo") as HTMLButtonElement;
@@ -2688,6 +2689,81 @@ export function initPdfEditorTool() {
       downloadBtn.classList.remove("disabled");
       const dlLabel = downloadBtn.querySelector("span");
       if (dlLabel) dlLabel.textContent = "Download";
+    }
+  });
+
+  /* ── Export Images ── */
+  exportImagesBtn.addEventListener("click", async () => {
+    if (!pdfDoc) return;
+    exportImagesBtn.classList.add("disabled");
+    const label = exportImagesBtn.querySelector("span");
+    if (label) label.textContent = "Exporting...";
+
+    try {
+      const { OPS } = await import("pdfjs-dist");
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      let imgCount = 0;
+
+      for (let p = 1; p <= pdfDoc.numPages; p++) {
+        const page = await pdfDoc.getPage(p);
+        const ops = await page.getOperatorList();
+
+        for (let i = 0; i < ops.fnArray.length; i++) {
+          if (ops.fnArray[i] !== OPS.paintImageXObject && ops.fnArray[i] !== OPS.paintJpegImageXObject) continue;
+          const imgName = ops.argsArray[i][0];
+          const isJpeg = ops.fnArray[i] === OPS.paintJpegImageXObject;
+
+          try {
+            const imgObj: any = await new Promise((resolve, reject) => {
+              const timeout = setTimeout(() => reject(new Error("timeout")), 5000);
+              page.objs.get(imgName, (obj: any) => { clearTimeout(timeout); resolve(obj); });
+            });
+
+            imgCount++;
+
+            if (isJpeg && imgObj instanceof HTMLImageElement) {
+              // Draw HTMLImageElement to canvas to get PNG bytes
+              const c = document.createElement("canvas");
+              c.width = imgObj.naturalWidth;
+              c.height = imgObj.naturalHeight;
+              c.getContext("2d")!.drawImage(imgObj, 0, 0);
+              const blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
+              if (blob) zip.file(`page${p}-img${imgCount}.png`, blob);
+            } else if (imgObj && imgObj.data && imgObj.width && imgObj.height) {
+              // RGBA pixel data → PNG via canvas
+              const c = document.createElement("canvas");
+              c.width = imgObj.width;
+              c.height = imgObj.height;
+              const ctx = c.getContext("2d")!;
+              const imageData = new ImageData(new Uint8ClampedArray(imgObj.data), imgObj.width, imgObj.height);
+              ctx.putImageData(imageData, 0, 0);
+              const blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
+              if (blob) zip.file(`page${p}-img${imgCount}.png`, blob);
+            }
+          } catch (_) {
+            // Skip images that can't be extracted
+          }
+        }
+      }
+
+      if (imgCount === 0) {
+        alert("No images found in this PDF.");
+        return;
+      }
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = pdfFileName.replace(/\.pdf$/i, "") + "-images.zip";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err: any) {
+      console.error("[PDF Editor] Export images error:", err);
+      alert(`Export images failed: ${err?.message || "Unknown error"}`);
+    } finally {
+      exportImagesBtn.classList.remove("disabled");
+      if (label) label.textContent = "Export Images";
     }
   });
 }
