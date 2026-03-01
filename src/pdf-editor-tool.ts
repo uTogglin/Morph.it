@@ -2720,27 +2720,38 @@ export function initPdfEditorTool() {
               const timeout = setTimeout(() => reject(new Error("timeout")), 5000);
               page.objs.get(imgName, (obj: any) => { clearTimeout(timeout); resolve(obj); });
             });
+            if (!imgObj) continue;
 
-            imgCount++;
+            let blob: Blob | null = null;
+            const c = document.createElement("canvas");
+            const ctx = c.getContext("2d")!;
 
-            if (isJpeg && imgObj instanceof HTMLImageElement) {
-              // Draw HTMLImageElement to canvas to get PNG bytes
-              const c = document.createElement("canvas");
-              c.width = imgObj.naturalWidth;
-              c.height = imgObj.naturalHeight;
-              c.getContext("2d")!.drawImage(imgObj, 0, 0);
-              const blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
-              if (blob) zip.file(`page${p}-img${imgCount}.png`, blob);
-            } else if (imgObj && imgObj.data && imgObj.width && imgObj.height) {
-              // RGBA pixel data → PNG via canvas
-              const c = document.createElement("canvas");
+            if (imgObj instanceof ImageBitmap) {
               c.width = imgObj.width;
               c.height = imgObj.height;
-              const ctx = c.getContext("2d")!;
+              ctx.drawImage(imgObj, 0, 0);
+              blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
+            } else if (imgObj instanceof HTMLImageElement) {
+              c.width = imgObj.naturalWidth || imgObj.width;
+              c.height = imgObj.naturalHeight || imgObj.height;
+              ctx.drawImage(imgObj, 0, 0);
+              blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
+            } else if (imgObj.bitmap instanceof ImageBitmap) {
+              c.width = imgObj.bitmap.width;
+              c.height = imgObj.bitmap.height;
+              ctx.drawImage(imgObj.bitmap, 0, 0);
+              blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
+            } else if (imgObj.data && imgObj.width && imgObj.height) {
+              c.width = imgObj.width;
+              c.height = imgObj.height;
               const imageData = new ImageData(new Uint8ClampedArray(imgObj.data), imgObj.width, imgObj.height);
               ctx.putImageData(imageData, 0, 0);
-              const blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
-              if (blob) zip.file(`page${p}-img${imgCount}.png`, blob);
+              blob = await new Promise<Blob | null>(r => c.toBlob(r, "image/png"));
+            }
+
+            if (blob) {
+              imgCount++;
+              zip.file(`page${p}-img${imgCount}.png`, blob);
             }
           } catch (_) {
             // Skip images that can't be extracted
