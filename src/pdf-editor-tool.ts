@@ -594,14 +594,23 @@ export function initPdfEditorTool() {
     if (lower.includes("dejavuserif")) return "Georgia";
     if (lower.includes("dejavusans") && lower.includes("mono")) return "Courier New";
     if (lower.includes("dejavusans")) return "Verdana";
-    if (lower.includes("roboto")) return "Arial";
-    if (lower.includes("opensans") || lower.includes("open")) return "Arial";
-    if (lower.includes("lato")) return "Arial";
-    if (lower.includes("sourcesans")) return "Arial";
-    if (lower.includes("sourceserif")) return "Georgia";
-    if (lower.includes("sourcecode")) return "Courier New";
-    if (lower.includes("notosans")) return "Arial";
-    if (lower.includes("notoserif")) return "Times New Roman";
+    if (lower.includes("roboto") && lower.includes("mono")) return "Roboto Mono";
+    if (lower.includes("roboto")) return "Roboto";
+    if (lower.includes("opensans") || (lower.includes("open") && lower.includes("sans"))) return "Open Sans";
+    if (lower.includes("lato")) return "Lato";
+    if (lower.includes("inter")) return "Inter";
+    if (lower.includes("nunito")) return "Nunito";
+    if (lower.includes("ptsans")) return "PT Sans";
+    if (lower.includes("ptserif")) return "PT Serif";
+    if (lower.includes("sourcesans")) return "Source Sans 3";
+    if (lower.includes("sourceserif")) return "Source Serif 4";
+    if (lower.includes("sourcecode")) return "Source Code Pro";
+    if (lower.includes("notosans")) return "Noto Sans";
+    if (lower.includes("notoserif")) return "Noto Serif";
+    if (lower.includes("merriweather")) return "Merriweather";
+    if (lower.includes("playfair")) return "Playfair Display";
+    if (lower.includes("baskerville")) return "Libre Baskerville";
+    if (lower.includes("firacode") || lower.includes("firamono")) return "Source Code Pro";
     // Generic families
     if (lower === "serif" || (lower.includes("serif") && !lower.includes("sans"))) return "Times New Roman";
     if (lower === "sansserif" || lower.includes("sans")) return "Arial";
@@ -658,11 +667,10 @@ export function initPdfEditorTool() {
       }
     }
 
-    // Font size: pdfjs renders glyph paths directly while fabric uses fillText
-    // with system fonts. The 96/72 factor corrects for the rendering difference
-    // between PDF point-based glyph scaling and CSS pixel-based font sizing.
+    // Font size: pdfjs transform[0] is the effective font size in PDF user space.
+    // Multiply by viewport scale to get canvas pixels (fabric fontSize units).
     const pdfPts = Math.abs(bestItem.transform[0]) || Math.abs(bestItem.transform[3]);
-    const fontSize = pdfPts * (96 / 72) * scale;
+    const fontSize = pdfPts * scale;
 
     // Sample text color by scanning a grid of pixels near the matched text
     // and picking the darkest one (most likely the text, not background)
@@ -746,7 +754,7 @@ export function initPdfEditorTool() {
           }
         }
 
-        const fontSize = pdfPts * (96 / 72) * scale;
+        const fontSize = pdfPts * scale;
 
         // Sample text color
         let color = "#000000";
