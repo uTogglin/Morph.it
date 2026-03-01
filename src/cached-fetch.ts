@@ -91,14 +91,28 @@ export async function applyHfCachePolicy(): Promise<void> {
 }
 
 /**
- * Show the first-visit caching prompt using the app's existing popup system.
+ * Show the first-visit caching prompt as its own overlay (independent of the
+ * shared #popup element so it won't be clobbered by the format-loading flow).
  */
 export function showCachePrompt(): void {
   const pref = getCachePref();
   if (pref !== null) return; // already decided
 
-  const html = `
-    <h2>Cache AI Models Locally?</h2>
+  // Backdrop
+  const bg = document.createElement("div");
+  bg.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:300;";
+
+  // Dialog box — mirrors #popup styling
+  const box = document.createElement("div");
+  box.style.cssText =
+    "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);" +
+    "min-width:320px;max-width:90vw;max-height:85vh;overflow-y:auto;" +
+    "background:var(--card-bg);border:1px solid var(--input-border);" +
+    "padding:24px;border-radius:var(--radius);text-align:center;" +
+    "box-shadow:var(--shadow-md);z-index:301;color:var(--text-main);";
+
+  box.innerHTML = `
+    <h2 style="margin-top:0;font-size:1.1rem;">Cache AI Models Locally?</h2>
     <p style="font-size:0.9rem;color:var(--text-muted);margin:8px 0 4px;text-align:left;">
       This site uses AI models and libraries (text-to-speech, speech-to-text,
       summarization, OCR, etc.) that can be <strong>75 MB &ndash; 1.5 GB</strong> each.
@@ -108,36 +122,39 @@ export function showCachePrompt(): void {
       <strong>browser&rsquo;s Cache Storage</strong> so they load instantly on
       future visits instead of re-downloading every time.
       <br><br>
-      You can change this later in <strong>Settings &rarr; General</strong>.
+      You can toggle this off at any time in <strong>Settings &rarr; General</strong>
+      to delete the cache and free up space.
     </p>
     <div style="display:flex;gap:10px;justify-content:center;">
-      <button id="cache-prompt-yes" style="flex:1;max-width:160px;">Yes, cache locally</button>
+      <button id="cache-prompt-yes"
+        style="flex:1;max-width:160px;font-size:0.9rem;padding:8px 24px;border:none;border-radius:var(--radius-sm);background:var(--accent);color:white;cursor:pointer;">
+        Yes, cache locally
+      </button>
       <button id="cache-prompt-no"
-        style="flex:1;max-width:160px;background:var(--surface-color);color:var(--text-main);border:1px solid var(--input-border);">
+        style="flex:1;max-width:160px;font-size:0.9rem;padding:8px 24px;border:1px solid var(--input-border);border-radius:var(--radius-sm);background:var(--surface-color);color:var(--text-main);cursor:pointer;">
         No thanks
       </button>
     </div>
   `;
 
-  (window as any).showPopup(html);
+  document.body.appendChild(bg);
+  document.body.appendChild(box);
 
-  const attach = () => {
-    const yesBtn = document.getElementById("cache-prompt-yes");
-    const noBtn = document.getElementById("cache-prompt-no");
-    if (!yesBtn || !noBtn) { setTimeout(attach, 50); return; }
+  function dismiss() {
+    bg.remove();
+    box.remove();
+  }
 
-    yesBtn.addEventListener("click", () => {
-      try { localStorage.setItem(LS_KEY, "yes"); } catch {}
-      (window as any).hidePopup();
-      requestPersistentStorage();
-      applyHfCachePolicy();
-    });
+  box.querySelector("#cache-prompt-yes")!.addEventListener("click", () => {
+    try { localStorage.setItem(LS_KEY, "yes"); } catch {}
+    dismiss();
+    requestPersistentStorage();
+    applyHfCachePolicy();
+  });
 
-    noBtn.addEventListener("click", () => {
-      try { localStorage.setItem(LS_KEY, "no"); } catch {}
-      (window as any).hidePopup();
-      applyHfCachePolicy();
-    });
-  };
-  attach();
+  box.querySelector("#cache-prompt-no")!.addEventListener("click", () => {
+    try { localStorage.setItem(LS_KEY, "no"); } catch {}
+    dismiss();
+    applyHfCachePolicy();
+  });
 }

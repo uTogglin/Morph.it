@@ -526,6 +526,9 @@ document.querySelector("#logo")?.addEventListener("click", showHomePage);
 requestPersistentStorage();
 applyHfCachePolicy();
 
+// On first visit, ask user if they want to cache models locally.
+showCachePrompt();
+
 // Initialize speech tool
 initSpeechTool();
 
@@ -1178,9 +1181,6 @@ window.hidePopup = function () {
   ui.popupBox.style.display = "none";
   ui.popupBackground.style.display = "none";
 }
-
-// On first visit, ask user if they want to cache models locally
-showCachePrompt();
 
 const allOptions: Array<{ format: FileFormat, handler: FormatHandler }> = [];
 
