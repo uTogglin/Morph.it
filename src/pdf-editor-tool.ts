@@ -1451,7 +1451,8 @@ export function initPdfEditorTool() {
         }
         fabricCanvas.renderAll();
         const fabricEl = fabricCanvas.getElement();
-        flatCtx.drawImage(fabricEl, 0, 0);
+        // Fabric v6 DPR-scales its internal canvas — scale it back to match bgCanvas
+        flatCtx.drawImage(fabricEl, 0, 0, flatCanvas.width, flatCanvas.height);
         for (const obj of hiddenObjs) obj.set("visible", true);
         fabricCanvas.renderAll();
 
