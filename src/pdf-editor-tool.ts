@@ -1500,7 +1500,7 @@ export function initPdfEditorTool() {
         const rh = (rect.height ?? 0) * (rect.scaleY ?? 1);
 
         if (cx >= rl - 2 && cx <= rl + rw + 2 && cy >= rt - 2 && cy <= rt + rh + 2) {
-          edits.push({ pdfX, pdfY, tolerance: 2.0, delete: true });
+          edits.push({ pdfX, pdfY, tolerance: 5.0, delete: true });
           break; // text item matched one rect, no need to check others
         }
       }

@@ -268,8 +268,24 @@ interface ResolvedTextItem {
   fontName: string;
 }
 
+// Multiply two 2D affine matrices [a,b,c,d,e,f]
+function mulMat(a: number[], b: number[]): number[] {
+  return [
+    a[0]*b[0] + a[1]*b[2],
+    a[0]*b[1] + a[1]*b[3],
+    a[2]*b[0] + a[3]*b[2],
+    a[2]*b[1] + a[3]*b[3],
+    a[4]*b[0] + a[5]*b[2] + b[4],
+    a[4]*b[1] + a[5]*b[3] + b[5],
+  ];
+}
+
 export function resolveTextPositions(instructions: Instruction[]): ResolvedTextItem[] {
   const items: ResolvedTextItem[] = [];
+
+  // CTM tracking (cm, q, Q)
+  let ctm = [1, 0, 0, 1, 0, 0];
+  const ctmStack: number[][] = [];
 
   // Text matrix: [a, b, c, d, e, f] — identity initially
   let tm = [1, 0, 0, 1, 0, 0];
@@ -282,6 +298,25 @@ export function resolveTextPositions(instructions: Instruction[]): ResolvedTextI
     const instr = instructions[idx];
     const op = instr.operator;
     const ops = instr.operands;
+
+    // Graphics state stack
+    if (op === "q") {
+      ctmStack.push([...ctm]);
+      continue;
+    }
+    if (op === "Q") {
+      if (ctmStack.length > 0) ctm = ctmStack.pop()!;
+      continue;
+    }
+
+    // Concatenate matrix to CTM
+    if (op === "cm" && ops.length >= 6) {
+      const nums = ops.filter(o => o.type === "number").map(o => (o as NumberToken).value);
+      if (nums.length >= 6) {
+        ctm = mulMat(nums.slice(0, 6), ctm);
+      }
+      continue;
+    }
 
     if (op === "BT") {
       inBT = true;
@@ -330,11 +365,13 @@ export function resolveTextPositions(instructions: Instruction[]): ResolvedTextI
       continue;
     }
 
-    // Text showing operators
+    // Text showing operators — transform text position through CTM to get page-space coords
     if (op === "Tj" || op === "TJ" || op === "'" || op === '"') {
+      const pageX = tm[4] * ctm[0] + tm[5] * ctm[2] + ctm[4];
+      const pageY = tm[4] * ctm[1] + tm[5] * ctm[3] + ctm[5];
       items.push({
-        x: tm[4],
-        y: tm[5],
+        x: pageX,
+        y: pageY,
         instructionIndex: idx,
         operator: op,
         fontSize: Math.abs(fontSize * tm[3]) || Math.abs(fontSize * tm[0]) || fontSize,
