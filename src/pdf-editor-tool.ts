@@ -704,7 +704,7 @@ export function initPdfEditorTool() {
     hlPenSizeGroup.style.display = activePdeTool === "highlight-pen" ? "" : "none";
 
     // Hide standard color & opacity when highlight tools are active (they have their own)
-    colorInput.closest(".pde-prop-group")!.style.display = isHighlightTool ? "none" : "";
+    (colorInput.closest(".pde-prop-group") as HTMLElement).style.display = isHighlightTool ? "none" : "";
     opacityGroup.style.display = isHighlightTool ? "none" : "";
 
     // Populate text properties from selected object
