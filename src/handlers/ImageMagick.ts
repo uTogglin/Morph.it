@@ -23,7 +23,8 @@ class ImageMagickHandler implements FormatHandler {
   async init () {
 
     const wasmLocation = "/convert/wasm/magick.wasm";
-    const wasmBytes = await fetch(wasmLocation).then(r => r.bytes());
+    const wasmBuffer = await fetch(wasmLocation).then(r => r.arrayBuffer());
+    const wasmBytes = new Uint8Array(wasmBuffer);
 
     await initializeImageMagick(wasmBytes);
 
