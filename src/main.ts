@@ -2376,15 +2376,7 @@ async function runLamaInpainting(imageBytes: Uint8Array, ext: string, maskImageD
   imgCtx.drawImage(img, 0, 0, 512, 512);
   const imgData = imgCtx.getImageData(0, 0, 512, 512);
 
-  // Image tensor [1, 3, 512, 512] float32 normalized to [0, 1]
-  const imgTensor = new Float32Array(3 * 512 * 512);
-  for (let i = 0; i < 512 * 512; i++) {
-    imgTensor[i] = imgData.data[i * 4] / 255.0;
-    imgTensor[512 * 512 + i] = imgData.data[i * 4 + 1] / 255.0;
-    imgTensor[2 * 512 * 512 + i] = imgData.data[i * 4 + 2] / 255.0;
-  }
-
-  // Resize mask to 512x512
+  // Resize mask to 512x512 (process mask first so we can zero out masked image pixels)
   const maskCanvas = document.createElement("canvas");
   maskCanvas.width = maskImageData.width; maskCanvas.height = maskImageData.height;
   maskCanvas.getContext("2d")!.putImageData(maskImageData, 0, 0);
@@ -2402,6 +2394,17 @@ async function runLamaInpainting(imageBytes: Uint8Array, ext: string, maskImageD
     maskTensor[i] = maskData.data[i * 4 + 3] > 30 ? 1.0 : 0.0;
   }
 
+  // Image tensor [1, 3, 512, 512] float32 normalized to [0, 1]
+  // LaMa expects masked image: zero out pixels in the masked region so the model
+  // knows those areas need to be reconstructed (standard LaMa convention)
+  const imgTensor = new Float32Array(3 * 512 * 512);
+  for (let i = 0; i < 512 * 512; i++) {
+    const keep = 1.0 - maskTensor[i]; // 0 for masked pixels, 1 for known pixels
+    imgTensor[i] = (imgData.data[i * 4] / 255.0) * keep;
+    imgTensor[512 * 512 + i] = (imgData.data[i * 4 + 1] / 255.0) * keep;
+    imgTensor[2 * 512 * 512 + i] = (imgData.data[i * 4 + 2] / 255.0) * keep;
+  }
+
   const inputNames = session.inputNames;
   const imgInputName = inputNames.find((n: string) => n.includes("image") || n === "image") ?? inputNames[0];
   const maskInputName = inputNames.find((n: string) => n.includes("mask") || n === "mask") ?? inputNames[1];
@@ -2413,15 +2416,22 @@ async function runLamaInpainting(imageBytes: Uint8Array, ext: string, maskImageD
   const results = await session.run(feeds);
   const outputData = results[session.outputNames[0]].data as Float32Array;
 
-  // Render 512x512 result — output is [0, 1] float, denormalize to [0, 255]
+  // Detect output range: if max value > 2 the model outputs [0,255], otherwise [0,1]
+  let maxVal = 0;
+  for (let i = 0; i < outputData.length; i++) {
+    if (outputData[i] > maxVal) maxVal = outputData[i];
+  }
+  const scale = maxVal > 2.0 ? 1.0 : 255.0;
+
+  // Render 512x512 result
   const outCanvas = document.createElement("canvas");
   outCanvas.width = 512; outCanvas.height = 512;
   const outCtx = outCanvas.getContext("2d")!;
   const outImgData = outCtx.createImageData(512, 512);
   for (let i = 0; i < 512 * 512; i++) {
-    outImgData.data[i * 4] = Math.max(0, Math.min(255, Math.round(outputData[i] * 255)));
-    outImgData.data[i * 4 + 1] = Math.max(0, Math.min(255, Math.round(outputData[512 * 512 + i] * 255)));
-    outImgData.data[i * 4 + 2] = Math.max(0, Math.min(255, Math.round(outputData[2 * 512 * 512 + i] * 255)));
+    outImgData.data[i * 4] = Math.max(0, Math.min(255, Math.round(outputData[i] * scale)));
+    outImgData.data[i * 4 + 1] = Math.max(0, Math.min(255, Math.round(outputData[512 * 512 + i] * scale)));
+    outImgData.data[i * 4 + 2] = Math.max(0, Math.min(255, Math.round(outputData[2 * 512 * 512 + i] * scale)));
     outImgData.data[i * 4 + 3] = 255;
   }
   outCtx.putImageData(outImgData, 0, 0);
