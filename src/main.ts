@@ -3097,7 +3097,7 @@ function showMiniPaintEditor() {
 
 /** Reset image tools state — show drop zone, reload iframe */
 function imgResetState() {
-  ui.imgEditorContainer?.classList.remove("fullscreen");
+  if (document.fullscreenElement) document.exitFullscreen();
   for (const url of imgOriginalUrls.values()) URL.revokeObjectURL(url);
   for (const url of imgProcessedUrls.values()) URL.revokeObjectURL(url);
   imgToolFiles = [];
@@ -3254,26 +3254,21 @@ ui.imgSaveBtn?.addEventListener("click", async () => {
   );
 });
 
-// Action: Fullscreen toggle
+// Action: Fullscreen toggle (browser Fullscreen API)
 ui.imgFullscreenBtn?.addEventListener("click", () => {
   const container = ui.imgEditorContainer;
   if (!container) return;
-  const isFs = container.classList.toggle("fullscreen");
-  const expand = document.getElementById("img-fs-expand");
-  const shrink = document.getElementById("img-fs-shrink");
-  if (expand) expand.classList.toggle("hidden", isFs);
-  if (shrink) shrink.classList.toggle("hidden", !isFs);
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    (container.requestFullscreen?.() ?? (container as any).webkitRequestFullscreen?.());
+  }
 });
 
-// Escape key exits fullscreen
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && ui.imgEditorContainer?.classList.contains("fullscreen")) {
-    ui.imgEditorContainer.classList.remove("fullscreen");
-    const expand = document.getElementById("img-fs-expand");
-    const shrink = document.getElementById("img-fs-shrink");
-    if (expand) expand.classList.remove("hidden");
-    if (shrink) shrink.classList.add("hidden");
-  }
+document.addEventListener("fullscreenchange", () => {
+  const isFs = !!document.fullscreenElement;
+  ui.imgFullscreenBtn?.querySelector(".img-icon-expand")?.classList.toggle("hidden", isFs);
+  ui.imgFullscreenBtn?.querySelector(".img-icon-collapse")?.classList.toggle("hidden", !isFs);
 });
 
 // ── Video Editor: Upload, Preview, Timeline, Processing ─────────────────────
