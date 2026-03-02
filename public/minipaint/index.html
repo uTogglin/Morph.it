@@ -1094,6 +1094,361 @@ a:hover {
 	filter: none !important;
 	border-left: 2px solid #6C5CE7 !important;
 }
+
+
+/* ══════════════════════════════════════════
+   16. HIDE ORIGINAL COLOR PANEL
+   ══════════════════════════════════════════ */
+.sidebar_right > .colors.block {
+	display: none !important;
+}
+
+
+/* ══════════════════════════════════════════
+   17. PS-STYLE COLOR TOOL (left toolbar bottom)
+   ══════════════════════════════════════════ */
+.ps-color-tool {
+	width: 40px;
+	margin-top: auto;
+	padding: 6px 0 8px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	border-top: 1px solid #1a1a1a;
+}
+.ps-color-swatches {
+	position: relative;
+	width: 28px;
+	height: 28px;
+}
+.ps-fg {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 18px;
+	height: 18px;
+	border: 1px solid #888;
+	outline: 1px solid #1a1a1a;
+	z-index: 2;
+	cursor: pointer;
+	box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+}
+.ps-bg {
+	position: absolute;
+	bottom: 0;
+	right: 0;
+	width: 18px;
+	height: 18px;
+	border: 1px solid #888;
+	outline: 1px solid #1a1a1a;
+	z-index: 1;
+	cursor: pointer;
+	box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+}
+.ps-swap {
+	position: absolute;
+	top: -2px;
+	right: -1px;
+	width: 14px;
+	height: 14px;
+	z-index: 3;
+	cursor: pointer;
+	background: none;
+	border: none !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0.5 !important;
+	min-width: 0 !important;
+	min-height: 0 !important;
+	width: 14px !important;
+	height: 14px !important;
+}
+.ps-swap:hover {
+	opacity: 1 !important;
+	background-color: transparent !important;
+}
+.ps-swap svg {
+	width: 10px;
+	height: 10px;
+}
+.ps-default {
+	position: absolute;
+	bottom: -1px;
+	left: -1px;
+	width: 14px;
+	height: 14px;
+	z-index: 3;
+	cursor: pointer;
+	background: none;
+	border: none !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0.5 !important;
+	min-width: 0 !important;
+	min-height: 0 !important;
+	width: 14px !important;
+	height: 14px !important;
+}
+.ps-default:hover {
+	opacity: 1 !important;
+	background-color: transparent !important;
+}
+.ps-default svg {
+	width: 11px;
+	height: 11px;
+}
+
+
+/* ══════════════════════════════════════════
+   18. LAYER THUMBNAILS
+   ══════════════════════════════════════════ */
+.layer-thumb {
+	width: 32px;
+	height: 24px;
+	flex-shrink: 0;
+	border: 1px solid #1a1a1a;
+	margin-right: 4px;
+	background-image:
+		linear-gradient(45deg, #3a3a3a 25%, transparent 25%),
+		linear-gradient(-45deg, #3a3a3a 25%, transparent 25%),
+		linear-gradient(45deg, transparent 75%, #3a3a3a 75%),
+		linear-gradient(-45deg, transparent 75%, #3a3a3a 75%);
+	background-size: 8px 8px;
+	background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+	background-color: #2a2a2a;
+	image-rendering: auto;
+}
+.layers_list .item {
+	display: flex !important;
+	align-items: center !important;
+}
+.layers_list .item .layer_name {
+	flex: 1 !important;
+	min-width: 0 !important;
+}
 </style>
+
+<script>
+(function() {
+	function initCustomUI() {
+		// Wait for miniPaint to initialize
+		if (typeof AppConfig === 'undefined' || !document.querySelector('.sidebar_left')) {
+			setTimeout(initCustomUI, 200);
+			return;
+		}
+		createColorTool();
+		initLayerThumbnails();
+	}
+
+	/* ── PS-STYLE COLOR TOOL ── */
+	function createColorTool() {
+		var sidebar = document.querySelector('.sidebar_left');
+		if (!sidebar) return;
+
+		var bgColor = '#ffffff';
+
+		var tool = document.createElement('div');
+		tool.className = 'ps-color-tool';
+		tool.innerHTML =
+			'<div class="ps-color-swatches">' +
+				'<button class="ps-swap" title="Swap colors (X)">' +
+					'<svg viewBox="0 0 10 10" fill="none" stroke="#ccc" stroke-width="1.3">' +
+						'<path d="M6 1L9 1L9 4"/>' +
+						'<path d="M4 9L1 9L1 6"/>' +
+						'<path d="M9 1L5 5"/>' +
+						'<path d="M1 9L5 5"/>' +
+					'</svg>' +
+				'</button>' +
+				'<button class="ps-default" title="Default colors (D)">' +
+					'<svg viewBox="0 0 11 11">' +
+						'<rect x="3" y="3" width="7.5" height="7.5" fill="#fff" stroke="#888" stroke-width="0.7"/>' +
+						'<rect x="0.5" y="0.5" width="7.5" height="7.5" fill="#000" stroke="#888" stroke-width="0.7"/>' +
+					'</svg>' +
+				'</button>' +
+				'<div class="ps-fg" title="Foreground color"></div>' +
+				'<div class="ps-bg" title="Background color"></div>' +
+			'</div>';
+
+		sidebar.appendChild(tool);
+
+		var fgSwatch = tool.querySelector('.ps-fg');
+		var bgSwatch = tool.querySelector('.ps-bg');
+		var swapBtn = tool.querySelector('.ps-swap');
+		var defaultBtn = tool.querySelector('.ps-default');
+
+		// Set initial colors
+		fgSwatch.style.backgroundColor = AppConfig.COLOR || '#000000';
+		bgSwatch.style.backgroundColor = bgColor;
+
+		// Click foreground → open color picker
+		fgSwatch.addEventListener('click', function(e) {
+			e.stopPropagation();
+			var sample = document.getElementById('selected_color_sample');
+			if (sample) sample.click();
+		});
+
+		// Click background → swap into fg, open picker, then swap back on next change
+		bgSwatch.addEventListener('click', function(e) {
+			e.stopPropagation();
+			// Save current fg
+			var savedFg = AppConfig.COLOR;
+			// Put bg into fg so picker edits it
+			AppConfig.COLOR = bgColor;
+			fgSwatch.style.backgroundColor = bgColor;
+
+			var sample = document.getElementById('selected_color_sample');
+			if (sample) sample.click();
+
+			// Watch for picker changes — once user picks, that's the new bg
+			var watchInterval = setInterval(function() {
+				if (AppConfig.COLOR !== bgColor) {
+					bgColor = AppConfig.COLOR;
+					bgSwatch.style.backgroundColor = bgColor;
+					// Restore fg
+					AppConfig.COLOR = savedFg;
+					fgSwatch.style.backgroundColor = savedFg;
+					clearInterval(watchInterval);
+				}
+			}, 100);
+
+			// Also catch if picker closes without change (timeout after 30s)
+			setTimeout(function() {
+				clearInterval(watchInterval);
+				// If color is still what we set, restore fg
+				if (AppConfig.COLOR === bgColor) {
+					bgColor = AppConfig.COLOR;
+					bgSwatch.style.backgroundColor = bgColor;
+					AppConfig.COLOR = savedFg;
+					fgSwatch.style.backgroundColor = savedFg;
+				}
+			}, 30000);
+		});
+
+		// Swap button
+		swapBtn.addEventListener('click', function(e) {
+			e.stopPropagation();
+			var tmp = AppConfig.COLOR;
+			AppConfig.COLOR = bgColor;
+			bgColor = tmp;
+			fgSwatch.style.backgroundColor = AppConfig.COLOR;
+			bgSwatch.style.backgroundColor = bgColor;
+		});
+
+		// Default button
+		defaultBtn.addEventListener('click', function(e) {
+			e.stopPropagation();
+			AppConfig.COLOR = '#000000';
+			bgColor = '#ffffff';
+			fgSwatch.style.backgroundColor = '#000000';
+			bgSwatch.style.backgroundColor = '#ffffff';
+		});
+
+		// Sync fg swatch with external color changes (e.g. from picker or tools)
+		setInterval(function() {
+			if (fgSwatch && AppConfig.COLOR) {
+				fgSwatch.style.backgroundColor = AppConfig.COLOR;
+			}
+		}, 200);
+
+		// Keyboard shortcuts (PS-style)
+		document.addEventListener('keydown', function(e) {
+			// Don't intercept when typing in inputs
+			if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+			if (e.key === 'x' || e.key === 'X') {
+				swapBtn.click();
+			} else if (e.key === 'd' || e.key === 'D') {
+				defaultBtn.click();
+			}
+		});
+	}
+
+	/* ── LAYER THUMBNAILS ── */
+	function initLayerThumbnails() {
+		var layersBase = document.getElementById('layers_base');
+		if (!layersBase) return;
+
+		function renderThumbnails() {
+			var items = document.querySelectorAll('.layers_list .item');
+			if (!items.length) return;
+
+			items.forEach(function(item) {
+				var nameBtn = item.querySelector('.layer_name');
+				if (!nameBtn) return;
+
+				var layerId = parseInt(nameBtn.getAttribute('data-id'), 10);
+				if (isNaN(layerId)) return;
+
+				// Find matching layer
+				var layer = null;
+				if (AppConfig.layers) {
+					for (var i = 0; i < AppConfig.layers.length; i++) {
+						if (AppConfig.layers[i].id === layerId) {
+							layer = AppConfig.layers[i];
+							break;
+						}
+					}
+				}
+				if (!layer) return;
+
+				// Get or create thumbnail canvas
+				var thumb = item.querySelector('.layer-thumb');
+				if (!thumb) {
+					thumb = document.createElement('canvas');
+					thumb.className = 'layer-thumb';
+					thumb.width = 32;
+					thumb.height = 24;
+					// Insert before the layer name button
+					item.insertBefore(thumb, nameBtn);
+				}
+
+				// Draw layer content scaled to fit
+				var ctx = thumb.getContext('2d');
+				ctx.clearRect(0, 0, 32, 24);
+
+				var src = layer.link_canvas || layer.link;
+				if (src && (src.width > 0 && src.height > 0)) {
+					var scale = Math.min(32 / src.width, 24 / src.height);
+					var w = src.width * scale;
+					var h = src.height * scale;
+					var x = (32 - w) / 2;
+					var y = (24 - h) / 2;
+					try {
+						ctx.drawImage(src, x, y, w, h);
+					} catch(e) {
+						// Ignore cross-origin or empty canvas errors
+					}
+				}
+			});
+		}
+
+		// Observe layer list changes
+		var observer = new MutationObserver(function() {
+			setTimeout(renderThumbnails, 50);
+		});
+		observer.observe(layersBase, { childList: true, subtree: true });
+
+		// Also update on interval (catches paint operations)
+		setInterval(renderThumbnails, 1000);
+
+		// Initial render
+		setTimeout(renderThumbnails, 100);
+	}
+
+	// Start after DOM + bundle init
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', function() {
+			setTimeout(initCustomUI, 500);
+		});
+	} else {
+		setTimeout(initCustomUI, 500);
+	}
+})();
+</script>
 </body>
 </html>
