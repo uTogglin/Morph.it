@@ -3006,7 +3006,7 @@ function syncImageSettingsUI() {
   // Inpainting
   if (ui.imgInpaintToggle) ui.imgInpaintToggle.classList.toggle("active", inpaintEnabled);
   if (ui.imgInpaintOptions) ui.imgInpaintOptions.classList.toggle("hidden", !inpaintEnabled);
-  if (ui.imgMaskCanvas) ui.imgMaskCanvas.classList.toggle("hidden", !inpaintEnabled || !imgToolFiles.length || imgShowAfter);
+  if (ui.imgMaskCanvas) ui.imgMaskCanvas.classList.toggle("hidden", !inpaintEnabled || !imgToolFiles.length || imgShowAfter || imgProcessedUrls.has(imgActiveIndex));
   if (ui.imgBrushSizeInput) ui.imgBrushSizeInput.value = String(inpaintBrushSize);
   if (ui.imgBrushSizeLabel) ui.imgBrushSizeLabel.textContent = inpaintBrushSize + "px";
   // Sidebar inpaint
@@ -3384,7 +3384,7 @@ ui.imgCompareSwitch?.addEventListener("click", () => {
   imgShowAfter = !imgShowAfter;
   ui.imgCompareSwitch.classList.toggle("active", imgShowAfter);
   // Hide mask canvas when showing "After", show when on "Before"
-  if (ui.imgMaskCanvas) ui.imgMaskCanvas.classList.toggle("hidden", !inpaintEnabled || imgShowAfter);
+  if (ui.imgMaskCanvas) ui.imgMaskCanvas.classList.toggle("hidden", !inpaintEnabled || imgShowAfter || imgProcessedUrls.has(imgActiveIndex));
   imgUpdateCompareLabels();
   imgShowImage(imgActiveIndex);
 });
@@ -3445,7 +3445,7 @@ function syncMaskCanvas() {
   const preview = ui.imgPreview;
   if (!canvas || !preview || !imgToolFiles.length) return;
 
-  if (!inpaintEnabled || imgShowAfter) {
+  if (!inpaintEnabled || imgShowAfter || imgProcessedUrls.has(imgActiveIndex)) {
     canvas.classList.add("hidden");
     return;
   }
