@@ -1,0 +1,91 @@
+/* Convert.it purple theme override for miniPaint */
+
+/* Dark mode (default) */
+:root {
+	--background: #0F0F13;
+	--text-color: #E0E0E8;
+	--text-color-muted: #8A8A9A;
+	--text-color-red: #e38282;
+	--text-color-green: #8bdb8b;
+	--text-color-blue: #a4a4ff;
+	--link-color: #6C5CE7;
+	--section-background-color: #16161E;
+	--area-background-color: #1A1A24;
+	--block-background-color: #1A1A24;
+	--header-background-color: #16161E;
+	--button-background-color: #1E1E2A;
+	--button-background-color-hover: #6C5CE7;
+	--button-background-color-active: #2A2A38;
+	--button-shadow-color: rgba(0, 0, 0, 0.3);
+	--button-text-color-active: #B8B0F0;
+	--button-border-radius: .4rem;
+	--button-toggle-background-color: #252533;
+	--button-toggle-background-color-hover: #2A2A38;
+	--input-background-color: #16161E;
+	--input-background-color-hover: #1E1E2A;
+	--input-text-color: #E0E0E8;
+	--input-border-color: #2A2A38;
+	--input-border-color-active: #6C5CE7;
+	--input-border-radius: .4rem;
+	--input-group-border-color: #1A1A24;
+	--menu-background-color: #111117;
+	--menu-icons-filter: invert(1);
+	--menu-icons-filter-active: none;
+	--menu-text-color: #B0B0C0;
+	--background-color-active: #6C5CE7;
+	--background-color-hover: #252533;
+	--text-color-active: #FFFFFF;
+	--border-color: #2A2A38;
+	--scrollbar-track-color: #1A1A24;
+	--scrollbar-thumb-color: #2A2A38;
+	--mobile-menu-toggle-filter: invert(1);
+}
+
+/* Light mode */
+body.theme-light {
+	--background: #F5F5FA;
+	--text-color: #1A1A2E;
+	--text-color-muted: #666680;
+	--text-color-red: #bb2424;
+	--text-color-green: #2b882b;
+	--text-color-blue: #5454ca;
+	--link-color: #5A4BD1;
+	--section-background-color: #EEEEF4;
+	--area-background-color: #E4E4EE;
+	--block-background-color: #EEEEF4;
+	--header-background-color: #E8E8F0;
+	--button-background-color: #FFFFFF;
+	--button-background-color-hover: #6C5CE7;
+	--button-background-color-active: #F0F0F8;
+	--button-text-color-active: #5A4BD1;
+	--button-shadow-color: rgba(0, 0, 0, 0.08);
+	--button-toggle-background-color: #D8D8E4;
+	--button-toggle-background-color-hover: #D0D0DC;
+	--input-background-color: #FFFFFF;
+	--input-background-color-hover: #F0F0F8;
+	--input-text-color: #1A1A2E;
+	--input-border-color: #D0D0DC;
+	--input-border-color-active: #6C5CE7;
+	--input-group-border-color: #D8D8E4;
+	--menu-background-color: #EEEEF4;
+	--menu-icons-filter: none;
+	--menu-icons-filter-active: invert(1);
+	--menu-text-color: #333350;
+	--background-color-active: #6C5CE7;
+	--background-color-hover: #D8D8E4;
+	--text-color-active: #FFFFFF;
+	--border-color: #D0D0DC;
+	--scrollbar-track-color: #F5F5FA;
+	--scrollbar-thumb-color: #B0B0C0;
+	--mobile-menu-toggle-filter: none;
+}
+
+/* Hide miniPaint's logo text and file menu items we don't need */
+.submenu .logo {
+	color: var(--text-color) !important;
+	font-size: 0 !important;
+	width: 0 !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	overflow: hidden !important;
+}

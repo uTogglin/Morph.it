@@ -134,20 +134,13 @@ let inpaintEnabled: boolean = (() => {
 let inpaintFeather: boolean = (() => {
   try { return localStorage.getItem("convert-inpaint-feather") === "true"; } catch { return false; }
 })();
-let inpaintBrushSize: number = (() => {
-  try { return parseInt(localStorage.getItem("convert-inpaint-brush") ?? "25") || 25; } catch { return 25; }
-})();
 let inpaintModel: "migan" | "lama" = (() => {
   try { const v = localStorage.getItem("convert-inpaint-model"); return v === "lama" ? "lama" : "migan"; } catch { return "migan" as const; }
 })();
 
-/** Per-image mask storage for inpainting */
-let imgMaskData: Map<number, ImageData> = new Map();
-let imgMaskHistory: Map<number, ImageData[]> = new Map();
+/** Inpainting session state */
 let inpaintSession: any = null;
 let inpaintSessionModel: string = "";
-let inpaintDrawing: boolean = false;
-let inpaintLastPos: { x: number; y: number } | null = null;
 
 /** Privacy mode: strips metadata and randomizes filenames for API calls */
 let privacyMode: boolean = (() => {
@@ -223,6 +216,7 @@ let imgProcessedData: Map<number, FileData> = new Map();
 let imgOriginalUrls: Map<number, string> = new Map();
 let imgProcessedUrls: Map<number, string> = new Map();
 let imgShowAfter: boolean = false;
+let miniPaintReady: boolean = false;
 
 /** Video editor state */
 let vidFiles: File[] = [];
@@ -343,39 +337,16 @@ const ui = {
   clearOutputBtn: document.querySelector("#clear-output-btn") as HTMLButtonElement,
   homePage: document.querySelector("#home-page") as HTMLElement,
   backToHome: document.querySelector("#back-to-home") as HTMLButtonElement,
-  // Image tools inline UI
-  imgCanvas: document.querySelector("#img-canvas") as HTMLDivElement,
-  imgDropPrompt: document.querySelector("#img-drop-prompt") as HTMLDivElement,
-  imgWorkspace: document.querySelector("#img-workspace") as HTMLDivElement,
-  imgPreview: document.querySelector("#img-preview") as HTMLImageElement,
-  imgFilmstripGrid: document.querySelector("#img-filmstrip-grid") as HTMLDivElement,
-  imgAddMore: document.querySelector("#img-add-more") as HTMLButtonElement,
-  imgCompareSwitch: document.querySelector("#img-compare-switch") as HTMLButtonElement,
-  imgDownloadBtn: document.querySelector("#img-download-btn") as HTMLButtonElement,
+  // Image tools UI
+  imgDropZone: document.querySelector("#img-drop-zone") as HTMLDivElement,
+  imgFrame: document.querySelector("#minipaint-frame") as HTMLIFrameElement,
+  imgActionBar: document.querySelector("#img-action-bar") as HTMLDivElement,
+  imgRemoveBgBtn: document.querySelector("#img-removebg-btn") as HTMLButtonElement,
+  imgInpaintBtn: document.querySelector("#img-inpaint-btn") as HTMLButtonElement,
+  imgSaveBtn: document.querySelector("#img-save-btn") as HTMLButtonElement,
   imgFileInput: document.querySelector("#img-file-input") as HTMLInputElement,
-  imgRemoveBgToggle: document.querySelector("#img-remove-bg-toggle") as HTMLButtonElement,
-  imgBgModeToggle: document.querySelector("#img-bg-mode-toggle") as HTMLButtonElement,
-  imgBgCorrectionToggle: document.querySelector("#img-bg-correction-toggle") as HTMLButtonElement,
-  imgBgCorrectionRow: document.querySelector("#img-bg-correction-row") as HTMLElement,
-  imgBgApiKeyRow: document.querySelector("#img-bg-api-key-row") as HTMLDivElement,
-  imgBgApiKeyInput: document.querySelector("#img-bg-api-key") as HTMLInputElement,
-  imgRescaleToggle: document.querySelector("#img-rescale-toggle") as HTMLButtonElement,
-  imgRescaleOptions: document.querySelector("#img-rescale-options") as HTMLDivElement,
-  imgRescaleWidthInput: document.querySelector("#img-rescale-width") as HTMLInputElement,
-  imgRescaleHeightInput: document.querySelector("#img-rescale-height") as HTMLInputElement,
-  imgRescaleLockInput: document.querySelector("#img-rescale-lock-ratio") as HTMLInputElement,
-  // Inpainting UI
-  imgMaskCanvas: document.querySelector("#img-mask-canvas") as HTMLCanvasElement,
-  imgInpaintToggle: document.querySelector("#img-inpaint-toggle") as HTMLButtonElement,
-  imgInpaintOptions: document.querySelector("#img-inpaint-options") as HTMLDivElement,
-  imgBrushSizeInput: document.querySelector("#img-brush-size") as HTMLInputElement,
-  imgBrushSizeLabel: document.querySelector("#img-brush-size-label") as HTMLSpanElement,
-  imgMaskUndo: document.querySelector("#img-mask-undo") as HTMLButtonElement,
-  imgMaskClear: document.querySelector("#img-mask-clear") as HTMLButtonElement,
-  imgInpaintSidebarToggle: document.querySelector("#img-inpaint-sidebar-toggle") as HTMLButtonElement,
-  imgInpaintSidebarOptions: document.querySelector("#img-inpaint-sidebar-options") as HTMLDivElement,
-  imgInpaintModelToggle: document.querySelector("#img-inpaint-model-toggle") as HTMLButtonElement,
-  imgInpaintFeatherToggle: document.querySelector("#img-inpaint-feather-toggle") as HTMLButtonElement,
+  imgInpaintModelToggle: document.querySelector("#inpaint-model-toggle") as HTMLButtonElement,
+  imgInpaintFeatherToggle: document.querySelector("#inpaint-feather-toggle") as HTMLButtonElement,
   // Video editor UI
   vidCanvas: document.querySelector("#vid-canvas") as HTMLDivElement,
   vidDropPrompt: document.querySelector("#vid-drop-prompt") as HTMLDivElement,
@@ -1446,6 +1417,7 @@ if (ui.themeToggle) {
   ui.themeToggle.addEventListener("click", () => {
     const current = document.documentElement.getAttribute("data-theme");
     applyTheme(current === "dark" ? "light" : "dark");
+    applyMiniPaintTheme();
   });
 }
 
@@ -2503,53 +2475,9 @@ function applyGaussianBlur(data: ImageData, w: number, h: number, radius: number
   for (let i = 0; i < w * h; i++) pixels[i * 4 + 3] = Math.round(alphas[i]);
 }
 
-/** Apply inpainting to files that have masks drawn */
+/** Apply inpainting to files — now a no-op since inpainting is done interactively in miniPaint */
 async function applyInpainting(files: FileData[]): Promise<FileData[]> {
-  if (!inpaintEnabled) return files;
-
-  const hasAnyMask = Array.from(imgMaskData.values()).some(d => {
-    const px = d.data;
-    for (let i = 3; i < px.length; i += 4) { if (px[i] > 0) return true; }
-    return false;
-  });
-  if (!hasAnyMask) return files;
-
-  const modelLabel = inpaintModel === "lama" ? "LaMa (208 MB)" : "MI-GAN (28 MB)";
-  window.showPopup(
-    `<h2>Removing objects...</h2>` +
-    `<p>Running ${modelLabel} inpainting. This may take a moment on first run.</p>`
-  );
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-  const result: FileData[] = [];
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i];
-    const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-    if (!bgRemovalExts.has(ext)) {
-      result.push(f);
-      continue;
-    }
-
-    const maskIdx = (applyAll && imgToolFiles.length > 1) ? i : imgActiveIndex;
-    const mask = imgMaskData.get(maskIdx);
-    if (!mask) {
-      result.push(f);
-      continue;
-    }
-
-    let hasPaint = false;
-    const px = mask.data;
-    for (let j = 3; j < px.length; j += 4) { if (px[j] > 0) { hasPaint = true; break; } }
-    if (!hasPaint) {
-      result.push(f);
-      continue;
-    }
-
-    const outBytes = await runInpainting(f.bytes, ext, mask);
-    const baseName = f.name.replace(/\.[^.]+$/, "");
-    result.push({ name: baseName + ".png", bytes: outBytes });
-  }
-  return result;
+  return files;
 }
 
 /** Apply user-specified rescaling to image files */
@@ -2727,11 +2655,7 @@ function updateProcessButton() {
   });
   const rescaleReady = rescaleEnabled && (rescaleWidth > 0 || rescaleHeight > 0);
   const compressReady = compressEnabled;
-  const hasInpaintMask = inpaintEnabled && Array.from(imgMaskData.values()).some(d => {
-    for (let i = 3; i < d.data.length; i += 4) { if (d.data[i] > 0) return true; }
-    return false;
-  });
-  const hasImageProcessing = rescaleReady || removeBg || hasInpaintMask;
+  const hasImageProcessing = rescaleReady || removeBg;
   const hasProcessing = hasImageProcessing || compressReady;
   const outputSelected = document.querySelector("#to-list .selected");
 
@@ -2753,19 +2677,10 @@ function updateProcessButton() {
   }
 
   if (activeTool === "image") {
-    if (hasFiles && (hasImageFiles && hasImageProcessing)) {
-      const labels: string[] = [];
-      if (hasInpaintMask) labels.push("Inpaint");
-      if (rescaleReady) labels.push("Resize");
-      if (removeBg) labels.push("Remove BG");
-      ui.convertButton.textContent = labels.length > 0 ? labels.join(" & ") : "Process";
-      ui.convertButton.className = "";
-      ui.convertButton.setAttribute("data-process-mode", "true");
-    } else {
-      ui.convertButton.textContent = "Process";
-      ui.convertButton.className = "disabled";
-      ui.convertButton.removeAttribute("data-process-mode");
-    }
+    // Image tool now uses its own action bar — shared convert button stays hidden
+    ui.convertButton.textContent = "Process";
+    ui.convertButton.className = "disabled";
+    ui.convertButton.removeAttribute("data-process-mode");
     return;
   }
 
@@ -2986,35 +2901,10 @@ ui.createArchiveBtn.addEventListener("click", async () => {
   }
 });
 
-// ── Image Tools: Upload, Preview, Filmstrip, Settings Sync, Before/After ────
+// ── Image Tools: miniPaint Bridge + Processing ──────────────────────────────
 
-/** Sync inline image settings UI with global state (both directions) */
+/** Sync image settings UI in the settings modal */
 function syncImageSettingsUI() {
-  // Remove BG
-  if (ui.imgRemoveBgToggle) ui.imgRemoveBgToggle.classList.toggle("active", removeBg);
-  if (ui.imgBgModeToggle) {
-    ui.imgBgModeToggle.classList.toggle("hidden", !removeBg);
-    ui.imgBgModeToggle.textContent = bgMode === "local" ? "Mode: Local" : "Mode: remove.bg API";
-  }
-  if (ui.imgBgCorrectionRow) ui.imgBgCorrectionRow.classList.toggle("hidden", !removeBg || bgMode === "api");
-  if (ui.imgBgCorrectionToggle) ui.imgBgCorrectionToggle.classList.toggle("active", bgCorrection);
-  if (ui.imgBgApiKeyRow) ui.imgBgApiKeyRow.classList.toggle("hidden", !removeBg || bgMode !== "api");
-  if (ui.imgBgApiKeyInput) ui.imgBgApiKeyInput.value = bgApiKey;
-  // Rescale
-  if (ui.imgRescaleToggle) ui.imgRescaleToggle.classList.toggle("active", rescaleEnabled);
-  if (ui.imgRescaleOptions) ui.imgRescaleOptions.classList.toggle("hidden", !rescaleEnabled);
-  if (ui.imgRescaleWidthInput) ui.imgRescaleWidthInput.value = rescaleWidth > 0 ? String(rescaleWidth) : "";
-  if (ui.imgRescaleHeightInput) ui.imgRescaleHeightInput.value = rescaleHeight > 0 ? String(rescaleHeight) : "";
-  if (ui.imgRescaleLockInput) ui.imgRescaleLockInput.checked = rescaleLockRatio;
-  // Inpainting
-  if (ui.imgInpaintToggle) ui.imgInpaintToggle.classList.toggle("active", inpaintEnabled);
-  if (ui.imgInpaintOptions) ui.imgInpaintOptions.classList.toggle("hidden", !inpaintEnabled);
-  if (ui.imgMaskCanvas) ui.imgMaskCanvas.classList.toggle("hidden", !inpaintEnabled || !imgToolFiles.length || imgShowAfter || imgProcessedUrls.has(imgActiveIndex));
-  if (ui.imgBrushSizeInput) ui.imgBrushSizeInput.value = String(inpaintBrushSize);
-  if (ui.imgBrushSizeLabel) ui.imgBrushSizeLabel.textContent = inpaintBrushSize + "px";
-  // Sidebar inpaint
-  if (ui.imgInpaintSidebarToggle) ui.imgInpaintSidebarToggle.classList.toggle("active", inpaintEnabled);
-  if (ui.imgInpaintSidebarOptions) ui.imgInpaintSidebarOptions.classList.toggle("hidden", !inpaintEnabled);
   if (ui.imgInpaintModelToggle) ui.imgInpaintModelToggle.textContent = inpaintModel === "lama" ? "Model: LaMa (HQ)" : "Model: MI-GAN";
   if (ui.imgInpaintFeatherToggle) ui.imgInpaintFeatherToggle.classList.toggle("active", inpaintFeather);
 }
@@ -3036,294 +2926,175 @@ function syncModalSettingsUI() {
   if (ui.rescaleLockInput) ui.rescaleLockInput.checked = rescaleLockRatio;
 }
 
-/** Wire inline image settings — each toggle updates global state + syncs both UIs */
-function wireInlineImageSettings() {
-  // Remove BG toggle
-  ui.imgRemoveBgToggle?.addEventListener("click", () => {
-    removeBg = !removeBg;
-    try { localStorage.setItem("convert-remove-bg", String(removeBg)); } catch {}
-    syncImageSettingsUI();
-    syncModalSettingsUI();
-    imgUpdateProcessButton();
-  });
-  // BG mode toggle
-  ui.imgBgModeToggle?.addEventListener("click", () => {
-    bgMode = bgMode === "local" ? "api" : "local";
-    try { localStorage.setItem("convert-bg-mode", bgMode); } catch {}
-    syncImageSettingsUI();
-    syncModalSettingsUI();
-  });
-  // Correction toggle
-  ui.imgBgCorrectionToggle?.addEventListener("click", () => {
-    bgCorrection = !bgCorrection;
-    try { localStorage.setItem("convert-bg-correction", String(bgCorrection)); } catch {}
-    syncImageSettingsUI();
-    syncModalSettingsUI();
-  });
-  // API key input
-  ui.imgBgApiKeyInput?.addEventListener("input", () => {
-    bgApiKey = ui.imgBgApiKeyInput.value.trim();
-    try { localStorage.setItem("convert-bg-api-key", bgApiKey); } catch {}
-    syncModalSettingsUI();
-  });
-  // Rescale toggle
-  ui.imgRescaleToggle?.addEventListener("click", () => {
-    rescaleEnabled = !rescaleEnabled;
-    try { localStorage.setItem("convert-rescale", String(rescaleEnabled)); } catch {}
-    syncImageSettingsUI();
-    syncModalSettingsUI();
-    imgUpdateProcessButton();
-  });
-  // Rescale width
-  ui.imgRescaleWidthInput?.addEventListener("input", () => {
-    rescaleWidth = parseInt(ui.imgRescaleWidthInput.value) || 0;
-    if (rescaleLockRatio && rescaleWidth > 0) {
-      rescaleHeight = 0;
-      ui.imgRescaleHeightInput.value = "";
-      try { localStorage.setItem("convert-rescale-height", "0"); } catch {}
-    }
-    try { localStorage.setItem("convert-rescale-width", String(rescaleWidth)); } catch {}
-    syncModalSettingsUI();
-    imgUpdateProcessButton();
-  });
-  // Rescale height
-  ui.imgRescaleHeightInput?.addEventListener("input", () => {
-    rescaleHeight = parseInt(ui.imgRescaleHeightInput.value) || 0;
-    if (rescaleLockRatio && rescaleHeight > 0) {
-      rescaleWidth = 0;
-      ui.imgRescaleWidthInput.value = "";
-      try { localStorage.setItem("convert-rescale-width", "0"); } catch {}
-    }
-    try { localStorage.setItem("convert-rescale-height", String(rescaleHeight)); } catch {}
-    syncModalSettingsUI();
-    imgUpdateProcessButton();
-  });
-  // Lock ratio
-  ui.imgRescaleLockInput?.addEventListener("change", () => {
-    rescaleLockRatio = ui.imgRescaleLockInput.checked;
-    if (rescaleLockRatio && rescaleWidth > 0 && rescaleHeight > 0) {
-      rescaleHeight = 0;
-      ui.imgRescaleHeightInput.value = "";
-      try { localStorage.setItem("convert-rescale-height", "0"); } catch {}
-    }
-    try { localStorage.setItem("convert-rescale-lock", String(rescaleLockRatio)); } catch {}
-    syncModalSettingsUI();
-  });
-  // Inpaint toggle (inline)
-  ui.imgInpaintToggle?.addEventListener("click", () => {
-    inpaintEnabled = !inpaintEnabled;
-    try { localStorage.setItem("convert-inpaint", String(inpaintEnabled)); } catch {}
-    syncImageSettingsUI();
-    syncModalSettingsUI();
-    if (inpaintEnabled && imgToolFiles.length > 0) syncMaskCanvas();
-    imgUpdateProcessButton();
-  });
-  // Inpaint toggle (sidebar — synced with inline)
-  ui.imgInpaintSidebarToggle?.addEventListener("click", () => {
-    inpaintEnabled = !inpaintEnabled;
-    try { localStorage.setItem("convert-inpaint", String(inpaintEnabled)); } catch {}
-    syncImageSettingsUI();
-    syncModalSettingsUI();
-    if (inpaintEnabled && imgToolFiles.length > 0) syncMaskCanvas();
-    imgUpdateProcessButton();
-  });
-  // Inpaint model toggle
-  ui.imgInpaintModelToggle?.addEventListener("click", () => {
-    inpaintModel = inpaintModel === "migan" ? "lama" : "migan";
-    try { localStorage.setItem("convert-inpaint-model", inpaintModel); } catch {}
-    syncImageSettingsUI();
-    syncModalSettingsUI();
-  });
-  // Feather toggle
-  ui.imgInpaintFeatherToggle?.addEventListener("click", () => {
-    inpaintFeather = !inpaintFeather;
-    try { localStorage.setItem("convert-inpaint-feather", String(inpaintFeather)); } catch {}
-    syncImageSettingsUI();
-    syncModalSettingsUI();
-  });
-  // Brush size slider
-  ui.imgBrushSizeInput?.addEventListener("input", () => {
-    inpaintBrushSize = parseInt(ui.imgBrushSizeInput.value) || 25;
-    if (ui.imgBrushSizeLabel) ui.imgBrushSizeLabel.textContent = inpaintBrushSize + "px";
-    try { localStorage.setItem("convert-inpaint-brush", String(inpaintBrushSize)); } catch {}
-  });
-  // Mask undo
-  ui.imgMaskUndo?.addEventListener("click", () => {
-    const history = imgMaskHistory.get(imgActiveIndex);
-    if (!history || history.length === 0) return;
-    const prev = history.pop()!;
-    imgMaskData.set(imgActiveIndex, prev);
-    const ctx = ui.imgMaskCanvas?.getContext("2d");
-    if (ctx) {
-      ctx.clearRect(0, 0, ui.imgMaskCanvas.width, ui.imgMaskCanvas.height);
-      ctx.putImageData(prev, 0, 0);
-    }
-    imgUpdateProcessButton();
-  });
-  // Mask clear
-  ui.imgMaskClear?.addEventListener("click", () => {
-    imgMaskData.delete(imgActiveIndex);
-    imgMaskHistory.delete(imgActiveIndex);
-    const ctx = ui.imgMaskCanvas?.getContext("2d");
-    if (ctx) ctx.clearRect(0, 0, ui.imgMaskCanvas.width, ui.imgMaskCanvas.height);
-    imgUpdateProcessButton();
-  });
-}
-wireInlineImageSettings();
-
-/** Update the process button state for image tools (uses the shared convert button) */
-function imgUpdateProcessButton() {
-  updateProcessButton();
-  imgUpdateActionButton();
-}
-
-/** Update the dual Process/Download action button based on current image state */
-function imgUpdateActionButton() {
-  if (!ui.imgDownloadBtn) return;
-  const hasFiles = imgToolFiles.length > 0;
-  const currentHasProcessed = imgProcessedData.has(imgActiveIndex);
-
-  if (!hasFiles) {
-    ui.imgDownloadBtn.textContent = "Process";
-    ui.imgDownloadBtn.classList.add("disabled");
-    return;
-  }
-
-  const multi = applyAll && imgToolFiles.length > 1;
-
-  if (multi && imgProcessedData.size === imgToolFiles.length) {
-    ui.imgDownloadBtn.textContent = "Download All";
-    ui.imgDownloadBtn.classList.remove("disabled");
-  } else if (currentHasProcessed && !multi) {
-    ui.imgDownloadBtn.textContent = "Download";
-    ui.imgDownloadBtn.classList.remove("disabled");
-  } else {
-    // Check if processing is possible
-    const hasImageFiles = imgToolFiles.some(f => {
-      const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-      return rescaleExts.has(ext) || bgRemovalExts.has(ext);
-    });
-    const rescaleReady = rescaleEnabled && (rescaleWidth > 0 || rescaleHeight > 0);
-    // Check if any mask has painted pixels
-    const hasInpaintMask = inpaintEnabled && Array.from(imgMaskData.values()).some(d => {
-      for (let i = 3; i < d.data.length; i += 4) { if (d.data[i] > 0) return true; }
-      return false;
-    });
-    const hasImageProcessing = rescaleReady || removeBg || hasInpaintMask;
-
-    if (hasImageFiles && hasImageProcessing) {
-      const labels: string[] = [];
-      if (hasInpaintMask) labels.push("Inpaint");
-      if (rescaleReady) labels.push("Resize");
-      if (removeBg) labels.push("Remove BG");
-      const base = labels.join(" & ") || "Process";
-      ui.imgDownloadBtn.textContent = multi ? base + " All" : base;
-      ui.imgDownloadBtn.classList.remove("disabled");
-    } else {
-      ui.imgDownloadBtn.textContent = "Process";
-      ui.imgDownloadBtn.classList.add("disabled");
-    }
-  }
-}
+/** Wire settings modal inpaint controls */
+ui.imgInpaintModelToggle?.addEventListener("click", () => {
+  inpaintModel = inpaintModel === "migan" ? "lama" : "migan";
+  try { localStorage.setItem("convert-inpaint-model", inpaintModel); } catch {}
+  syncImageSettingsUI();
+  syncModalSettingsUI();
+});
+ui.imgInpaintFeatherToggle?.addEventListener("click", () => {
+  inpaintFeather = !inpaintFeather;
+  try { localStorage.setItem("convert-inpaint-feather", String(inpaintFeather)); } catch {}
+  syncImageSettingsUI();
+  syncModalSettingsUI();
+});
 
 const IMAGE_TOOL_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif", "avif", "ico", "heif", "heic"]);
 
-/** Load files into the image tools workspace */
-function imgLoadFiles(files: File[]) {
-  // Filter to image files only
-  const imageFiles = files.filter(f =>
-    f.type.startsWith("image/") || IMAGE_TOOL_EXTS.has(f.name.split(".").pop()?.toLowerCase() ?? "")
-  );
-  if (imageFiles.length === 0) return;
+// ── miniPaint Bridge ─────────────────────────────────────────────────────────
 
-  // Merge with existing, deduplicating
-  const existing = new Set(imgToolFiles.map(f => `${f.name}|${f.size}`));
-  const merged = [...imgToolFiles, ...imageFiles.filter(f => !existing.has(`${f.name}|${f.size}`))];
-  imgToolFiles = merged;
-
-  // Also set selectedFiles for the shared process button
-  selectedFiles = imgToolFiles;
-  allUploadedFiles = imgToolFiles;
-
-  // Switch canvas to preview mode, show workspace
-  ui.imgCanvas?.classList.add("has-image");
-  ui.imgDropPrompt?.classList.add("hidden");
-  ui.imgPreview?.classList.remove("hidden");
-  ui.imgWorkspace?.classList.remove("hidden");
-
-  // Clear any previous processed data for new images
-  imgProcessedData.clear();
-  for (const url of imgProcessedUrls.values()) URL.revokeObjectURL(url);
-  imgProcessedUrls.clear();
-  imgShowAfter = false;
-  ui.imgCompareSwitch?.classList.remove("active");
-  imgUpdateCompareLabels();
-
-  imgRenderFilmstrip();
-  imgShowImage(imgToolFiles.length > 1 ? imgToolFiles.length - 1 : 0);
-  syncImageSettingsUI();
-  imgUpdateProcessButton();
-}
-
-/** Show image at index in the large preview */
-function imgShowImage(index: number) {
-  if (index < 0 || index >= imgToolFiles.length) return;
-  imgActiveIndex = index;
-
-  // Create original URL if not already cached
-  if (!imgOriginalUrls.has(index)) {
-    imgOriginalUrls.set(index, URL.createObjectURL(imgToolFiles[index]));
-  }
-
-  // Show original or processed based on toggle
-  if (imgShowAfter && imgProcessedUrls.has(index)) {
-    ui.imgPreview.src = imgProcessedUrls.get(index)!;
-  } else {
-    ui.imgPreview.src = imgOriginalUrls.get(index)!;
-  }
-
-  // Update filmstrip active state
-  const thumbs = ui.imgFilmstripGrid?.querySelectorAll(".img-filmstrip-thumb");
-  thumbs?.forEach((t, i) => t.classList.toggle("active", i === index));
-
-  // Sync mask canvas (show/hide + restore mask data for this image)
-  if (inpaintEnabled) syncMaskCanvas();
-
-  // Update action button (Process vs Download) for this image
-  imgUpdateActionButton();
-}
-
-/** Render filmstrip thumbnails */
-function imgRenderFilmstrip() {
-  if (!ui.imgFilmstripGrid) return;
-  ui.imgFilmstripGrid.innerHTML = "";
-  for (let i = 0; i < imgToolFiles.length; i++) {
-    const thumb = document.createElement("div");
-    thumb.className = "img-filmstrip-thumb" + (i === imgActiveIndex ? " active" : "");
-
-    const img = document.createElement("img");
-    if (!imgOriginalUrls.has(i)) {
-      imgOriginalUrls.set(i, URL.createObjectURL(imgToolFiles[i]));
-    }
-    img.src = imgOriginalUrls.get(i)!;
-    img.alt = imgToolFiles[i].name;
-    thumb.appendChild(img);
-
-    thumb.addEventListener("click", () => imgShowImage(i));
-    ui.imgFilmstripGrid.appendChild(thumb);
-  }
-}
-
-/** Update before/after label styling */
-function imgUpdateCompareLabels() {
-  const labels = document.querySelectorAll<HTMLSpanElement>(".img-compare-label");
-  labels.forEach(l => {
-    const side = l.dataset.side;
-    l.classList.toggle("active-side", side === (imgShowAfter ? "after" : "before"));
+/** Wait for miniPaint iframe to fully load and expose its API */
+function waitForMiniPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (miniPaintReady) { resolve(); return; }
+    const frame = ui.imgFrame;
+    if (!frame) { resolve(); return; }
+    const check = () => {
+      try {
+        const win = frame.contentWindow as any;
+        if (win && win.Layers && win.FileOpen) {
+          miniPaintReady = true;
+          resolve();
+          return;
+        }
+      } catch {}
+      setTimeout(check, 100);
+    };
+    frame.addEventListener("load", () => setTimeout(check, 200), { once: true });
+    // If already loaded, check immediately
+    check();
   });
 }
 
-/** Reset image tools state */
+/** Sync miniPaint theme with the host page */
+function applyMiniPaintTheme() {
+  try {
+    const frame = ui.imgFrame;
+    if (!frame || !miniPaintReady) return;
+    const body = frame.contentDocument?.body;
+    if (!body) return;
+    const hostTheme = document.documentElement.getAttribute("data-theme");
+    body.classList.toggle("theme-light", hostTheme === "light");
+  } catch {}
+}
+
+/** Load an image file into miniPaint as a new layer */
+async function loadImageIntoMiniPaint(file: File): Promise<void> {
+  await waitForMiniPaint();
+  const win = ui.imgFrame.contentWindow as any;
+  if (!win?.Layers) return;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const layer = {
+        name: file.name,
+        type: "image",
+        data: img,
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height,
+        width_original: img.naturalWidth || img.width,
+        height_original: img.naturalHeight || img.height,
+      };
+      win.Layers.insert(layer);
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+/** Load processed bytes back into miniPaint as a new layer */
+async function loadBytesIntoMiniPaint(bytes: Uint8Array, name: string): Promise<void> {
+  if (!miniPaintReady) return;
+  const win = ui.imgFrame.contentWindow as any;
+  if (!win?.Layers) return;
+
+  return new Promise((resolve) => {
+    const blob = new Blob([bytes], { type: "image/png" });
+    const img = new Image();
+    img.onload = () => {
+      const layer = {
+        name: name,
+        type: "image",
+        data: img,
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height,
+        width_original: img.naturalWidth || img.width,
+        height_original: img.naturalHeight || img.height,
+      };
+      win.Layers.insert(layer);
+      URL.revokeObjectURL(img.src);
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+/** Get composited image from all miniPaint layers as PNG bytes */
+function getImageFromMiniPaint(): Uint8Array | null {
+  if (!miniPaintReady) return null;
+  const win = ui.imgFrame.contentWindow as any;
+  if (!win?.Layers) return null;
+
+  const dim = win.Layers.get_dimensions();
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = dim.width;
+  tempCanvas.height = dim.height;
+  const ctx = tempCanvas.getContext("2d")!;
+  win.Layers.convert_layers_to_canvas(ctx);
+
+  // Convert canvas to PNG bytes synchronously via data URL
+  const dataUrl = tempCanvas.toDataURL("image/png");
+  const base64 = dataUrl.split(",")[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/** Extract the "Mask" layer as ImageData for inpainting, or null if none exists */
+function getMaskFromMiniPaint(): ImageData | null {
+  if (!miniPaintReady) return null;
+  const win = ui.imgFrame.contentWindow as any;
+  if (!win?.Layers) return null;
+
+  // Find layer named "Mask" (case-insensitive) — try multiple API paths
+  const layers: any[] = win.Layers.get_layers?.() ?? win.config?.layers ?? win.Layers?.layers ?? [];
+  const maskLayer = layers.find((l: any) => l.name?.toLowerCase() === "mask" && l.type === "image");
+  if (!maskLayer) return null;
+
+  // Render just this layer to a canvas
+  const dim = win.Layers.get_dimensions();
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = dim.width;
+  tempCanvas.height = dim.height;
+  const ctx = tempCanvas.getContext("2d")!;
+
+  // Draw the mask layer's data
+  if (maskLayer.data instanceof HTMLCanvasElement || maskLayer.data instanceof HTMLImageElement) {
+    ctx.drawImage(maskLayer.data, maskLayer.x || 0, maskLayer.y || 0, maskLayer.width, maskLayer.height);
+  } else if (maskLayer.link) {
+    // Try canvas reference
+    const layerCanvas = maskLayer.link;
+    if (layerCanvas instanceof HTMLCanvasElement) {
+      ctx.drawImage(layerCanvas, maskLayer.x || 0, maskLayer.y || 0, maskLayer.width, maskLayer.height);
+    }
+  }
+
+  return ctx.getImageData(0, 0, dim.width, dim.height);
+}
+
+/** Show the miniPaint editor, hide drop zone */
+function showMiniPaintEditor() {
+  ui.imgDropZone?.classList.add("hidden");
+  ui.imgFrame?.classList.remove("hidden");
+  ui.imgActionBar?.classList.remove("hidden");
+}
+
+/** Reset image tools state — show drop zone, reload iframe */
 function imgResetState() {
   for (const url of imgOriginalUrls.values()) URL.revokeObjectURL(url);
   for (const url of imgProcessedUrls.values()) URL.revokeObjectURL(url);
@@ -3333,36 +3104,48 @@ function imgResetState() {
   imgOriginalUrls.clear();
   imgProcessedUrls.clear();
   imgShowAfter = false;
-  imgMaskData.clear();
-  imgMaskHistory.clear();
-  // Reset canvas back to drop-prompt
-  if (ui.imgCanvas) ui.imgCanvas.classList.remove("has-image");
-  if (ui.imgDropPrompt) ui.imgDropPrompt.classList.remove("hidden");
-  if (ui.imgPreview) { ui.imgPreview.classList.add("hidden"); ui.imgPreview.src = ""; }
-  if (ui.imgWorkspace) ui.imgWorkspace.classList.add("hidden");
-  if (ui.imgCompareSwitch) ui.imgCompareSwitch.classList.remove("active");
-  if (ui.imgFilmstripGrid) ui.imgFilmstripGrid.innerHTML = "";
-  if (ui.imgMaskCanvas) { ui.imgMaskCanvas.classList.add("hidden"); const ctx = ui.imgMaskCanvas.getContext("2d"); if (ctx) ctx.clearRect(0, 0, ui.imgMaskCanvas.width, ui.imgMaskCanvas.height); }
-  imgUpdateCompareLabels();
-  imgUpdateActionButton();
+  miniPaintReady = false;
+  // Show drop zone, hide editor
+  ui.imgDropZone?.classList.remove("hidden");
+  ui.imgFrame?.classList.add("hidden");
+  ui.imgActionBar?.classList.add("hidden");
+  // Reset iframe
+  if (ui.imgFrame) ui.imgFrame.removeAttribute("src");
 }
 
-// Canvas click → trigger file input (only in empty state)
-ui.imgCanvas?.addEventListener("click", (e) => {
-  if (ui.imgCanvas.classList.contains("has-image")) return;
-  ui.imgFileInput?.click();
-});
-// Canvas drag-and-drop
-ui.imgCanvas?.addEventListener("dragover", (e) => e.preventDefault());
-ui.imgCanvas?.addEventListener("drop", (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  if (e.dataTransfer?.files) imgLoadFiles(Array.from(e.dataTransfer.files));
-});
+/** Load files into the image tools — opens miniPaint editor */
+function imgLoadFiles(files: File[]) {
+  const imageFiles = files.filter(f =>
+    f.type.startsWith("image/") || IMAGE_TOOL_EXTS.has(f.name.split(".").pop()?.toLowerCase() ?? "")
+  );
+  if (imageFiles.length === 0) return;
 
-// Also allow dropping on the workspace (to add more)
-ui.imgWorkspace?.addEventListener("dragover", (e) => e.preventDefault());
-ui.imgWorkspace?.addEventListener("drop", (e) => {
+  imgToolFiles = imageFiles;
+  selectedFiles = imgToolFiles;
+  allUploadedFiles = imgToolFiles;
+
+  // Lazy-load miniPaint iframe
+  if (ui.imgFrame && !ui.imgFrame.src?.includes("minipaint")) {
+    ui.imgFrame.src = "/minipaint/index.html";
+  }
+  showMiniPaintEditor();
+  applyMiniPaintTheme();
+
+  // Load first image into editor once ready
+  (async () => {
+    await waitForMiniPaint();
+    applyMiniPaintTheme();
+    for (const file of imageFiles) {
+      await loadImageIntoMiniPaint(file);
+    }
+  })();
+}
+
+// Drop zone click → trigger file input
+ui.imgDropZone?.addEventListener("click", () => ui.imgFileInput?.click());
+// Drop zone drag-and-drop
+ui.imgDropZone?.addEventListener("dragover", (e) => e.preventDefault());
+ui.imgDropZone?.addEventListener("drop", (e) => {
   e.preventDefault();
   e.stopPropagation();
   if (e.dataTransfer?.files) imgLoadFiles(Array.from(e.dataTransfer.files));
@@ -3377,211 +3160,96 @@ ui.imgFileInput?.addEventListener("change", () => {
   }
 });
 
-// Add more button
-ui.imgAddMore?.addEventListener("click", () => ui.imgFileInput?.click());
+// Action: Remove Background
+ui.imgRemoveBgBtn?.addEventListener("click", async () => {
+  const imageBytes = getImageFromMiniPaint();
+  if (!imageBytes) return;
 
-// Before/after toggle
-ui.imgCompareSwitch?.addEventListener("click", () => {
-  // Only toggle if we have processed data for the current image
-  if (!imgProcessedUrls.has(imgActiveIndex)) return;
-  imgShowAfter = !imgShowAfter;
-  ui.imgCompareSwitch.classList.toggle("active", imgShowAfter);
-  // Hide mask canvas when showing "After", show when on "Before"
-  if (ui.imgMaskCanvas) ui.imgMaskCanvas.classList.toggle("hidden", !inpaintEnabled || imgShowAfter || imgProcessedUrls.has(imgActiveIndex));
-  imgUpdateCompareLabels();
-  imgShowImage(imgActiveIndex);
+  removeBg = true;
+  try { localStorage.setItem("convert-remove-bg", "true"); } catch {}
+  syncModalSettingsUI();
+
+  const fileData: FileData[] = [{ name: "image.png", bytes: imageBytes }];
+  const result = await applyBgRemoval(fileData);
+  if (result.length > 0 && result[0].bytes !== imageBytes) {
+    await loadBytesIntoMiniPaint(result[0].bytes, "No Background");
+    window.showPopup(
+      `<h2>Background removed!</h2>` +
+      `<p>Result added as a new layer.</p>` +
+      `<button onclick="window.hidePopup()">OK</button>`
+    );
+  }
 });
 
-// Action button: Process (if unprocessed) or Download (if processed)
-ui.imgDownloadBtn?.addEventListener("click", () => {
-  if (ui.imgDownloadBtn.classList.contains("disabled")) return;
-  const currentHasProcessed = imgProcessedData.has(imgActiveIndex);
-  const multi = applyAll && imgToolFiles.length > 1;
+// Action: Object Removal (inpainting)
+ui.imgInpaintBtn?.addEventListener("click", async () => {
+  const maskData = getMaskFromMiniPaint();
 
-  // Download mode — all results ready
-  if (multi && imgProcessedData.size === imgToolFiles.length) {
-    if (archiveMultiOutput) {
-      (async () => {
-        const zip = new JSZip();
-        for (const [, data] of imgProcessedData) zip.file(data.name, data.bytes);
-        const zipBytes = await zip.generateAsync({ type: "uint8array" });
-        downloadFile(zipBytes, "edited_images.zip");
-      })();
-    } else {
-      for (const [, data] of imgProcessedData) {
-        const blob = new Blob([data.bytes as BlobPart], { type: "application/octet-stream" });
-        const url = URL.createObjectURL(blob);
-        triggerDownload(url, data.name);
-        URL.revokeObjectURL(url);
-      }
-    }
+  // Check if mask has any painted pixels
+  if (!maskData) {
+    window.showPopup(
+      `<h2>Object Removal</h2>` +
+      `<p>To remove objects from your image:</p>` +
+      `<ol style="text-align:left;margin:12px 0;">` +
+      `<li>In the editor, go to <b>Layer → New layer</b></li>` +
+      `<li>Name it <b>Mask</b></li>` +
+      `<li>Use the brush/pencil tool to paint over objects you want to remove</li>` +
+      `<li>Click <b>Object Removal</b> again</li>` +
+      `</ol>` +
+      `<button onclick="window.hidePopup()">Got it</button>`
+    );
     return;
   }
 
-  if (currentHasProcessed && !multi) {
-    // Single download
-    const data = imgProcessedData.get(imgActiveIndex)!;
-    const blob = new Blob([data.bytes as BlobPart], { type: "application/octet-stream" });
-    const url = URL.createObjectURL(blob);
-    triggerDownload(url, data.name);
-    URL.revokeObjectURL(url);
-  } else {
-    // Process mode
-    if (!multi) {
-      // Only process active image — set selectedFiles to just the active file
-      selectedFiles = [imgToolFiles[imgActiveIndex]];
-    } else {
-      selectedFiles = imgToolFiles;
-    }
-    ui.convertButton.click();
+  // Verify mask has painted content
+  let hasPaint = false;
+  for (let i = 3; i < maskData.data.length; i += 4) {
+    if (maskData.data[i] > 0) { hasPaint = true; break; }
   }
-});
-
-// Initialize compare labels
-imgUpdateCompareLabels();
-
-// ── Inpainting: Mask Canvas Sync & Drawing ──────────────────────────────────
-
-/** Sync mask canvas position/size to match the displayed image (accounting for object-fit: contain) */
-function syncMaskCanvas() {
-  const canvas = ui.imgMaskCanvas;
-  const preview = ui.imgPreview;
-  if (!canvas || !preview || !imgToolFiles.length) return;
-
-  if (!inpaintEnabled || imgShowAfter || imgProcessedUrls.has(imgActiveIndex)) {
-    canvas.classList.add("hidden");
+  if (!hasPaint) {
+    window.showPopup(
+      `<h2>Empty mask</h2>` +
+      `<p>Paint over the objects you want to remove on the "Mask" layer, then try again.</p>` +
+      `<button onclick="window.hidePopup()">OK</button>`
+    );
     return;
   }
-  canvas.classList.remove("hidden");
 
-  // Compute displayed image rect within the img-canvas container (padding-box)
-  const imgNatW = preview.naturalWidth || 1;
-  const imgNatH = preview.naturalHeight || 1;
-  const containerW = ui.imgCanvas.clientWidth;
-  const containerH = ui.imgCanvas.clientHeight;
+  const imageBytes = getImageFromMiniPaint();
+  if (!imageBytes) return;
 
-  // object-fit: contain letterbox calculation
-  const scale = Math.min(containerW / imgNatW, containerH / imgNatH);
-  const dispW = imgNatW * scale;
-  const dispH = imgNatH * scale;
-  const offsetX = (containerW - dispW) / 2;
-  const offsetY = (containerH - dispH) / 2;
+  inpaintEnabled = true;
+  if (inpaintFeather) applyGaussianBlur(maskData, maskData.width, maskData.height, 3);
 
-  // Position overlay canvas to match displayed image
-  canvas.style.left = offsetX + "px";
-  canvas.style.top = offsetY + "px";
-  canvas.style.width = dispW + "px";
-  canvas.style.height = dispH + "px";
-
-  // Set canvas resolution to natural image size for pixel-accurate masks
-  canvas.width = imgNatW;
-  canvas.height = imgNatH;
-
-  // Restore stored mask data for current image
-  const stored = imgMaskData.get(imgActiveIndex);
-  if (stored) {
-    const ctx = canvas.getContext("2d");
-    if (ctx) ctx.putImageData(stored, 0, 0);
-  }
-}
-
-/** Convert pointer event coordinates to mask canvas coordinates */
-function pointerToMaskCoords(e: PointerEvent): { x: number; y: number } {
-  const canvas = ui.imgMaskCanvas;
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  return {
-    x: (e.clientX - rect.left) * scaleX,
-    y: (e.clientY - rect.top) * scaleY,
-  };
-}
-
-/** Draw a brush stroke segment on the mask canvas */
-function drawMaskStroke(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  // Scale brush size relative to canvas resolution vs display size
-  const rect = ui.imgMaskCanvas.getBoundingClientRect();
-  const displayScale = ui.imgMaskCanvas.width / rect.width;
-  const radius = (inpaintBrushSize / 2) * displayScale;
-
-  ctx.globalCompositeOperation = "source-over";
-  ctx.fillStyle = "rgba(255, 60, 60, 0.5)";
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-/** Draw line between two points on mask canvas */
-function drawMaskLine(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number) {
-  const dist = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2);
-  const steps = Math.max(1, Math.ceil(dist / 3));
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    drawMaskStroke(ctx, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
-  }
-}
-
-// Mask drawing pointer events
-ui.imgMaskCanvas?.addEventListener("pointerdown", (e: PointerEvent) => {
-  if (!inpaintEnabled) return;
-  e.preventDefault();
-  (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  inpaintDrawing = true;
-
-  // Save undo snapshot
-  const ctx = ui.imgMaskCanvas.getContext("2d")!;
-  const snapshot = ctx.getImageData(0, 0, ui.imgMaskCanvas.width, ui.imgMaskCanvas.height);
-  if (!imgMaskHistory.has(imgActiveIndex)) imgMaskHistory.set(imgActiveIndex, []);
-  const history = imgMaskHistory.get(imgActiveIndex)!;
-  if (history.length > 30) history.shift(); // cap undo stack
-  history.push(snapshot);
-
-  const pos = pointerToMaskCoords(e);
-  drawMaskStroke(ctx, pos.x, pos.y);
-  inpaintLastPos = pos;
+  const result = await runInpainting(imageBytes, "png", maskData);
+  await loadBytesIntoMiniPaint(result, "Inpainted");
+  window.showPopup(
+    `<h2>Objects removed!</h2>` +
+    `<p>Result added as a new layer.</p>` +
+    `<button onclick="window.hidePopup()">OK</button>`
+  );
 });
 
-ui.imgMaskCanvas?.addEventListener("pointermove", (e: PointerEvent) => {
-  if (!inpaintDrawing) return;
-  e.preventDefault();
-  const ctx = ui.imgMaskCanvas.getContext("2d")!;
-  const pos = pointerToMaskCoords(e);
-  if (inpaintLastPos) {
-    drawMaskLine(ctx, inpaintLastPos.x, inpaintLastPos.y, pos.x, pos.y);
-  } else {
-    drawMaskStroke(ctx, pos.x, pos.y);
-  }
-  inpaintLastPos = pos;
-});
+// Action: Save & Download
+ui.imgSaveBtn?.addEventListener("click", async () => {
+  const imageBytes = getImageFromMiniPaint();
+  if (!imageBytes) return;
 
-ui.imgMaskCanvas?.addEventListener("pointerup", (e: PointerEvent) => {
-  if (!inpaintDrawing) return;
-  inpaintDrawing = false;
-  inpaintLastPos = null;
-  // Save mask data
-  const ctx = ui.imgMaskCanvas.getContext("2d");
-  if (ctx) {
-    imgMaskData.set(imgActiveIndex, ctx.getImageData(0, 0, ui.imgMaskCanvas.width, ui.imgMaskCanvas.height));
-  }
-  imgUpdateProcessButton();
-});
+  const fileName = imgToolFiles[0]?.name?.replace(/\.[^.]+$/, "") || "edited";
+  let fileData: FileData[] = [{ name: fileName + ".png", bytes: imageBytes }];
 
-ui.imgMaskCanvas?.addEventListener("pointercancel", () => {
-  inpaintDrawing = false;
-  inpaintLastPos = null;
-});
+  // Apply pipeline (rescale, metadata strip, etc.) but skip inpainting/bg removal (already done in-editor)
+  fileData = await applyMetadataStrip(fileData);
+  fileData = await applyRescale(fileData);
 
-// Prevent canvas click from bubbling to img-canvas (which would open file dialog)
-ui.imgMaskCanvas?.addEventListener("click", (e) => e.stopPropagation());
+  for (const f of fileData) downloadFile(f.bytes, f.name);
 
-// Window resize → resync mask canvas position
-window.addEventListener("resize", () => {
-  if (inpaintEnabled && imgToolFiles.length > 0) syncMaskCanvas();
-});
-
-// Also sync mask canvas when image loads (to get accurate naturalWidth/Height)
-ui.imgPreview?.addEventListener("load", () => {
-  if (inpaintEnabled && imgToolFiles.length > 0) syncMaskCanvas();
+  const totalSize = fileData.reduce((s, f) => s + f.bytes.length, 0);
+  window.showPopup(
+    `<h2>Image saved!</h2>` +
+    `<p>Size: ${formatFileSize(totalSize)}</p>` +
+    `<button onclick="window.hidePopup()">OK</button>`
+  );
 });
 
 // ── Video Editor: Upload, Preview, Timeline, Processing ─────────────────────
@@ -4851,7 +4519,6 @@ if (ui.applyAllToggle) {
     ui.applyAllToggle.classList.toggle("active", applyAll);
     try { localStorage.setItem("convert-apply-all", String(applyAll)); } catch {}
     vidUpdateActionButton();
-    imgUpdateActionButton();
   });
 }
 
@@ -5061,41 +4728,8 @@ ui.convertButton.onclick = async function () {
 
       fileData = await applyToolProcessing(fileData);
 
-      // Image tools: store processed data for before/after preview
-      if (activeTool === "image" && imgToolFiles.length > 0) {
-        const singleMode = !applyAll && imgToolFiles.length > 1;
-        if (!singleMode) {
-          imgProcessedData.clear();
-          for (const url of imgProcessedUrls.values()) URL.revokeObjectURL(url);
-          imgProcessedUrls.clear();
-        }
-
-        for (let i = 0; i < fileData.length; i++) {
-          const f = fileData[i];
-          // Map result to correct index: single mode uses activeIndex, batch uses sequential
-          const idx = singleMode ? imgActiveIndex : i;
-          imgProcessedData.set(idx, f);
-          if (imgProcessedUrls.has(idx)) URL.revokeObjectURL(imgProcessedUrls.get(idx)!);
-          const blob = new Blob([f.bytes as BlobPart], { type: "application/octet-stream" });
-          imgProcessedUrls.set(idx, URL.createObjectURL(blob));
-        }
-        // Restore selectedFiles to all images
-        selectedFiles = imgToolFiles;
-
-        // Auto-switch to "After" view
-        imgShowAfter = true;
-        ui.imgCompareSwitch?.classList.add("active");
-        imgUpdateCompareLabels();
-        imgShowImage(imgActiveIndex);
-
-        const totalSize = fileData.reduce((s, f) => s + f.bytes.length, 0);
-        window.showPopup(
-          `<h2>Processed ${fileData.length} image${fileData.length !== 1 ? "s" : ""}!</h2>` +
-          `<p>Total size: ${formatFileSize(totalSize)}</p>` +
-          `<p>Use the Before/After toggle to compare results.</p>` +
-          `<button onclick="window.hidePopup()">OK</button>`
-        );
-      } else {
+      // Image tools: processing now handled via miniPaint action bar
+      {
         for (const f of fileData) {
           downloadFile(f.bytes, f.name);
         }
