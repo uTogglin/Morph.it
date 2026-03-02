@@ -1,8 +1,8 @@
 import type { FileData } from "./FormatHandler.ts";
-import { cachedFetch } from "./cached-fetch.ts";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import type { LogEvent } from "@ffmpeg/ffmpeg";
 import { compressVideoWebCodecs, compressVideoVP9, isWebCodecsAvailable } from "./webcodecs-compress.ts";
+import { cdnUrl, cdnFetch } from "./cdn.ts";
 
 /** Returns ["-map_metadata", "-1"] when privacy mode is active, else [] */
 function privacyArgs(): string[] {
@@ -19,7 +19,7 @@ let ffmpegReady: Promise<void> | null = null;
 
 async function getFFmpeg(): Promise<FFmpeg> {
   if (!compressFFmpeg) compressFFmpeg = new FFmpeg();
-  if (!ffmpegReady) ffmpegReady = compressFFmpeg.load({ coreURL: "/wasm/ffmpeg-core.js" }).then(() => {});
+  if (!ffmpegReady) ffmpegReady = compressFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
   await ffmpegReady;
   return compressFFmpeg;
 }
@@ -27,7 +27,7 @@ async function getFFmpeg(): Promise<FFmpeg> {
 async function reloadFFmpeg(): Promise<FFmpeg> {
   if (compressFFmpeg) compressFFmpeg.terminate();
   compressFFmpeg = new FFmpeg();
-  ffmpegReady = compressFFmpeg.load({ coreURL: "/wasm/ffmpeg-core.js" }).then(() => {});
+  ffmpegReady = compressFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
   await ffmpegReady;
   return compressFFmpeg;
 }
@@ -162,7 +162,7 @@ async function ensureMagick(): Promise<void> {
   if (!magickReady) {
     magickReady = (async () => {
       const { initializeImageMagick } = await import("@imagemagick/magick-wasm");
-      const wasmResponse = await cachedFetch("/wasm/magick.wasm");
+      const wasmResponse = await cdnFetch("magickWasm");
       const wasmBytes = new Uint8Array(await wasmResponse.arrayBuffer());
       await initializeImageMagick(wasmBytes);
     })();

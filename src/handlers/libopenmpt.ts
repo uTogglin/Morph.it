@@ -1,5 +1,5 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
-import { cachedFetch } from "../cached-fetch.ts";
+import { cdnFetch, cdnUrl } from "../cdn.ts";
 
 interface LibOpenMPTModule {
   __render(fileData: Uint8Array, sampleRate: number): Int16Array;
@@ -88,7 +88,7 @@ class libopenmptHandler implements FormatHandler {
 
   async init (): Promise<void> {
     // Pre-fetch the WASM binary so the Emscripten module can use it directly.
-    const wasmBinary = await cachedFetch("/wasm/libopenmpt.wasm")
+    const wasmBinary = await cdnFetch("libopenmptWasm")
       .then(r => r.arrayBuffer());
 
     // Set the global that Emscripten picks up:
@@ -99,9 +99,10 @@ class libopenmptHandler implements FormatHandler {
 
     // Load as a classic <script> tag so it is never run through Rollup/Vite's
     // module pipeline (which would break the Emscripten global-variable pattern).
+    const libopenmptJsUrl = await cdnUrl("libopenmptJs");
     await new Promise<void>((resolve, reject) => {
       const script = document.createElement("script");
-      script.src = "/wasm/libopenmpt.js";
+      script.src = libopenmptJsUrl;
       script.onload = () => resolve();
       script.onerror = () => reject(new Error("Failed to load libopenmpt.js"));
       document.head.appendChild(script);

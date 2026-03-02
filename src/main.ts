@@ -14,6 +14,7 @@ import { initSummarizeTool } from "./summarize-tool.js";
 import { initOcrTool } from "./ocr-tool.js";
 import { initPdfEditorTool } from "./pdf-editor-tool.js";
 import { cachedFetch, requestPersistentStorage, showCachePrompt, clearModelCache, applyHfCachePolicy } from "./cached-fetch.js";
+import { cdnFetch } from "./cdn.js";
 
 // ── In-app console log capture ─────────────────────────────────────────────
 interface AppLogEntry { level: "error" | "warn" | "info"; msg: string; time: string; }
@@ -2200,7 +2201,7 @@ async function ensureMagick() {
   if (!magickReady) {
     magickReady = (async () => {
       const { initializeImageMagick } = await import("@imagemagick/magick-wasm");
-      const wasmResponse = await cachedFetch("/wasm/magick.wasm");
+      const wasmResponse = await cdnFetch("magickWasm");
       const wasmBytes = new Uint8Array(await wasmResponse.arrayBuffer());
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await initializeImageMagick(wasmBytes as any);
@@ -2962,7 +2963,9 @@ ui.createArchiveBtn.addEventListener("click", async () => {
           window.showPopup("<h2>Loading 7-Zip tools...</h2>");
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
           const SevenZip = (await import("7z-wasm")).default;
-          const sz = await SevenZip({ locateFile: (p: string) => `/wasm/${p}` });
+          const { cdnUrlPreload: _preload, cdnUrlSync: _sync } = await import("./cdn.js");
+          await _preload("sevenZip");
+          const sz = await SevenZip({ locateFile: () => _sync("sevenZip") });
           for (const f of inputFileData) sz.FS.writeFile(f.name, f.bytes);
           sz.callMain(["a", "-t7z", "archive.7z", ...inputFileData.map(f => f.name)]);
           downloadFile(sz.FS.readFile("archive.7z"), "archive.7z");

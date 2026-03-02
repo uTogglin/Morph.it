@@ -1,4 +1,5 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { cdnUrl } from "./cdn.ts";
 
 // ── FFmpeg instance for WAV→MP3 ────────────────────────────────────────────
 let speechFFmpeg: FFmpeg | null = null;
@@ -6,7 +7,7 @@ let speechFFmpegReady: Promise<void> | null = null;
 
 async function getSpeechFFmpeg(): Promise<FFmpeg> {
   if (!speechFFmpeg) speechFFmpeg = new FFmpeg();
-  if (!speechFFmpegReady) speechFFmpegReady = speechFFmpeg.load({ coreURL: "/wasm/ffmpeg-core.js" }).then(() => {});
+  if (!speechFFmpegReady) speechFFmpegReady = speechFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
   await speechFFmpegReady;
   return speechFFmpeg;
 }

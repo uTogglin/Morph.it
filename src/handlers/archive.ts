@@ -1,6 +1,7 @@
 import { gzip } from "pako";
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { cdnUrlPreload, cdnUrlSync } from "../cdn.ts";
 
 /**
  * Builds a POSIX ustar TAR archive from an array of FileData entries.
@@ -68,9 +69,11 @@ class ArchiveHandler implements FormatHandler {
   private sevenZip: any = null;
 
   async init() {
+    // Pre-resolve the CDN URL before 7z-wasm calls locateFile synchronously
+    await cdnUrlPreload("sevenZip");
     const SevenZip = (await import("7z-wasm")).default;
     this.sevenZip = await SevenZip({
-      locateFile: (path: string) => `/wasm/${path}`,
+      locateFile: () => cdnUrlSync("sevenZip"),
     });
     this.ready = true;
   }

@@ -6,6 +6,7 @@ import {
   Mp4OutputFormat, WebMOutputFormat, MkvOutputFormat,
   ALL_FORMATS, canEncodeAudio,
 } from "mediabunny";
+import { cdnUrl } from "./cdn.ts";
 
 // ── Own FFmpeg instance (separate from compress module) ──
 
@@ -14,7 +15,7 @@ let vidFFmpegReady: Promise<void> | null = null;
 
 async function getFFmpeg(): Promise<FFmpeg> {
   if (!vidFFmpeg) vidFFmpeg = new FFmpeg();
-  if (!vidFFmpegReady) vidFFmpegReady = vidFFmpeg.load({ coreURL: "/wasm/ffmpeg-core.js" }).then(() => {});
+  if (!vidFFmpegReady) vidFFmpegReady = vidFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
   await vidFFmpegReady;
   return vidFFmpeg;
 }
@@ -22,7 +23,7 @@ async function getFFmpeg(): Promise<FFmpeg> {
 async function reloadFFmpeg(): Promise<FFmpeg> {
   if (vidFFmpeg) vidFFmpeg.terminate();
   vidFFmpeg = new FFmpeg();
-  vidFFmpegReady = vidFFmpeg.load({ coreURL: "/wasm/ffmpeg-core.js" }).then(() => {});
+  vidFFmpegReady = vidFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
   await vidFFmpegReady;
   return vidFFmpeg;
 }

@@ -35,7 +35,7 @@ import {
   ConsoleStdout,
   PreopenDirectory,
 } from "@bjorn3/browser_wasi_shim";
-import { cachedFetch } from "../../cached-fetch.ts";
+import { cdnFetch } from "../../cdn.ts";
 
 const args = ["pandoc.wasm", "+RTS", "-H64m", "-RTS"];
 const env = [];
@@ -53,7 +53,7 @@ const fds = [
 const options = { debug: false };
 const wasi = new WASI(args, env, fds, options);
 const { instance } = await WebAssembly.instantiateStreaming(
-  cachedFetch("/wasm/pandoc.wasm"),
+  cdnFetch("pandocWasm"),
   {
     wasi_snapshot_preview1: wasi.wasiImport,
   }

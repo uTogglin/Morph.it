@@ -10,7 +10,7 @@ import mime from "mime";
 import normalizeMimeType from "../normalizeMimeType.ts";
 
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
-import { cachedFetch } from "../cached-fetch.ts";
+import { cdnFetch } from "../cdn.ts";
 
 class ImageMagickHandler implements FormatHandler {
 
@@ -22,8 +22,7 @@ class ImageMagickHandler implements FormatHandler {
 
   async init () {
 
-    const wasmLocation = "/wasm/magick.wasm";
-    const wasmBytes = await cachedFetch(wasmLocation).then(r => r.bytes());
+    const wasmBytes = await cdnFetch("magickWasm").then(r => r.bytes());
 
     await initializeImageMagick(wasmBytes);
 
