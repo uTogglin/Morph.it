@@ -1726,6 +1726,7 @@ body[data-tool="image"] #convert-button { display: none !important; }
 .img-action-btn svg {
   flex-shrink: 0;
 }
+#img-fullscreen-btn svg.hidden { display: none; }
 .img-action-btn--primary {
   background: var(--accent);
   color: white;

@@ -367,13 +367,15 @@ body {
 
 
 /* ══════════════════════════════════════════
-   6. LEFT TOOLBAR  (Photopea-style)
+   6. LEFT TOOLBAR
+   Tools blend into the background, color
+   picker pinned at the bottom
    ══════════════════════════════════════════ */
 .sidebar_left {
 	grid-area: sidebar_left !important;
-	width: 32px !important;
+	width: 34px !important;
 	background: #333 !important;
-	padding: 2px !important;
+	padding: 3px 2px !important;
 	margin: 0 !important;
 	overflow: hidden !important;
 	overflow-y: auto !important;
@@ -383,33 +385,80 @@ body {
 	flex-direction: column !important;
 	flex-wrap: nowrap !important;
 	align-items: center !important;
-	gap: 0 !important;
+	gap: 1px !important;
 }
+/* Tool buttons — flat icons, no chrome, blend into background */
 .sidebar_left button {
-	width: 26px !important;
-	height: 26px !important;
-	min-width: 26px !important;
-	min-height: 26px !important;
+	width: 28px !important;
+	height: 28px !important;
+	min-width: 28px !important;
+	min-height: 28px !important;
 	margin: 0 !important;
 	padding: 0 !important;
 	border-radius: 0 !important;
 	border: none !important;
 	box-shadow: none !important;
 	background-color: transparent !important;
-	background-size: 18px !important;
+	background-size: 20px !important;
 	background-position: center !important;
-	opacity: 0.7 !important;
+	opacity: 0.65 !important;
 	transition: none !important;
+	filter: brightness(1.1) !important;
 }
 .sidebar_left button:hover {
-	background-color: #444 !important;
+	background-color: transparent !important;
 	opacity: 1 !important;
 	border: none !important;
 }
 .sidebar_left button.active {
-	background-color: #6C5CE7 !important;
+	background-color: transparent !important;
 	opacity: 1 !important;
-	border-radius: 2px !important;
+	border-radius: 0 !important;
+	filter: brightness(1.4) drop-shadow(0 0 2px rgba(108,92,231,0.5)) !important;
+}
+
+/* ── Color picker: move from right sidebar to bottom of left toolbar ── */
+.sidebar_right > .colors {
+	position: fixed !important;
+	bottom: 4px !important;
+	left: 2px !important;
+	width: 32px !important;
+	height: auto !important;
+	z-index: 50 !important;
+	background: transparent !important;
+	border: none !important;
+	border-bottom: none !important;
+	overflow: visible !important;
+}
+/* Hide the "Colors" header when pinned to toolbar */
+.sidebar_right > .colors > h2 {
+	display: none !important;
+}
+/* Show only the main color sample, hide the rest */
+.sidebar_right > .colors > .content {
+	padding: 0 !important;
+	background: transparent !important;
+}
+/* The selected color square — make it the fg/bg indicator */
+#selected_color_sample {
+	width: 22px !important;
+	height: 22px !important;
+	border: 2px solid #ccc !important;
+	border-radius: 0 !important;
+	box-shadow: 1px 1px 0 0 #000, inset 0 0 0 1px #000 !important;
+	cursor: pointer !important;
+	position: relative !important;
+	z-index: 2 !important;
+}
+/* Hide the color channel sliders, swatches, hex input in the toolbar view */
+.sidebar_right > .colors #color_section_channels,
+.sidebar_right > .colors #color_section_picker,
+.sidebar_right > .colors .ui_button_group {
+	display: none !important;
+}
+/* Keep swatches visible as a small strip */
+.sidebar_right > .colors #color_section_swatches {
+	display: none !important;
 }
 
 
