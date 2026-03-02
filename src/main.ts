@@ -2257,8 +2257,9 @@ async function ensureInpaintSession() {
   const url = wanted === "lama" ? LAMA_MODEL_URL : MIGAN_MODEL_URL;
   const modelResp = await cachedFetch(url);
   const modelBytes = new Uint8Array(await modelResp.arrayBuffer());
+  // LaMa's Fourier convolutions (FFC) are incompatible with WebGPU — force WASM
   const providers: string[] = [];
-  if (navigator.gpu) providers.push("webgpu");
+  if (wanted !== "lama" && navigator.gpu) providers.push("webgpu");
   providers.push("wasm");
   inpaintSession = await ort.InferenceSession.create(modelBytes.buffer, {
     executionProviders: providers,
