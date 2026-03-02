@@ -67,76 +67,76 @@
 
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
-   PHOTOPEA-CLONE THEME — Complete visual overhaul for miniPaint
-   Purple accent: #6C5CE7  |  Base: #202020  |  Surface: #333333
+   PHOTOSHOP CC DARK THEME — Refined miniPaint overhaul
+   Purple accent: #6C5CE7 (sparingly)  |  Base: #1e1e1e
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── 1. CSS VARIABLES — Override everything ── */
+/* ── 1. CSS VARIABLES ── */
 :root {
 	--background: #1e1e1e !important;
-	--text-color: #ccc !important;
-	--text-color-muted: #888 !important;
-	--text-color-active: #fff !important;
+	--text-color: #c8c8c8 !important;
+	--text-color-muted: #707070 !important;
+	--text-color-active: #e0e0e0 !important;
 	--text-color-red: #e38282 !important;
 	--text-color-green: #8bdb8b !important;
 	--text-color-blue: #a4a4ff !important;
 	--link-color: #6C5CE7 !important;
-	--section-background-color: #333 !important;
+	--section-background-color: #2c2c2c !important;
 	--area-background-color: #252525 !important;
-	--block-background-color: #282828 !important;
-	--header-background-color: #2a2a2a !important;
-	--button-background-color: #444 !important;
-	--button-background-color-hover: #555 !important;
+	--block-background-color: #252525 !important;
+	--header-background-color: #232323 !important;
+	--button-background-color: #3a3a3a !important;
+	--button-background-color-hover: #4a4a4a !important;
 	--button-background-color-active: #6C5CE7 !important;
-	--button-shadow-color: rgba(0,0,0,0.2) !important;
+	--button-shadow-color: rgba(0,0,0,0.3) !important;
 	--button-text-color-active: #fff !important;
-	--button-toggle-background-color: #383838 !important;
-	--button-toggle-background-color-hover: #444 !important;
+	--button-toggle-background-color: #333 !important;
+	--button-toggle-background-color-hover: #3a3a3a !important;
 	--button-border-radius: 2px !important;
-	--input-background-color: #222 !important;
-	--input-background-color-hover: #2a2a2a !important;
-	--input-text-color: #ccc !important;
-	--input-border-color: #555 !important;
+	--input-background-color: #1a1a1a !important;
+	--input-background-color-hover: #222 !important;
+	--input-text-color: #c8c8c8 !important;
+	--input-border-color: #333 !important;
 	--input-border-color-active: #6C5CE7 !important;
 	--input-border-radius: 2px !important;
-	--input-group-border-color: #333 !important;
-	--menu-background-color: #222 !important;
+	--input-group-border-color: #1a1a1a !important;
+	--menu-background-color: #1c1c1c !important;
 	--menu-icons-filter: invert(1) !important;
 	--menu-icons-filter-active: none !important;
-	--menu-text-color: #bbb !important;
+	--menu-text-color: #b0b0b0 !important;
 	--background-color-active: #6C5CE7 !important;
 	--background-color-hover: #3a3a3a !important;
-	--border-color: #444 !important;
+	--border-color: #1a1a1a !important;
 	--scrollbar-track-color: #1e1e1e !important;
-	--scrollbar-thumb-color: #555 !important;
+	--scrollbar-thumb-color: #444 !important;
 	--mobile-menu-toggle-filter: invert(1) !important;
 	/* Dropdowns */
-	--menu-dropdown-background-color: #2a2a2a !important;
-	--menu-dropdown-border-color: #555 !important;
-	--menu-dropdown-text-color: #ccc !important;
-	--menu-dropdown-text-muted-color: #888 !important;
-	--menu-dropdown-hover-background-color: #6C5CE7 !important;
+	--menu-dropdown-background-color: #252525 !important;
+	--menu-dropdown-border-color: #1a1a1a !important;
+	--menu-dropdown-text-color: #c8c8c8 !important;
+	--menu-dropdown-text-muted-color: #707070 !important;
+	--menu-dropdown-hover-background-color: #5a4bd6 !important;
 	--menu-dropdown-hover-text-color: #fff !important;
-	--menu-dropdown-divider-color: #444 !important;
+	--menu-dropdown-divider-color: #1a1a1a !important;
 }
 
 
 /* ── 2. BASE RESET ── */
 body {
 	background: #1e1e1e !important;
-	color: #ccc !important;
+	color: #c8c8c8 !important;
 	font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif !important;
-	font-size: 12px !important;
+	font-size: 11px !important;
 	margin: 0 !important;
 	min-height: 100vh !important;
 }
 * {
 	scrollbar-width: thin !important;
-	scrollbar-color: #555 #1e1e1e !important;
+	scrollbar-color: #444 #1e1e1e !important;
 }
 ::selection {
-	background: #6C5CE7 !important;
-	color: #fff !important;
+	background: #3d3564 !important;
+	color: #e0e0e0 !important;
 }
 
 
@@ -160,7 +160,7 @@ body {
 
 
 /* ══════════════════════════════════════════
-   4. TOP MENU BAR  (Photopea-style)
+   4. TOP MENU BAR  (Photoshop CC style)
    ══════════════════════════════════════════ */
 .main_menu {
 	position: fixed !important;
@@ -169,7 +169,7 @@ body {
 	right: 0 !important;
 	z-index: 100 !important;
 	height: 24px !important;
-	background: #222 !important;
+	background: #1c1c1c !important;
 }
 .main_menu > ul.menu_bar {
 	display: flex !important;
@@ -178,7 +178,7 @@ body {
 	padding: 0 !important;
 	margin: 0 !important;
 	height: 24px !important;
-	background: #222 !important;
+	background: #1c1c1c !important;
 	border-bottom: 1px solid #111 !important;
 }
 .main_menu > ul.menu_bar > li {
@@ -189,7 +189,7 @@ body {
 	display: flex !important;
 	align-items: center !important;
 	font-size: 12px !important;
-	color: #bbb !important;
+	color: #b0b0b0 !important;
 	text-decoration: none !important;
 	padding: 0 10px !important;
 	height: 100% !important;
@@ -197,7 +197,7 @@ body {
 }
 .main_menu > ul.menu_bar > li > a:hover {
 	background: #3a3a3a !important;
-	color: #fff !important;
+	color: #e0e0e0 !important;
 	box-shadow: none !important;
 }
 .main_menu > ul.menu_bar > li > a:focus {
@@ -206,39 +206,39 @@ body {
 	background: #3a3a3a !important;
 }
 .main_menu > ul.menu_bar > li > a[aria-expanded="true"] {
-	background: #2a2a2a !important;
-	color: #fff !important;
+	background: #252525 !important;
+	color: #e0e0e0 !important;
 }
 
 
 /* ── 4b. MENU DROPDOWNS ── */
 .main_menu > ul.menu_dropdown {
-	background: #2a2a2a !important;
-	border: 1px solid #555 !important;
+	background: #252525 !important;
+	border: 1px solid #1a1a1a !important;
 	border-radius: 0 !important;
-	box-shadow: 2px 4px 12px rgba(0,0,0,0.6) !important;
+	box-shadow: 2px 4px 16px rgba(0,0,0,0.8) !important;
 	padding: 2px 0 !important;
 	min-width: 180px !important;
 }
 .main_menu > ul.menu_dropdown > li > a {
 	display: flex !important;
 	align-items: center !important;
-	color: #ccc !important;
+	color: #c8c8c8 !important;
 	font-size: 12px !important;
-	height: 24px !important;
-	line-height: 24px !important;
+	height: 22px !important;
+	line-height: 22px !important;
 	padding: 0 28px 0 10px !important;
 	text-decoration: none !important;
 }
 .main_menu > ul.menu_dropdown > li > a:hover,
 .main_menu > ul.menu_dropdown > li > a:focus {
-	background: #6C5CE7 !important;
+	background: #5a4bd6 !important;
 	color: #fff !important;
 	box-shadow: none !important;
 }
 .main_menu > ul.menu_dropdown > li > a .shortcut {
 	margin-left: auto !important;
-	color: #888 !important;
+	color: #707070 !important;
 	font-size: 11px !important;
 }
 .main_menu > ul.menu_dropdown > li > a:hover .shortcut {
@@ -246,11 +246,11 @@ body {
 }
 .main_menu > ul.menu_dropdown > li hr {
 	border: none !important;
-	border-top: 1px solid #444 !important;
+	border-top: 1px solid #1a1a1a !important;
 	margin: 2px 0 !important;
 }
 .main_menu > ul.menu_dropdown > li > a[aria-haspopup="true"]::after {
-	color: #888 !important;
+	color: #707070 !important;
 }
 
 
@@ -262,17 +262,18 @@ body {
 	display: flex !important;
 	flex-direction: row !important;
 	align-items: center !important;
-	background: #333 !important;
+	background: #2c2c2c !important;
 	margin: 0 !important;
 	padding: 0 4px !important;
-	height: 28px !important;
-	min-height: 28px !important;
-	max-height: 28px !important;
-	border-bottom: 1px solid #222 !important;
+	height: 26px !important;
+	min-height: 26px !important;
+	max-height: 26px !important;
+	border-top: 1px solid #1a1a1a !important;
+	border-bottom: 1px solid #1a1a1a !important;
 	overflow: hidden !important;
 }
 
-/* Logo — hide it like Photopea hides branding */
+/* Logo — hide it */
 .logo {
 	display: none !important;
 }
@@ -288,7 +289,7 @@ body {
 	padding: 0 4px !important;
 	display: flex !important;
 	align-items: center !important;
-	gap: 6px !important;
+	gap: 5px !important;
 	flex: 1 !important;
 	height: 100% !important;
 }
@@ -297,35 +298,35 @@ body {
 	align-items: center !important;
 	margin: 0 !important;
 	min-height: auto !important;
-	gap: 4px !important;
+	gap: 3px !important;
 	float: none !important;
 	clear: none !important;
 }
 .submenu .block.attributes label {
-	color: #aaa !important;
-	font-size: 11px !important;
+	color: #808080 !important;
+	font-size: 10px !important;
 	white-space: nowrap !important;
 	margin: 0 !important;
 }
 .submenu .block.attributes select {
-	background: #444 !important;
-	color: #ccc !important;
-	border: 1px solid #555 !important;
+	background: #1a1a1a !important;
+	color: #c8c8c8 !important;
+	border: 1px solid #333 !important;
 	border-radius: 2px !important;
-	font-size: 11px !important;
-	height: 20px !important;
-	padding: 0 4px !important;
+	font-size: 10px !important;
+	height: 18px !important;
+	padding: 0 3px !important;
 }
 .submenu .block.attributes input[type="number"],
 .submenu .block.attributes input[type="text"] {
-	background: #444 !important;
-	color: #ccc !important;
-	border: 1px solid #555 !important;
+	background: #1a1a1a !important;
+	color: #c8c8c8 !important;
+	border: 1px solid #333 !important;
 	border-radius: 2px !important;
-	font-size: 11px !important;
-	height: 20px !important;
-	padding: 0 4px !important;
-	width: 50px !important;
+	font-size: 10px !important;
+	height: 18px !important;
+	padding: 0 3px !important;
+	width: 48px !important;
 }
 .submenu .block.attributes input:focus,
 .submenu .block.attributes select:focus {
@@ -337,24 +338,24 @@ body {
 	margin: 0 2px 0 0 !important;
 }
 .submenu .block.attributes .ui_number_input {
-	border: 1px solid #555 !important;
+	border: 1px solid #333 !important;
 	border-radius: 2px !important;
 	overflow: hidden !important;
 }
 .submenu .block.attributes .ui_number_input input {
 	border: none !important;
-	height: 18px !important;
+	height: 16px !important;
 }
 
 /* Undo button */
 .undo_button {
 	display: block !important;
-	width: 24px !important;
-	height: 24px !important;
+	width: 22px !important;
+	height: 22px !important;
 	margin-left: auto !important;
 	margin-right: 2px !important;
-	background-size: auto 16px !important;
-	opacity: 0.5 !important;
+	background-size: auto 14px !important;
+	opacity: 0.4 !important;
 	border: none !important;
 	box-shadow: none !important;
 	background-color: transparent !important;
@@ -367,24 +368,23 @@ body {
 
 
 /* ══════════════════════════════════════════
-   6. LEFT TOOLBAR
-   Tools blend seamlessly into the background
+   6. LEFT TOOLBAR  (Photoshop CC style)
    ══════════════════════════════════════════ */
 .sidebar_left {
 	grid-area: sidebar_left !important;
-	width: 34px !important;
-	background: #3c3c3c !important;
-	padding: 3px 2px !important;
+	width: 40px !important;
+	background: #2a2a2a !important;
+	padding: 2px 0 !important;
 	margin: 0 !important;
 	overflow: hidden !important;
 	overflow-y: auto !important;
 	align-self: stretch !important;
-	border-right: 1px solid #222 !important;
+	border-right: 1px solid #1a1a1a !important;
 	display: flex !important;
 	flex-direction: column !important;
 	flex-wrap: nowrap !important;
 	align-items: center !important;
-	gap: 1px !important;
+	gap: 0 !important;
 }
 
 
@@ -410,34 +410,34 @@ body {
 	position: relative !important;
 }
 .ruler_left {
-	background-color: #333 !important;
+	background-color: #2c2c2c !important;
 }
 .ruler_top {
-	background-color: #333 !important;
+	background-color: #2c2c2c !important;
 }
 
 
 /* ══════════════════════════════════════════
-   8. RIGHT SIDEBAR  (Photopea-style panels)
+   8. RIGHT SIDEBAR  (Photoshop CC panels)
    ══════════════════════════════════════════ */
 .sidebar_right {
 	grid-area: sidebar_right !important;
 	width: 240px !important;
 	margin: 0 !important;
 	padding: 0 !important;
-	background: #292929 !important;
+	background: #252525 !important;
 	overflow-x: hidden !important;
 	overflow-y: auto !important;
-	border-left: 1px solid #222 !important;
+	border-left: 1px solid #1a1a1a !important;
 	display: flex !important;
 	flex-direction: column !important;
 }
 
 /* Panel blocks */
 .sidebar_right > .block {
-	background: #333 !important;
+	background: #2c2c2c !important;
 	border: none !important;
-	border-bottom: 1px solid #222 !important;
+	border-bottom: 1px solid #1a1a1a !important;
 	border-radius: 0 !important;
 	margin: 0 !important;
 	flex-shrink: 0 !important;
@@ -447,25 +447,25 @@ body {
 	flex: 1 !important;
 }
 
-/* Panel headers — Photopea tab style */
+/* Panel headers — Photoshop tab style */
 .sidebar_right > .block > h2 {
-	background: #2a2a2a !important;
-	color: #aaa !important;
-	font-size: 11px !important;
+	background: #232323 !important;
+	color: #999 !important;
+	font-size: 10px !important;
 	font-weight: 400 !important;
-	text-transform: none !important;
-	letter-spacing: normal !important;
-	padding: 4px 8px !important;
+	text-transform: uppercase !important;
+	letter-spacing: 0.5px !important;
+	padding: 3px 8px !important;
 	margin: 0 !important;
 	border-radius: 0 !important;
-	border-bottom: 1px solid #222 !important;
+	border-bottom: 1px solid #1a1a1a !important;
 	cursor: pointer !important;
 	line-height: 18px !important;
 	height: auto !important;
 }
 .sidebar_right > .block > h2:hover {
-	color: #fff !important;
-	background: #353535 !important;
+	color: #e0e0e0 !important;
+	background: #2a2a2a !important;
 }
 .sidebar_right > .block > h2.toggled {
 	border-bottom-color: transparent !important;
@@ -473,28 +473,28 @@ body {
 /* Toggle arrow indicator */
 .sidebar_right > .block > h2.toggle::after {
 	float: right !important;
-	font-size: 10px !important;
-	color: #888 !important;
+	font-size: 9px !important;
+	color: #707070 !important;
 }
 
 /* Panel content */
 .sidebar_right > .block > .content,
 .sidebar_right > .block > div:not(h2) {
-	padding: 4px 6px !important;
-	background: #333 !important;
+	padding: 3px 5px !important;
+	background: #2c2c2c !important;
 }
 
-/* Layers panel — Photopea style, always visible at bottom */
+/* Layers panel — always visible at bottom */
 .sidebar_right > .layers {
 	flex: 1 !important;
 	display: flex !important;
 	flex-direction: column !important;
 }
 .sidebar_right > .layers > h2 {
-	background: #2a2a2a !important;
-	color: #ddd !important;
+	background: #232323 !important;
+	color: #c8c8c8 !important;
 	font-weight: 400 !important;
-	border-bottom: 2px solid #6C5CE7 !important;
+	border-bottom: 1px solid #6C5CE7 !important;
 }
 .sidebar_right > .layers > .content {
 	flex: 1 !important;
@@ -505,73 +505,74 @@ body {
 /* Layer toolbar buttons (+ D R ↑ ↓) */
 .layer_add {
 	display: inline-block !important;
-	padding: 2px 6px !important;
-	margin: 0 2px 4px 0 !important;
-	background: #6C5CE7 !important;
+	padding: 1px 5px !important;
+	margin: 0 1px 3px 0 !important;
+	background: #3a3a3a !important;
 	border: none !important;
-	border-radius: 2px !important;
-	color: #fff !important;
-	font-size: 12px !important;
+	border-radius: 0 !important;
+	color: #c8c8c8 !important;
+	font-size: 11px !important;
 	cursor: pointer !important;
 	line-height: 1.4 !important;
 }
 .layer_add:hover {
-	background: #7d6ff0 !important;
+	background: #4a4a4a !important;
 	border: none !important;
 }
 .layer_duplicate,
 .layer_raster {
 	display: inline-block !important;
-	padding: 2px 6px !important;
-	margin: 0 2px 4px 0 !important;
-	background: #444 !important;
+	padding: 1px 5px !important;
+	margin: 0 1px 3px 0 !important;
+	background: #3a3a3a !important;
 	border: none !important;
-	border-radius: 2px !important;
-	color: #ccc !important;
-	font-size: 12px !important;
+	border-radius: 0 !important;
+	color: #c8c8c8 !important;
+	font-size: 11px !important;
 	cursor: pointer !important;
 }
 .layer_duplicate:hover,
 .layer_raster:hover {
-	background: #555 !important;
+	background: #4a4a4a !important;
 	border: none !important;
 }
 .layers_arrow {
 	display: inline-block !important;
-	padding: 2px 6px !important;
-	margin: 0 2px 4px 0 !important;
-	background: #444 !important;
+	padding: 1px 5px !important;
+	margin: 0 1px 3px 0 !important;
+	background: #3a3a3a !important;
 	border: none !important;
-	border-radius: 2px !important;
-	color: #ccc !important;
-	font-size: 12px !important;
+	border-radius: 0 !important;
+	color: #c8c8c8 !important;
+	font-size: 11px !important;
 	cursor: pointer !important;
 }
 .layers_arrow:hover {
-	background: #555 !important;
+	background: #4a4a4a !important;
 	border: none !important;
 }
 
 /* Layer list */
 .layers_list {
-	margin-top: 4px !important;
+	margin-top: 2px !important;
 }
 .layers_list .item {
-	margin-bottom: 1px !important;
+	margin-bottom: 0 !important;
 	display: flex !important;
 	align-items: center !important;
+	border-bottom: 1px solid #1a1a1a !important;
 }
 
-/* Layer name — Photopea style */
+/* Layer name — Photoshop style */
 .layer_name {
 	display: block !important;
-	padding: 3px 6px !important;
+	padding: 2px 6px !important;
 	height: auto !important;
-	min-height: 22px !important;
-	background: #292929 !important;
+	min-height: 20px !important;
+	background: #252525 !important;
 	border: 1px solid transparent !important;
 	border-radius: 0 !important;
-	color: #ccc !important;
+	color: #c8c8c8 !important;
 	font-size: 11px !important;
 	line-height: 16px !important;
 	cursor: pointer !important;
@@ -580,23 +581,23 @@ body {
 	text-overflow: ellipsis !important;
 }
 .layer_name:hover {
-	background: #3a3a3a !important;
+	background: #333 !important;
 	border-color: transparent !important;
 }
 
-/* Active layer — highlighted like Photopea selection */
+/* Active layer — dark purple-tinted like PS selection */
 .layers_list .active .layer_name,
 .layers_list .item.active .layer_name {
-	background: #6C5CE7 !important;
-	color: #fff !important;
-	border-color: #6C5CE7 !important;
+	background: #3d3564 !important;
+	color: #e0e0e0 !important;
+	border-color: #3d3564 !important;
 }
 
 /* Layer visibility eye */
 .visibility {
-	opacity: 0.4 !important;
-	width: 18px !important;
-	min-width: 18px !important;
+	opacity: 0.35 !important;
+	width: 16px !important;
+	min-width: 16px !important;
 	padding: 0 2px !important;
 	margin: 0 !important;
 	cursor: pointer !important;
@@ -610,14 +611,14 @@ body {
 	border: none !important;
 }
 .visibility.visible {
-	opacity: 1 !important;
+	opacity: 0.9 !important;
 }
 
 /* Layer delete button */
 .delete {
-	width: 14px !important;
-	min-width: 14px !important;
-	opacity: 0.4 !important;
+	width: 16px !important;
+	min-width: 16px !important;
+	opacity: 0.35 !important;
 	background-size: 10px !important;
 	border: none !important;
 	box-shadow: none !important;
@@ -630,19 +631,19 @@ body {
 
 /* Layer filter items */
 .filter {
-	margin-bottom: 1px !important;
+	margin-bottom: 0 !important;
 	margin-left: 24px !important;
-	opacity: 0.7 !important;
-	font-size: 11px !important;
+	opacity: 0.6 !important;
+	font-size: 10px !important;
 }
 
 /* Preview / zoom area */
 .canvas_preview_wrapper {
-	background: #292929 !important;
+	background: #252525 !important;
 }
 .canvas_preview_details {
 	background: transparent !important;
-	padding: 4px 0 !important;
+	padding: 3px 0 !important;
 }
 .canvas_preview_details .details {
 	display: flex !important;
@@ -650,14 +651,14 @@ body {
 }
 .canvas_preview_details .details button {
 	font-size: 10px !important;
-	padding: 1px 5px !important;
-	background: #444 !important;
+	padding: 1px 4px !important;
+	background: #3a3a3a !important;
 	border: none !important;
-	color: #ccc !important;
-	border-radius: 2px !important;
+	color: #c8c8c8 !important;
+	border-radius: 0 !important;
 }
 .canvas_preview_details .details button:hover {
-	background: #555 !important;
+	background: #4a4a4a !important;
 	border: none !important;
 }
 #zoom_range {
@@ -667,23 +668,23 @@ body {
 
 /* Color panel */
 .colors .content {
-	padding: 4px !important;
+	padding: 3px !important;
 }
 .colors .ui_color_sample {
-	border: 1px solid #555 !important;
-	box-shadow: 0 0 0 1px #333 inset !important;
-	border-radius: 2px !important;
+	border: 1px solid #333 !important;
+	box-shadow: 0 0 0 1px #1a1a1a inset !important;
+	border-radius: 0 !important;
 }
 .ui_icon_button {
 	background: transparent !important;
 	border: none !important;
-	color: #aaa !important;
+	color: #999 !important;
 	padding: 2px !important;
 	cursor: pointer !important;
 	box-shadow: none !important;
 }
 .ui_icon_button:hover {
-	color: #fff !important;
+	color: #e0e0e0 !important;
 	background: transparent !important;
 	border: none !important;
 }
@@ -691,9 +692,9 @@ body {
 	color: #6C5CE7 !important;
 }
 .block_section {
-	border-top: 1px solid #444 !important;
-	padding-top: 4px !important;
-	margin-top: 4px !important;
+	border-top: 1px solid #1a1a1a !important;
+	padding-top: 3px !important;
+	margin-top: 3px !important;
 }
 
 /* Color picker gradient */
@@ -714,16 +715,16 @@ body {
 
 
 /* ══════════════════════════════════════════
-   9. FORM ELEMENTS
+   9. FORM ELEMENTS  (sunken wells)
    ══════════════════════════════════════════ */
 input[type="text"],
 input[type="number"],
 input[type="password"],
 input[type="url"],
 textarea {
-	background: #222 !important;
-	color: #ccc !important;
-	border: 1px solid #555 !important;
+	background: #1a1a1a !important;
+	color: #c8c8c8 !important;
+	border: 1px solid #333 !important;
 	border-radius: 2px !important;
 	font-size: 11px !important;
 	font-family: inherit !important;
@@ -738,14 +739,14 @@ textarea:focus {
 }
 
 select {
-	background: #222 !important;
-	color: #ccc !important;
-	border: 1px solid #555 !important;
+	background: #1a1a1a !important;
+	color: #c8c8c8 !important;
+	border: 1px solid #333 !important;
 	border-radius: 2px !important;
 	font-size: 11px !important;
 	font-family: inherit !important;
 	padding: 2px 4px !important;
-	height: 22px !important;
+	height: 20px !important;
 }
 select:focus {
 	border-color: #6C5CE7 !important;
@@ -753,8 +754,8 @@ select:focus {
 }
 
 label {
-	color: #aaa !important;
-	font-size: 11px !important;
+	color: #999 !important;
+	font-size: 10px !important;
 }
 
 input[type="checkbox"],
@@ -767,28 +768,28 @@ input[type="range"] {
 
 /* Number input widget */
 .ui_number_input {
-	border: 1px solid #555 !important;
+	border: 1px solid #333 !important;
 	border-radius: 2px !important;
-	background: #222 !important;
+	background: #1a1a1a !important;
 }
 .ui_number_input input {
-	background: #222 !important;
-	color: #ccc !important;
+	background: #1a1a1a !important;
+	color: #c8c8c8 !important;
 	border: none !important;
 	font-size: 11px !important;
 }
 .ui_number_input button {
-	background: #444 !important;
+	background: #333 !important;
 	border: none !important;
-	border-left: 1px solid #555 !important;
-	color: #ccc !important;
+	border-left: 1px solid #1a1a1a !important;
+	color: #c8c8c8 !important;
 	box-shadow: none !important;
 	border-radius: 0 !important;
 }
 .ui_number_input button:hover {
-	background: #555 !important;
+	background: #3a3a3a !important;
 	border: none !important;
-	border-left: 1px solid #555 !important;
+	border-left: 1px solid #1a1a1a !important;
 }
 
 /* Input groups */
@@ -796,7 +797,7 @@ input[type="range"] {
 	margin-bottom: 2px !important;
 }
 .ui_input_group label {
-	font-size: 11px !important;
+	font-size: 10px !important;
 }
 .ui_flex_group {
 	display: flex !important;
@@ -808,20 +809,20 @@ input[type="range"] {
    10. BUTTONS — GENERIC
    ══════════════════════════════════════════ */
 button {
-	background: #444 !important;
-	color: #ccc !important;
+	background: #3a3a3a !important;
+	color: #c8c8c8 !important;
 	border: none !important;
 	border-radius: 2px !important;
 	font-size: 11px !important;
 	font-family: inherit !important;
-	padding: 3px 8px !important;
+	padding: 2px 7px !important;
 	cursor: pointer !important;
 	box-shadow: none !important;
 	transition: none !important;
 }
 button:hover {
-	background: #555 !important;
-	color: #fff !important;
+	background: #4a4a4a !important;
+	color: #e0e0e0 !important;
 	border: none !important;
 }
 button:focus {
@@ -831,11 +832,11 @@ button:focus {
 
 /* Primary action button style */
 .button {
-	background: #444 !important;
-	color: #ccc !important;
+	background: #3a3a3a !important;
+	color: #c8c8c8 !important;
 	border: none !important;
-	border-radius: 3px !important;
-	padding: 6px 16px !important;
+	border-radius: 0 !important;
+	padding: 5px 14px !important;
 	font-size: 12px !important;
 }
 .button:hover {
@@ -844,10 +845,9 @@ button:focus {
 	border: none !important;
 }
 
-/* Active state */
+/* Active state — no longer blanket purple */
 .active {
-	background-color: #6C5CE7 !important;
-	color: #fff !important;
+	color: #e0e0e0 !important;
 }
 
 
@@ -855,38 +855,38 @@ button:focus {
    11. POPUPS & DIALOGS (miniPaint native)
    ══════════════════════════════════════════ */
 .popup {
-	background: #333 !important;
-	border: 1px solid #555 !important;
-	border-radius: 4px !important;
-	box-shadow: 0 0 0 4000px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.7) !important;
-	color: #ccc !important;
+	background: #2c2c2c !important;
+	border: 1px solid #1a1a1a !important;
+	border-radius: 0 !important;
+	box-shadow: 0 0 0 4000px rgba(0,0,0,0.6), 0 12px 48px rgba(0,0,0,0.8) !important;
+	color: #c8c8c8 !important;
 	font-size: 12px !important;
 }
 .popup h2 {
-	background: #2a2a2a !important;
-	color: #ddd !important;
-	border-radius: 4px 4px 0 0 !important;
-	font-size: 14px !important;
+	background: #232323 !important;
+	color: #c8c8c8 !important;
+	border-radius: 0 !important;
+	font-size: 13px !important;
 	font-weight: 400 !important;
-	border-bottom: 1px solid #444 !important;
+	border-bottom: 1px solid #1a1a1a !important;
 	text-transform: none !important;
 	letter-spacing: normal !important;
 }
 .popup .dialog_content {
-	color: #ccc !important;
+	color: #c8c8c8 !important;
 }
 .popup .buttons {
-	background: #2a2a2a !important;
-	border-top: 1px solid #444 !important;
-	border-radius: 0 0 4px 4px !important;
+	background: #232323 !important;
+	border-top: 1px solid #1a1a1a !important;
+	border-radius: 0 !important;
 }
 .popup .buttons button,
 .popup .buttons .button {
-	background: #444 !important;
-	color: #ccc !important;
+	background: #3a3a3a !important;
+	color: #c8c8c8 !important;
 	border: none !important;
-	border-radius: 3px !important;
-	padding: 6px 18px !important;
+	border-radius: 0 !important;
+	padding: 5px 16px !important;
 	font-size: 12px !important;
 }
 .popup .buttons button:hover,
@@ -895,14 +895,14 @@ button:focus {
 	color: #fff !important;
 }
 .popup .close {
-	color: #888 !important;
+	color: #707070 !important;
 	border: none !important;
 	background: transparent !important;
-	font-size: 20px !important;
+	font-size: 18px !important;
 	box-shadow: none !important;
 }
 .popup .close:hover {
-	color: #fff !important;
+	color: #e0e0e0 !important;
 	background: transparent !important;
 	border: none !important;
 }
@@ -912,44 +912,44 @@ button:focus {
    12. ALERTIFY DIALOGS
    ══════════════════════════════════════════ */
 .ajs-dialog {
-	background: #333 !important;
-	border: 1px solid #555 !important;
-	border-radius: 4px !important;
-	box-shadow: 0 8px 32px rgba(0,0,0,0.7) !important;
-	color: #ccc !important;
+	background: #2c2c2c !important;
+	border: 1px solid #1a1a1a !important;
+	border-radius: 0 !important;
+	box-shadow: 0 12px 48px rgba(0,0,0,0.8) !important;
+	color: #c8c8c8 !important;
 }
 .ajs-header {
-	background: #2a2a2a !important;
-	color: #ddd !important;
-	border-bottom: 1px solid #444 !important;
-	border-radius: 4px 4px 0 0 !important;
+	background: #232323 !important;
+	color: #c8c8c8 !important;
+	border-bottom: 1px solid #1a1a1a !important;
+	border-radius: 0 !important;
 }
 .ajs-body {
-	color: #ccc !important;
+	color: #c8c8c8 !important;
 }
 .ajs-body .ajs-content {
-	color: #ccc !important;
+	color: #c8c8c8 !important;
 }
 .ajs-body input[type="text"],
 .ajs-body textarea {
-	background: #222 !important;
-	color: #ccc !important;
-	border: 1px solid #555 !important;
+	background: #1a1a1a !important;
+	color: #c8c8c8 !important;
+	border: 1px solid #333 !important;
 	border-radius: 2px !important;
 	width: 100% !important;
 	padding: 4px 6px !important;
 }
 .ajs-footer {
-	background: #2a2a2a !important;
-	border-top: 1px solid #444 !important;
-	border-radius: 0 0 4px 4px !important;
+	background: #232323 !important;
+	border-top: 1px solid #1a1a1a !important;
+	border-radius: 0 !important;
 }
 .ajs-footer .ajs-button {
-	background: #444 !important;
-	color: #ccc !important;
+	background: #3a3a3a !important;
+	color: #c8c8c8 !important;
 	border: none !important;
-	border-radius: 3px !important;
-	padding: 6px 16px !important;
+	border-radius: 0 !important;
+	padding: 5px 14px !important;
 	font-size: 12px !important;
 }
 .ajs-footer .ajs-button:hover {
@@ -958,27 +958,27 @@ button:focus {
 }
 .ajs-dimmer {
 	background: #000 !important;
-	opacity: 0.6 !important;
+	opacity: 0.65 !important;
 }
 
 
 /* ══════════════════════════════════════════
-   13. SCROLLBARS
+   13. SCROLLBARS  (thinner, minimal)
    ══════════════════════════════════════════ */
 ::-webkit-scrollbar {
-	width: 8px !important;
-	height: 8px !important;
+	width: 6px !important;
+	height: 6px !important;
 }
 ::-webkit-scrollbar-track,
 ::-webkit-scrollbar-track-piece {
 	background: #1e1e1e !important;
 }
 ::-webkit-scrollbar-thumb {
-	background: #555 !important;
+	background: #444 !important;
 	border-radius: 0 !important;
 }
 ::-webkit-scrollbar-thumb:hover {
-	background: #777 !important;
+	background: #555 !important;
 }
 ::-webkit-scrollbar-corner {
 	background: #1e1e1e !important;
@@ -989,20 +989,20 @@ button:focus {
    14. MISC ELEMENTS
    ══════════════════════════════════════════ */
 hr {
-	border-color: #444 !important;
+	border-color: #1a1a1a !important;
 	border-bottom: none !important;
 }
 
 /* Row layout */
 .row {
 	clear: both !important;
-	margin-bottom: 2px !important;
-	min-height: 22px !important;
+	margin-bottom: 1px !important;
+	min-height: 20px !important;
 }
 
 /* Info & detail text */
 .text_muted {
-	color: #888 !important;
+	color: #707070 !important;
 }
 .right {
 	float: right !important;
@@ -1018,17 +1018,17 @@ hr {
 }
 .details .ui_color_input input {
 	width: 100% !important;
-	height: 22px !important;
+	height: 20px !important;
 }
 
 /* Popup preview canvases */
 .preview_container {
 	text-align: center !important;
-	margin: 8px 0 !important;
+	margin: 6px 0 !important;
 }
 .preview_canvas_left,
 .preview_canvas_post {
-	border: 1px solid #555 !important;
+	border: 1px solid #333 !important;
 }
 
 /* Error text */
@@ -1041,7 +1041,7 @@ a {
 	color: #6C5CE7 !important;
 }
 a:hover {
-	color: #8d7ff0 !important;
+	color: #7d6ff0 !important;
 }
 
 /* Hidden utility */
@@ -1058,13 +1058,14 @@ a:hover {
 /* ══════════════════════════════════════════
    15. TOOLBAR OVERRIDES — must come last to
    beat generic button/active rules above
+   Photoshop CC: left purple border for active
    ══════════════════════════════════════════ */
 #tools_container button,
 .sidebar_left button {
-	width: 28px !important;
-	height: 28px !important;
-	min-width: 28px !important;
-	min-height: 28px !important;
+	width: 32px !important;
+	height: 32px !important;
+	min-width: 32px !important;
+	min-height: 32px !important;
 	margin: 0 !important;
 	padding: 0 !important;
 	border-radius: 0 !important;
@@ -1073,12 +1074,12 @@ a:hover {
 	background-color: transparent !important;
 	background-size: 20px !important;
 	background-position: center !important;
-	opacity: 0.65 !important;
+	opacity: 0.55 !important;
 	transition: none !important;
 }
 #tools_container button:hover,
 .sidebar_left button:hover {
-	background-color: transparent !important;
+	background-color: #363636 !important;
 	opacity: 1 !important;
 	border: none !important;
 }
@@ -1090,7 +1091,8 @@ a:hover {
 	background: transparent !important;
 	opacity: 1 !important;
 	border-radius: 0 !important;
-	filter: brightness(1.5) drop-shadow(0 0 3px rgba(108,92,231,0.6)) !important;
+	filter: none !important;
+	border-left: 2px solid #6C5CE7 !important;
 }
 </style>
 </body>
