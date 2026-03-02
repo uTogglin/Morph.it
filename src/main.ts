@@ -2716,7 +2716,11 @@ function updateProcessButton() {
   });
   const rescaleReady = rescaleEnabled && (rescaleWidth > 0 || rescaleHeight > 0);
   const compressReady = compressEnabled;
-  const hasImageProcessing = rescaleReady || removeBg;
+  const hasInpaintMask = inpaintEnabled && Array.from(imgMaskData.values()).some(d => {
+    for (let i = 3; i < d.data.length; i += 4) { if (d.data[i] > 0) return true; }
+    return false;
+  });
+  const hasImageProcessing = rescaleReady || removeBg || hasInpaintMask;
   const hasProcessing = hasImageProcessing || compressReady;
   const outputSelected = document.querySelector("#to-list .selected");
 
@@ -2740,6 +2744,7 @@ function updateProcessButton() {
   if (activeTool === "image") {
     if (hasFiles && (hasImageFiles && hasImageProcessing)) {
       const labels: string[] = [];
+      if (hasInpaintMask) labels.push("Inpaint");
       if (rescaleReady) labels.push("Resize");
       if (removeBg) labels.push("Remove BG");
       ui.convertButton.textContent = labels.length > 0 ? labels.join(" & ") : "Process";
