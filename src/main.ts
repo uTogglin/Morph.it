@@ -344,6 +344,8 @@ const ui = {
   imgRemoveBgBtn: document.querySelector("#img-removebg-btn") as HTMLButtonElement,
   imgInpaintBtn: document.querySelector("#img-inpaint-btn") as HTMLButtonElement,
   imgSaveBtn: document.querySelector("#img-save-btn") as HTMLButtonElement,
+  imgFullscreenBtn: document.querySelector("#img-fullscreen-btn") as HTMLButtonElement,
+  imgEditorContainer: document.querySelector("#img-editor-container") as HTMLDivElement,
   imgFileInput: document.querySelector("#img-file-input") as HTMLInputElement,
   imgInpaintModelToggle: document.querySelector("#inpaint-model-toggle") as HTMLButtonElement,
   imgInpaintFeatherToggle: document.querySelector("#inpaint-feather-toggle") as HTMLButtonElement,
@@ -3096,6 +3098,7 @@ function showMiniPaintEditor() {
 
 /** Reset image tools state — show drop zone, reload iframe */
 function imgResetState() {
+  ui.imgEditorContainer?.classList.remove("fullscreen");
   for (const url of imgOriginalUrls.values()) URL.revokeObjectURL(url);
   for (const url of imgProcessedUrls.values()) URL.revokeObjectURL(url);
   imgToolFiles = [];
@@ -3250,6 +3253,28 @@ ui.imgSaveBtn?.addEventListener("click", async () => {
     `<p>Size: ${formatFileSize(totalSize)}</p>` +
     `<button onclick="window.hidePopup()">OK</button>`
   );
+});
+
+// Action: Fullscreen toggle
+ui.imgFullscreenBtn?.addEventListener("click", () => {
+  const container = ui.imgEditorContainer;
+  if (!container) return;
+  const isFs = container.classList.toggle("fullscreen");
+  const expand = document.getElementById("img-fs-expand");
+  const shrink = document.getElementById("img-fs-shrink");
+  if (expand) expand.classList.toggle("hidden", isFs);
+  if (shrink) shrink.classList.toggle("hidden", !isFs);
+});
+
+// Escape key exits fullscreen
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && ui.imgEditorContainer?.classList.contains("fullscreen")) {
+    ui.imgEditorContainer.classList.remove("fullscreen");
+    const expand = document.getElementById("img-fs-expand");
+    const shrink = document.getElementById("img-fs-shrink");
+    if (expand) expand.classList.remove("hidden");
+    if (shrink) shrink.classList.add("hidden");
+  }
 });
 
 // ── Video Editor: Upload, Preview, Timeline, Processing ─────────────────────
