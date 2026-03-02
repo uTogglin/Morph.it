@@ -1601,16 +1601,15 @@ if (ui.archiveMultiToggle) {
 
 // ──── Remove Background Toggles ────
 function updateBgUI() {
-  if (ui.bgModeToggle) ui.bgModeToggle.classList.toggle("hidden", !removeBg);
-  // Correction is inside a .sm-switch-row — toggle hidden on the row
+  // Correction only applies to local mode
   const correctionRow = ui.bgCorrectionToggle?.closest(".sm-switch-row");
-  if (correctionRow) (correctionRow as HTMLElement).classList.toggle("hidden", !removeBg || bgMode === "api");
-  if (ui.bgApiKeyRow) ui.bgApiKeyRow.classList.toggle("hidden", !removeBg || bgMode !== "api");
+  if (correctionRow) (correctionRow as HTMLElement).classList.toggle("hidden", bgMode === "api");
+  // API key only shown in API mode
+  if (ui.bgApiKeyRow) ui.bgApiKeyRow.classList.toggle("hidden", bgMode !== "api");
 }
 
 if (ui.removeBgToggle) {
   ui.removeBgToggle.classList.toggle("active", removeBg);
-  updateBgUI();
   ui.removeBgToggle.addEventListener("click", () => {
     removeBg = !removeBg;
     ui.removeBgToggle.classList.toggle("active", removeBg);
@@ -1620,6 +1619,7 @@ if (ui.removeBgToggle) {
     updateProcessButton();
   });
 }
+updateBgUI();
 
 if (ui.bgModeToggle) {
   ui.bgModeToggle.textContent = bgMode === "local" ? "Mode: Local" : "Mode: remove.bg API";
@@ -2915,7 +2915,6 @@ function syncImageSettingsUI() {
 function syncModalSettingsUI() {
   if (ui.removeBgToggle) ui.removeBgToggle.classList.toggle("active", removeBg);
   if (ui.bgModeToggle) {
-    ui.bgModeToggle.classList.toggle("hidden", !removeBg);
     ui.bgModeToggle.textContent = bgMode === "local" ? "Mode: Local" : "Mode: remove.bg API";
   }
   updateBgUI();
