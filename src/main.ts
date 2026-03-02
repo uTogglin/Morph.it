@@ -3012,7 +3012,7 @@ async function loadBytesIntoMiniPaint(bytes: Uint8Array, name: string): Promise<
   if (!win?.Layers) return;
 
   return new Promise((resolve) => {
-    const blob = new Blob([bytes], { type: "image/png" });
+    const blob = new Blob([bytes as BlobPart], { type: "image/png" });
     const img = new Image();
     img.onload = () => {
       const layer = {
