@@ -62,10 +62,6 @@ export default defineConfig({
         {
           src: "node_modules/7z-wasm/7zz.wasm",
           dest: "wasm"
-        },
-        {
-          src: "node_modules/onnxruntime-web/dist/*.wasm",
-          dest: "wasm"
         }
       ]
     }),

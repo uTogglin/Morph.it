@@ -2253,7 +2253,7 @@ async function ensureInpaintSession() {
   if (inpaintSession) { try { inpaintSession.release(); } catch {} inpaintSession = null; }
 
   const ort = await import("onnxruntime-web");
-  ort.env.wasm.wasmPaths = "/wasm/";
+  ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/";
   const url = wanted === "lama" ? LAMA_MODEL_URL : MIGAN_MODEL_URL;
   const modelResp = await cachedFetch(url);
   const modelBytes = new Uint8Array(await modelResp.arrayBuffer());
@@ -2327,9 +2327,11 @@ async function runMiganInpainting(imageBytes: Uint8Array, ext: string, maskImage
   feeds[session.inputNames[1]] = maskTensor;
 
   const results = await session.run(feeds);
-  const outData = results[session.outputNames[0]].data as Uint8Array;
+  const outTensor = results[session.outputNames[0]];
+  const rawData = outTensor.data;
+  const isFloat = outTensor.type === "float32";
 
-  // Convert output CHW RGB uint8 → canvas RGBA
+  // Convert output CHW RGB → canvas RGBA (handle both uint8 and float32)
   const outCanvas = document.createElement("canvas");
   outCanvas.width = W; outCanvas.height = H;
   const outCtx = outCanvas.getContext("2d")!;
@@ -2338,10 +2340,13 @@ async function runMiganInpainting(imageBytes: Uint8Array, ext: string, maskImage
   for (let h = 0; h < H; h++) {
     for (let w = 0; w < W; w++) {
       const dstIdx = (h * W + w) * 4;
-      outImgData.data[dstIdx] = outData[0 * size + h * W + w];     // R
-      outImgData.data[dstIdx + 1] = outData[1 * size + h * W + w]; // G
-      outImgData.data[dstIdx + 2] = outData[2 * size + h * W + w]; // B
-      outImgData.data[dstIdx + 3] = 255;                            // A
+      const r = rawData[0 * size + h * W + w] as number;
+      const g = rawData[1 * size + h * W + w] as number;
+      const b = rawData[2 * size + h * W + w] as number;
+      outImgData.data[dstIdx] = isFloat ? Math.max(0, Math.min(255, Math.round(r))) : r;
+      outImgData.data[dstIdx + 1] = isFloat ? Math.max(0, Math.min(255, Math.round(g))) : g;
+      outImgData.data[dstIdx + 2] = isFloat ? Math.max(0, Math.min(255, Math.round(b))) : b;
+      outImgData.data[dstIdx + 3] = 255;
     }
   }
   outCtx.putImageData(outImgData, 0, 0);
@@ -2528,15 +2533,9 @@ async function applyInpainting(files: FileData[]): Promise<FileData[]> {
       continue;
     }
 
-    try {
-      const outBytes = await runInpainting(f.bytes, ext, mask);
-      const baseName = f.name.replace(/\.[^.]+$/, "");
-      result.push({ name: baseName + ".png", bytes: outBytes });
-    } catch (e) {
-      console.error("Inpainting failed for", f.name, e);
-      window.showPopup(`<h2>Inpainting Error</h2><p>${(e as Error).message}</p>`);
-      result.push(f);
-    }
+    const outBytes = await runInpainting(f.bytes, ext, mask);
+    const baseName = f.name.replace(/\.[^.]+$/, "");
+    result.push({ name: baseName + ".png", bytes: outBytes });
   }
   return result;
 }
