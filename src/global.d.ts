@@ -15,12 +15,4 @@ declare global {
   }
 }
 
-declare module "onnxruntime-web" {
-  const content: any;
-  export = content;
-  export const env: any;
-  export const Tensor: any;
-  export const InferenceSession: any;
-}
-
 export { };
