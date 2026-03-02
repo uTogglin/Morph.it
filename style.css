@@ -1630,6 +1630,7 @@ body[data-tool="image"] #convert-button { display: none !important; }
 
 /* Canvas box */
 #img-canvas {
+  position: relative;
   width: 560px;
   height: 560px;
   flex-shrink: 0;
@@ -1679,6 +1680,66 @@ body[data-tool="image"] #convert-button { display: none !important; }
   object-fit: contain;
 }
 #img-preview.hidden { display: none; }
+
+/* Mask canvas overlay for inpainting */
+.img-mask-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  cursor: crosshair;
+  touch-action: none;
+  pointer-events: auto;
+}
+.img-mask-canvas.hidden { display: none; }
+
+/* Inpaint controls row (matches removebg-row) */
+.img-inpaint-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* Brush size slider row */
+.img-brush-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.84rem;
+  color: var(--text-main);
+}
+.img-brush-row input[type="range"] {
+  flex: 1;
+  min-width: 100px;
+}
+.img-brush-row span:last-child {
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Undo / Clear action buttons */
+.img-inpaint-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+#img-inpaint-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+#img-inpaint-options.hidden { display: none; }
 
 /* Right sidebar: settings + download */
 .img-sidebar {
@@ -3378,6 +3439,8 @@ body[data-tool="image"] #convert-button { display: none !important; }
   #img-canvas-col { width: 100%; }
   .img-sidebar { width: 100%; }
   #img-canvas { width: 100%; height: auto; aspect-ratio: 1; }
+  .img-inpaint-row { padding: 8px 14px; font-size: 0.82rem; }
+  .img-brush-row { font-size: 0.8rem; }
   #img-workspace { width: 100%; }
 
   /* Video editor responsive */

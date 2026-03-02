@@ -8,6 +8,7 @@ export default defineConfig({
       "@ffmpeg/ffmpeg",
       "@sqlite.org/sqlite-wasm",
       "7z-wasm",
+      "onnxruntime-web",
     ]
   },
   base: "/",
@@ -60,6 +61,10 @@ export default defineConfig({
         },
         {
           src: "node_modules/7z-wasm/7zz.wasm",
+          dest: "wasm"
+        },
+        {
+          src: "node_modules/onnxruntime-web/dist/*.wasm",
           dest: "wasm"
         }
       ]

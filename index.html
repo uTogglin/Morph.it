@@ -670,6 +670,7 @@
             <span class="img-drop-sub">or click to browse</span>
           </div>
           <img id="img-preview" class="hidden" alt="Preview">
+          <canvas id="img-mask-canvas" class="img-mask-canvas hidden"></canvas>
         </div>
 
         <!-- Below canvas: filmstrip, remove bg, before/after -->
@@ -683,6 +684,21 @@
               <span>Remove Background</span>
               <button id="img-remove-bg-toggle" class="sm-switch" role="switch"></button>
             </label>
+            <label class="img-inpaint-row">
+              <span>Object Removal</span>
+              <button id="img-inpaint-toggle" class="sm-switch" role="switch"></button>
+            </label>
+            <div id="img-inpaint-options" class="hidden">
+              <div class="img-brush-row">
+                <span>Brush</span>
+                <input type="range" id="img-brush-size" min="5" max="80" value="25">
+                <span id="img-brush-size-label">25px</span>
+              </div>
+              <div class="img-inpaint-actions">
+                <button id="img-mask-undo" class="sm-btn">Undo</button>
+                <button id="img-mask-clear" class="sm-btn">Clear</button>
+              </div>
+            </div>
             <div class="img-compare-toggle">
               <span class="img-compare-label" data-side="before">Before</span>
               <button id="img-compare-switch" class="img-toggle-switch" role="switch"></button>
@@ -720,6 +736,20 @@
             </label>
             <div id="img-bg-api-key-row" class="hidden">
               <input type="password" id="img-bg-api-key" placeholder="remove.bg API key" autocomplete="off">
+            </div>
+          </div>
+          <div class="img-settings-group">
+            <span class="sm-label">Object removal</span>
+            <label class="sm-switch-row">
+              <span class="sm-switch-label">Enable inpainting</span>
+              <button id="img-inpaint-sidebar-toggle" class="sm-switch" role="switch"></button>
+            </label>
+            <div id="img-inpaint-sidebar-options" class="hidden">
+              <button id="img-inpaint-model-toggle" class="sm-btn">Model: MI-GAN</button>
+              <label class="sm-switch-row">
+                <span class="sm-switch-label">Feather mask edges</span>
+                <button id="img-inpaint-feather-toggle" class="sm-switch" role="switch"></button>
+              </label>
             </div>
           </div>
         </div>

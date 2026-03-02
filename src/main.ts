@@ -126,6 +126,28 @@ let rescaleLockRatio: boolean = (() => {
   try { return localStorage.getItem("convert-rescale-lock") !== "false"; } catch { return true; }
 })();
 
+/** Inpainting (object removal) settings */
+let inpaintEnabled: boolean = (() => {
+  try { return localStorage.getItem("convert-inpaint") === "true"; } catch { return false; }
+})();
+let inpaintFeather: boolean = (() => {
+  try { return localStorage.getItem("convert-inpaint-feather") === "true"; } catch { return false; }
+})();
+let inpaintBrushSize: number = (() => {
+  try { return parseInt(localStorage.getItem("convert-inpaint-brush") ?? "25") || 25; } catch { return 25; }
+})();
+let inpaintModel: "migan" | "lama" = (() => {
+  try { const v = localStorage.getItem("convert-inpaint-model"); return v === "lama" ? "lama" : "migan"; } catch { return "migan" as const; }
+})();
+
+/** Per-image mask storage for inpainting */
+let imgMaskData: Map<number, ImageData> = new Map();
+let imgMaskHistory: Map<number, ImageData[]> = new Map();
+let inpaintSession: any = null;
+let inpaintSessionModel: string = "";
+let inpaintDrawing: boolean = false;
+let inpaintLastPos: { x: number; y: number } | null = null;
+
 /** Privacy mode: strips metadata and randomizes filenames for API calls */
 let privacyMode: boolean = (() => {
   try { return localStorage.getItem("convert-privacy") === "true"; } catch { return false; }
@@ -341,6 +363,18 @@ const ui = {
   imgRescaleWidthInput: document.querySelector("#img-rescale-width") as HTMLInputElement,
   imgRescaleHeightInput: document.querySelector("#img-rescale-height") as HTMLInputElement,
   imgRescaleLockInput: document.querySelector("#img-rescale-lock-ratio") as HTMLInputElement,
+  // Inpainting UI
+  imgMaskCanvas: document.querySelector("#img-mask-canvas") as HTMLCanvasElement,
+  imgInpaintToggle: document.querySelector("#img-inpaint-toggle") as HTMLButtonElement,
+  imgInpaintOptions: document.querySelector("#img-inpaint-options") as HTMLDivElement,
+  imgBrushSizeInput: document.querySelector("#img-brush-size") as HTMLInputElement,
+  imgBrushSizeLabel: document.querySelector("#img-brush-size-label") as HTMLSpanElement,
+  imgMaskUndo: document.querySelector("#img-mask-undo") as HTMLButtonElement,
+  imgMaskClear: document.querySelector("#img-mask-clear") as HTMLButtonElement,
+  imgInpaintSidebarToggle: document.querySelector("#img-inpaint-sidebar-toggle") as HTMLButtonElement,
+  imgInpaintSidebarOptions: document.querySelector("#img-inpaint-sidebar-options") as HTMLDivElement,
+  imgInpaintModelToggle: document.querySelector("#img-inpaint-model-toggle") as HTMLButtonElement,
+  imgInpaintFeatherToggle: document.querySelector("#img-inpaint-feather-toggle") as HTMLButtonElement,
   // Video editor UI
   vidCanvas: document.querySelector("#vid-canvas") as HTMLDivElement,
   vidDropPrompt: document.querySelector("#vid-drop-prompt") as HTMLDivElement,
@@ -2207,6 +2241,306 @@ async function resizeImageBytes(bytes: Uint8Array, ext: string, w: number, h: nu
 /** Image extensions eligible for rescaling */
 const rescaleExts = new Set(["png", "webp", "avif", "tiff", "tif", "gif", "jpg", "jpeg", "bmp", "ico", "svg"]);
 
+/** Inpainting model URLs */
+const MIGAN_MODEL_URL = "https://huggingface.co/andraniksargsyan/migan/resolve/main/migan_pipeline_v2.onnx";
+const LAMA_MODEL_URL = "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx";
+
+/** Lazy-load ONNX Runtime session for the selected inpainting model */
+async function ensureInpaintSession() {
+  const wanted = inpaintModel;
+  // Re-create session if model selection changed
+  if (inpaintSession && inpaintSessionModel === wanted) return inpaintSession;
+  if (inpaintSession) { try { inpaintSession.release(); } catch {} inpaintSession = null; }
+
+  const ort = await import("onnxruntime-web");
+  ort.env.wasm.wasmPaths = "/wasm/";
+  const url = wanted === "lama" ? LAMA_MODEL_URL : MIGAN_MODEL_URL;
+  const modelResp = await cachedFetch(url);
+  const modelBytes = new Uint8Array(await modelResp.arrayBuffer());
+  const providers: string[] = [];
+  if (navigator.gpu) providers.push("webgpu");
+  providers.push("wasm");
+  inpaintSession = await ort.InferenceSession.create(modelBytes.buffer, {
+    executionProviders: providers,
+  });
+  inpaintSessionModel = wanted;
+  return inpaintSession;
+}
+
+/** Run MI-GAN pipeline inpainting — accepts arbitrary resolution, uint8 in/out */
+async function runMiganInpainting(imageBytes: Uint8Array, ext: string, maskImageData: ImageData): Promise<Uint8Array> {
+  const ort = await import("onnxruntime-web");
+  const session = await ensureInpaintSession();
+
+  // Load image to canvas at original size
+  const blob = new Blob([imageBytes as BlobPart], { type: "image/" + ext });
+  const blobUrl = URL.createObjectURL(blob);
+  const img = new Image();
+  await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = blobUrl; });
+  URL.revokeObjectURL(blobUrl);
+
+  const W = img.width, H = img.height;
+
+  // Get image RGBA pixel data
+  const imgCanvas = document.createElement("canvas");
+  imgCanvas.width = W; imgCanvas.height = H;
+  const imgCtx = imgCanvas.getContext("2d")!;
+  imgCtx.drawImage(img, 0, 0);
+  const imgData = imgCtx.getImageData(0, 0, W, H);
+
+  // Convert image HWC RGBA → CHW RGB uint8
+  const imgCHW = new Uint8Array(3 * H * W);
+  for (let h = 0; h < H; h++) {
+    for (let w = 0; w < W; w++) {
+      const srcIdx = (h * W + w) * 4;
+      imgCHW[0 * H * W + h * W + w] = imgData.data[srcIdx];     // R
+      imgCHW[1 * H * W + h * W + w] = imgData.data[srcIdx + 1]; // G
+      imgCHW[2 * H * W + h * W + w] = imgData.data[srcIdx + 2]; // B
+    }
+  }
+
+  // Scale mask to image dimensions if needed
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = W; maskCanvas.height = H;
+  const maskCtx = maskCanvas.getContext("2d")!;
+  if (maskImageData.width !== W || maskImageData.height !== H) {
+    const tmpCanvas = document.createElement("canvas");
+    tmpCanvas.width = maskImageData.width; tmpCanvas.height = maskImageData.height;
+    tmpCanvas.getContext("2d")!.putImageData(maskImageData, 0, 0);
+    maskCtx.drawImage(tmpCanvas, 0, 0, W, H);
+  } else {
+    maskCtx.putImageData(maskImageData, 0, 0);
+  }
+  const maskData = maskCtx.getImageData(0, 0, W, H);
+
+  // Convert mask: our drawn overlay alpha → MI-GAN convention (0=hole, 255=known)
+  const maskCHW = new Uint8Array(1 * H * W);
+  for (let i = 0; i < H * W; i++) {
+    maskCHW[i] = maskData.data[i * 4 + 3] > 30 ? 0 : 255;
+  }
+
+  const imageTensor = new ort.Tensor("uint8", imgCHW, [1, 3, H, W]);
+  const maskTensor = new ort.Tensor("uint8", maskCHW, [1, 1, H, W]);
+
+  const feeds: Record<string, any> = {};
+  feeds[session.inputNames[0]] = imageTensor;
+  feeds[session.inputNames[1]] = maskTensor;
+
+  const results = await session.run(feeds);
+  const outData = results[session.outputNames[0]].data as Uint8Array;
+
+  // Convert output CHW RGB uint8 → canvas RGBA
+  const outCanvas = document.createElement("canvas");
+  outCanvas.width = W; outCanvas.height = H;
+  const outCtx = outCanvas.getContext("2d")!;
+  const outImgData = outCtx.createImageData(W, H);
+  const size = H * W;
+  for (let h = 0; h < H; h++) {
+    for (let w = 0; w < W; w++) {
+      const dstIdx = (h * W + w) * 4;
+      outImgData.data[dstIdx] = outData[0 * size + h * W + w];     // R
+      outImgData.data[dstIdx + 1] = outData[1 * size + h * W + w]; // G
+      outImgData.data[dstIdx + 2] = outData[2 * size + h * W + w]; // B
+      outImgData.data[dstIdx + 3] = 255;                            // A
+    }
+  }
+  outCtx.putImageData(outImgData, 0, 0);
+
+  const outBlob = await new Promise<Blob>((res) => outCanvas.toBlob(b => res(b!), "image/png", 1));
+  return new Uint8Array(await outBlob.arrayBuffer());
+}
+
+/** Run LaMa inpainting — fixed 512x512, float32, composited back to original resolution */
+async function runLamaInpainting(imageBytes: Uint8Array, ext: string, maskImageData: ImageData): Promise<Uint8Array> {
+  const ort = await import("onnxruntime-web");
+  const session = await ensureInpaintSession();
+
+  const blob = new Blob([imageBytes as BlobPart], { type: "image/" + ext });
+  const blobUrl = URL.createObjectURL(blob);
+  const img = new Image();
+  await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = blobUrl; });
+  URL.revokeObjectURL(blobUrl);
+
+  const origW = img.width, origH = img.height;
+
+  // Resize image to 512x512
+  const imgCanvas = document.createElement("canvas");
+  imgCanvas.width = 512; imgCanvas.height = 512;
+  const imgCtx = imgCanvas.getContext("2d")!;
+  imgCtx.drawImage(img, 0, 0, 512, 512);
+  const imgData = imgCtx.getImageData(0, 0, 512, 512);
+
+  // Image tensor [1, 3, 512, 512] float32
+  const imgTensor = new Float32Array(3 * 512 * 512);
+  for (let i = 0; i < 512 * 512; i++) {
+    imgTensor[i] = imgData.data[i * 4];
+    imgTensor[512 * 512 + i] = imgData.data[i * 4 + 1];
+    imgTensor[2 * 512 * 512 + i] = imgData.data[i * 4 + 2];
+  }
+
+  // Resize mask to 512x512
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = maskImageData.width; maskCanvas.height = maskImageData.height;
+  maskCanvas.getContext("2d")!.putImageData(maskImageData, 0, 0);
+  const mask512 = document.createElement("canvas");
+  mask512.width = 512; mask512.height = 512;
+  const mask512Ctx = mask512.getContext("2d")!;
+  mask512Ctx.drawImage(maskCanvas, 0, 0, 512, 512);
+  const maskData = mask512Ctx.getImageData(0, 0, 512, 512);
+
+  if (inpaintFeather) applyGaussianBlur(maskData, 512, 512, 5);
+
+  // Binary mask tensor [1, 1, 512, 512]
+  const maskTensor = new Float32Array(512 * 512);
+  for (let i = 0; i < 512 * 512; i++) {
+    maskTensor[i] = maskData.data[i * 4 + 3] > 30 ? 1.0 : 0.0;
+  }
+
+  const inputNames = session.inputNames;
+  const imgInputName = inputNames.find((n: string) => n.includes("image") || n === "image") ?? inputNames[0];
+  const maskInputName = inputNames.find((n: string) => n.includes("mask") || n === "mask") ?? inputNames[1];
+
+  const feeds: Record<string, any> = {};
+  feeds[imgInputName] = new ort.Tensor("float32", imgTensor, [1, 3, 512, 512]);
+  feeds[maskInputName] = new ort.Tensor("float32", maskTensor, [1, 1, 512, 512]);
+
+  const results = await session.run(feeds);
+  const outputData = results[session.outputNames[0]].data as Float32Array;
+
+  // Render 512x512 result
+  const outCanvas = document.createElement("canvas");
+  outCanvas.width = 512; outCanvas.height = 512;
+  const outCtx = outCanvas.getContext("2d")!;
+  const outImgData = outCtx.createImageData(512, 512);
+  for (let i = 0; i < 512 * 512; i++) {
+    outImgData.data[i * 4] = Math.max(0, Math.min(255, outputData[i]));
+    outImgData.data[i * 4 + 1] = Math.max(0, Math.min(255, outputData[512 * 512 + i]));
+    outImgData.data[i * 4 + 2] = Math.max(0, Math.min(255, outputData[2 * 512 * 512 + i]));
+    outImgData.data[i * 4 + 3] = 255;
+  }
+  outCtx.putImageData(outImgData, 0, 0);
+
+  // Composite into original at full resolution — only replace masked pixels
+  const finalCanvas = document.createElement("canvas");
+  finalCanvas.width = origW; finalCanvas.height = origH;
+  const finalCtx = finalCanvas.getContext("2d")!;
+  finalCtx.drawImage(img, 0, 0);
+
+  const maskOrigCanvas = document.createElement("canvas");
+  maskOrigCanvas.width = origW; maskOrigCanvas.height = origH;
+  maskOrigCanvas.getContext("2d")!.drawImage(maskCanvas, 0, 0, origW, origH);
+  const maskOrigData = maskOrigCanvas.getContext("2d")!.getImageData(0, 0, origW, origH);
+
+  const inpaintScaled = document.createElement("canvas");
+  inpaintScaled.width = origW; inpaintScaled.height = origH;
+  inpaintScaled.getContext("2d")!.drawImage(outCanvas, 0, 0, origW, origH);
+
+  const finalData = finalCtx.getImageData(0, 0, origW, origH);
+  const inpaintedData = inpaintScaled.getContext("2d")!.getImageData(0, 0, origW, origH);
+
+  for (let i = 0; i < origW * origH; i++) {
+    const a = maskOrigData.data[i * 4 + 3] / 255;
+    if (a > 0.01) {
+      finalData.data[i * 4] = Math.round(finalData.data[i * 4] * (1 - a) + inpaintedData.data[i * 4] * a);
+      finalData.data[i * 4 + 1] = Math.round(finalData.data[i * 4 + 1] * (1 - a) + inpaintedData.data[i * 4 + 1] * a);
+      finalData.data[i * 4 + 2] = Math.round(finalData.data[i * 4 + 2] * (1 - a) + inpaintedData.data[i * 4 + 2] * a);
+    }
+  }
+  finalCtx.putImageData(finalData, 0, 0);
+
+  const outBlob = await new Promise<Blob>((res) => finalCanvas.toBlob(b => res(b!), "image/png", 1));
+  return new Uint8Array(await outBlob.arrayBuffer());
+}
+
+/** Run inpainting using the selected model */
+async function runInpainting(imageBytes: Uint8Array, ext: string, maskImageData: ImageData): Promise<Uint8Array> {
+  return inpaintModel === "lama"
+    ? runLamaInpainting(imageBytes, ext, maskImageData)
+    : runMiganInpainting(imageBytes, ext, maskImageData);
+}
+
+/** Simple box-blur approximation of Gaussian blur on ImageData alpha channel */
+function applyGaussianBlur(data: ImageData, w: number, h: number, radius: number) {
+  const pixels = data.data;
+  const alphas = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) alphas[i] = pixels[i * 4 + 3];
+
+  for (let pass = 0; pass < 3; pass++) {
+    const temp = new Float32Array(alphas);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let sum = 0, count = 0;
+        for (let dy = -radius; dy <= radius; dy++) {
+          for (let dx = -radius; dx <= radius; dx++) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+              sum += temp[ny * w + nx];
+              count++;
+            }
+          }
+        }
+        alphas[y * w + x] = sum / count;
+      }
+    }
+  }
+  for (let i = 0; i < w * h; i++) pixels[i * 4 + 3] = Math.round(alphas[i]);
+}
+
+/** Apply inpainting to files that have masks drawn */
+async function applyInpainting(files: FileData[]): Promise<FileData[]> {
+  if (!inpaintEnabled) return files;
+
+  const hasAnyMask = Array.from(imgMaskData.values()).some(d => {
+    const px = d.data;
+    for (let i = 3; i < px.length; i += 4) { if (px[i] > 0) return true; }
+    return false;
+  });
+  if (!hasAnyMask) return files;
+
+  const modelLabel = inpaintModel === "lama" ? "LaMa (208 MB)" : "MI-GAN (28 MB)";
+  window.showPopup(
+    `<h2>Removing objects...</h2>` +
+    `<p>Running ${modelLabel} inpainting. This may take a moment on first run.</p>`
+  );
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  const result: FileData[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+    if (!bgRemovalExts.has(ext)) {
+      result.push(f);
+      continue;
+    }
+
+    const maskIdx = (applyAll && imgToolFiles.length > 1) ? i : imgActiveIndex;
+    const mask = imgMaskData.get(maskIdx);
+    if (!mask) {
+      result.push(f);
+      continue;
+    }
+
+    let hasPaint = false;
+    const px = mask.data;
+    for (let j = 3; j < px.length; j += 4) { if (px[j] > 0) { hasPaint = true; break; } }
+    if (!hasPaint) {
+      result.push(f);
+      continue;
+    }
+
+    try {
+      const outBytes = await runInpainting(f.bytes, ext, mask);
+      const baseName = f.name.replace(/\.[^.]+$/, "");
+      result.push({ name: baseName + ".png", bytes: outBytes });
+    } catch (e) {
+      console.error("Inpainting failed for", f.name, e);
+      window.showPopup(`<h2>Inpainting Error</h2><p>${(e as Error).message}</p>`);
+      result.push(f);
+    }
+  }
+  return result;
+}
+
 /** Apply user-specified rescaling to image files */
 async function applyRescale(files: FileData[]): Promise<FileData[]> {
   if (!rescaleEnabled || (rescaleWidth <= 0 && rescaleHeight <= 0)) return files;
@@ -2252,12 +2586,14 @@ async function applyToolProcessing(files: FileData[]): Promise<FileData[]> {
     files = await applyMetadataStrip(files);
     files = await applyCompression(files);
   } else if (activeTool === "image") {
-    // Image tools: BG removal → metadata strip → rescale
+    // Image tools: inpainting → BG removal → metadata strip → rescale
+    files = await applyInpainting(files);
     files = await applyBgRemoval(files);
     files = await applyMetadataStrip(files);
     files = await applyRescale(files);
   } else {
     // Fallback (shouldn't happen): run all
+    files = await applyInpainting(files);
     files = await applyBgRemoval(files);
     files = await applyMetadataStrip(files);
     files = await applyRescale(files);
@@ -2652,6 +2988,17 @@ function syncImageSettingsUI() {
   if (ui.imgRescaleWidthInput) ui.imgRescaleWidthInput.value = rescaleWidth > 0 ? String(rescaleWidth) : "";
   if (ui.imgRescaleHeightInput) ui.imgRescaleHeightInput.value = rescaleHeight > 0 ? String(rescaleHeight) : "";
   if (ui.imgRescaleLockInput) ui.imgRescaleLockInput.checked = rescaleLockRatio;
+  // Inpainting
+  if (ui.imgInpaintToggle) ui.imgInpaintToggle.classList.toggle("active", inpaintEnabled);
+  if (ui.imgInpaintOptions) ui.imgInpaintOptions.classList.toggle("hidden", !inpaintEnabled);
+  if (ui.imgMaskCanvas) ui.imgMaskCanvas.classList.toggle("hidden", !inpaintEnabled || !imgToolFiles.length || imgShowAfter);
+  if (ui.imgBrushSizeInput) ui.imgBrushSizeInput.value = String(inpaintBrushSize);
+  if (ui.imgBrushSizeLabel) ui.imgBrushSizeLabel.textContent = inpaintBrushSize + "px";
+  // Sidebar inpaint
+  if (ui.imgInpaintSidebarToggle) ui.imgInpaintSidebarToggle.classList.toggle("active", inpaintEnabled);
+  if (ui.imgInpaintSidebarOptions) ui.imgInpaintSidebarOptions.classList.toggle("hidden", !inpaintEnabled);
+  if (ui.imgInpaintModelToggle) ui.imgInpaintModelToggle.textContent = inpaintModel === "lama" ? "Model: LaMa (HQ)" : "Model: MI-GAN";
+  if (ui.imgInpaintFeatherToggle) ui.imgInpaintFeatherToggle.classList.toggle("active", inpaintFeather);
 }
 
 /** Also sync the modal settings UI from global state */
@@ -2744,6 +3091,65 @@ function wireInlineImageSettings() {
     try { localStorage.setItem("convert-rescale-lock", String(rescaleLockRatio)); } catch {}
     syncModalSettingsUI();
   });
+  // Inpaint toggle (inline)
+  ui.imgInpaintToggle?.addEventListener("click", () => {
+    inpaintEnabled = !inpaintEnabled;
+    try { localStorage.setItem("convert-inpaint", String(inpaintEnabled)); } catch {}
+    syncImageSettingsUI();
+    syncModalSettingsUI();
+    if (inpaintEnabled && imgToolFiles.length > 0) syncMaskCanvas();
+    imgUpdateProcessButton();
+  });
+  // Inpaint toggle (sidebar — synced with inline)
+  ui.imgInpaintSidebarToggle?.addEventListener("click", () => {
+    inpaintEnabled = !inpaintEnabled;
+    try { localStorage.setItem("convert-inpaint", String(inpaintEnabled)); } catch {}
+    syncImageSettingsUI();
+    syncModalSettingsUI();
+    if (inpaintEnabled && imgToolFiles.length > 0) syncMaskCanvas();
+    imgUpdateProcessButton();
+  });
+  // Inpaint model toggle
+  ui.imgInpaintModelToggle?.addEventListener("click", () => {
+    inpaintModel = inpaintModel === "migan" ? "lama" : "migan";
+    try { localStorage.setItem("convert-inpaint-model", inpaintModel); } catch {}
+    syncImageSettingsUI();
+    syncModalSettingsUI();
+  });
+  // Feather toggle
+  ui.imgInpaintFeatherToggle?.addEventListener("click", () => {
+    inpaintFeather = !inpaintFeather;
+    try { localStorage.setItem("convert-inpaint-feather", String(inpaintFeather)); } catch {}
+    syncImageSettingsUI();
+    syncModalSettingsUI();
+  });
+  // Brush size slider
+  ui.imgBrushSizeInput?.addEventListener("input", () => {
+    inpaintBrushSize = parseInt(ui.imgBrushSizeInput.value) || 25;
+    if (ui.imgBrushSizeLabel) ui.imgBrushSizeLabel.textContent = inpaintBrushSize + "px";
+    try { localStorage.setItem("convert-inpaint-brush", String(inpaintBrushSize)); } catch {}
+  });
+  // Mask undo
+  ui.imgMaskUndo?.addEventListener("click", () => {
+    const history = imgMaskHistory.get(imgActiveIndex);
+    if (!history || history.length === 0) return;
+    const prev = history.pop()!;
+    imgMaskData.set(imgActiveIndex, prev);
+    const ctx = ui.imgMaskCanvas?.getContext("2d");
+    if (ctx) {
+      ctx.clearRect(0, 0, ui.imgMaskCanvas.width, ui.imgMaskCanvas.height);
+      ctx.putImageData(prev, 0, 0);
+    }
+    imgUpdateProcessButton();
+  });
+  // Mask clear
+  ui.imgMaskClear?.addEventListener("click", () => {
+    imgMaskData.delete(imgActiveIndex);
+    imgMaskHistory.delete(imgActiveIndex);
+    const ctx = ui.imgMaskCanvas?.getContext("2d");
+    if (ctx) ctx.clearRect(0, 0, ui.imgMaskCanvas.width, ui.imgMaskCanvas.height);
+    imgUpdateProcessButton();
+  });
 }
 wireInlineImageSettings();
 
@@ -2780,10 +3186,16 @@ function imgUpdateActionButton() {
       return rescaleExts.has(ext) || bgRemovalExts.has(ext);
     });
     const rescaleReady = rescaleEnabled && (rescaleWidth > 0 || rescaleHeight > 0);
-    const hasImageProcessing = rescaleReady || removeBg;
+    // Check if any mask has painted pixels
+    const hasInpaintMask = inpaintEnabled && Array.from(imgMaskData.values()).some(d => {
+      for (let i = 3; i < d.data.length; i += 4) { if (d.data[i] > 0) return true; }
+      return false;
+    });
+    const hasImageProcessing = rescaleReady || removeBg || hasInpaintMask;
 
     if (hasImageFiles && hasImageProcessing) {
       const labels: string[] = [];
+      if (hasInpaintMask) labels.push("Inpaint");
       if (rescaleReady) labels.push("Resize");
       if (removeBg) labels.push("Remove BG");
       const base = labels.join(" & ") || "Process";
@@ -2856,6 +3268,9 @@ function imgShowImage(index: number) {
   const thumbs = ui.imgFilmstripGrid?.querySelectorAll(".img-filmstrip-thumb");
   thumbs?.forEach((t, i) => t.classList.toggle("active", i === index));
 
+  // Sync mask canvas (show/hide + restore mask data for this image)
+  if (inpaintEnabled) syncMaskCanvas();
+
   // Update action button (Process vs Download) for this image
   imgUpdateActionButton();
 }
@@ -2900,6 +3315,8 @@ function imgResetState() {
   imgOriginalUrls.clear();
   imgProcessedUrls.clear();
   imgShowAfter = false;
+  imgMaskData.clear();
+  imgMaskHistory.clear();
   // Reset canvas back to drop-prompt
   if (ui.imgCanvas) ui.imgCanvas.classList.remove("has-image");
   if (ui.imgDropPrompt) ui.imgDropPrompt.classList.remove("hidden");
@@ -2907,6 +3324,7 @@ function imgResetState() {
   if (ui.imgWorkspace) ui.imgWorkspace.classList.add("hidden");
   if (ui.imgCompareSwitch) ui.imgCompareSwitch.classList.remove("active");
   if (ui.imgFilmstripGrid) ui.imgFilmstripGrid.innerHTML = "";
+  if (ui.imgMaskCanvas) { ui.imgMaskCanvas.classList.add("hidden"); const ctx = ui.imgMaskCanvas.getContext("2d"); if (ctx) ctx.clearRect(0, 0, ui.imgMaskCanvas.width, ui.imgMaskCanvas.height); }
   imgUpdateCompareLabels();
   imgUpdateActionButton();
 }
@@ -2950,6 +3368,8 @@ ui.imgCompareSwitch?.addEventListener("click", () => {
   if (!imgProcessedUrls.has(imgActiveIndex)) return;
   imgShowAfter = !imgShowAfter;
   ui.imgCompareSwitch.classList.toggle("active", imgShowAfter);
+  // Hide mask canvas when showing "After", show when on "Before"
+  if (ui.imgMaskCanvas) ui.imgMaskCanvas.classList.toggle("hidden", !inpaintEnabled || imgShowAfter);
   imgUpdateCompareLabels();
   imgShowImage(imgActiveIndex);
 });
@@ -3001,6 +3421,150 @@ ui.imgDownloadBtn?.addEventListener("click", () => {
 
 // Initialize compare labels
 imgUpdateCompareLabels();
+
+// ── Inpainting: Mask Canvas Sync & Drawing ──────────────────────────────────
+
+/** Sync mask canvas position/size to match the displayed image (accounting for object-fit: contain) */
+function syncMaskCanvas() {
+  const canvas = ui.imgMaskCanvas;
+  const preview = ui.imgPreview;
+  if (!canvas || !preview || !imgToolFiles.length) return;
+
+  if (!inpaintEnabled || imgShowAfter) {
+    canvas.classList.add("hidden");
+    return;
+  }
+  canvas.classList.remove("hidden");
+
+  // Compute displayed image rect within the img-canvas container (padding-box)
+  const imgNatW = preview.naturalWidth || 1;
+  const imgNatH = preview.naturalHeight || 1;
+  const containerW = ui.imgCanvas.clientWidth;
+  const containerH = ui.imgCanvas.clientHeight;
+
+  // object-fit: contain letterbox calculation
+  const scale = Math.min(containerW / imgNatW, containerH / imgNatH);
+  const dispW = imgNatW * scale;
+  const dispH = imgNatH * scale;
+  const offsetX = (containerW - dispW) / 2;
+  const offsetY = (containerH - dispH) / 2;
+
+  // Position overlay canvas to match displayed image
+  canvas.style.left = offsetX + "px";
+  canvas.style.top = offsetY + "px";
+  canvas.style.width = dispW + "px";
+  canvas.style.height = dispH + "px";
+
+  // Set canvas resolution to natural image size for pixel-accurate masks
+  canvas.width = imgNatW;
+  canvas.height = imgNatH;
+
+  // Restore stored mask data for current image
+  const stored = imgMaskData.get(imgActiveIndex);
+  if (stored) {
+    const ctx = canvas.getContext("2d");
+    if (ctx) ctx.putImageData(stored, 0, 0);
+  }
+}
+
+/** Convert pointer event coordinates to mask canvas coordinates */
+function pointerToMaskCoords(e: PointerEvent): { x: number; y: number } {
+  const canvas = ui.imgMaskCanvas;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY,
+  };
+}
+
+/** Draw a brush stroke segment on the mask canvas */
+function drawMaskStroke(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  // Scale brush size relative to canvas resolution vs display size
+  const rect = ui.imgMaskCanvas.getBoundingClientRect();
+  const displayScale = ui.imgMaskCanvas.width / rect.width;
+  const radius = (inpaintBrushSize / 2) * displayScale;
+
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = "rgba(255, 60, 60, 0.5)";
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Draw line between two points on mask canvas */
+function drawMaskLine(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number) {
+  const dist = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2);
+  const steps = Math.max(1, Math.ceil(dist / 3));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    drawMaskStroke(ctx, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
+  }
+}
+
+// Mask drawing pointer events
+ui.imgMaskCanvas?.addEventListener("pointerdown", (e: PointerEvent) => {
+  if (!inpaintEnabled) return;
+  e.preventDefault();
+  (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  inpaintDrawing = true;
+
+  // Save undo snapshot
+  const ctx = ui.imgMaskCanvas.getContext("2d")!;
+  const snapshot = ctx.getImageData(0, 0, ui.imgMaskCanvas.width, ui.imgMaskCanvas.height);
+  if (!imgMaskHistory.has(imgActiveIndex)) imgMaskHistory.set(imgActiveIndex, []);
+  const history = imgMaskHistory.get(imgActiveIndex)!;
+  if (history.length > 30) history.shift(); // cap undo stack
+  history.push(snapshot);
+
+  const pos = pointerToMaskCoords(e);
+  drawMaskStroke(ctx, pos.x, pos.y);
+  inpaintLastPos = pos;
+});
+
+ui.imgMaskCanvas?.addEventListener("pointermove", (e: PointerEvent) => {
+  if (!inpaintDrawing) return;
+  e.preventDefault();
+  const ctx = ui.imgMaskCanvas.getContext("2d")!;
+  const pos = pointerToMaskCoords(e);
+  if (inpaintLastPos) {
+    drawMaskLine(ctx, inpaintLastPos.x, inpaintLastPos.y, pos.x, pos.y);
+  } else {
+    drawMaskStroke(ctx, pos.x, pos.y);
+  }
+  inpaintLastPos = pos;
+});
+
+ui.imgMaskCanvas?.addEventListener("pointerup", (e: PointerEvent) => {
+  if (!inpaintDrawing) return;
+  inpaintDrawing = false;
+  inpaintLastPos = null;
+  // Save mask data
+  const ctx = ui.imgMaskCanvas.getContext("2d");
+  if (ctx) {
+    imgMaskData.set(imgActiveIndex, ctx.getImageData(0, 0, ui.imgMaskCanvas.width, ui.imgMaskCanvas.height));
+  }
+  imgUpdateProcessButton();
+});
+
+ui.imgMaskCanvas?.addEventListener("pointercancel", () => {
+  inpaintDrawing = false;
+  inpaintLastPos = null;
+});
+
+// Prevent canvas click from bubbling to img-canvas (which would open file dialog)
+ui.imgMaskCanvas?.addEventListener("click", (e) => e.stopPropagation());
+
+// Window resize → resync mask canvas position
+window.addEventListener("resize", () => {
+  if (inpaintEnabled && imgToolFiles.length > 0) syncMaskCanvas();
+});
+
+// Also sync mask canvas when image loads (to get accurate naturalWidth/Height)
+ui.imgPreview?.addEventListener("load", () => {
+  if (inpaintEnabled && imgToolFiles.length > 0) syncMaskCanvas();
+});
 
 // ── Video Editor: Upload, Preview, Timeline, Processing ─────────────────────
 
