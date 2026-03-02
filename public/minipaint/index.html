@@ -1109,7 +1109,7 @@ a:hover {
    ══════════════════════════════════════════ */
 .ps-color-tool {
 	width: 40px;
-	margin-top: auto;
+	margin-top: 2px;
 	padding: 6px 0 8px;
 	display: flex;
 	flex-direction: column;
@@ -1232,26 +1232,538 @@ a:hover {
 	flex: 1 !important;
 	min-width: 0 !important;
 }
+
+
+/* ══════════════════════════════════════════
+   19. PS-STYLE COLOR PICKER DIALOG
+   ══════════════════════════════════════════ */
+.ps-picker-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.45);
+	z-index: 10000;
+	display: none;
+	justify-content: center;
+	align-items: center;
+}
+.ps-picker {
+	background: #2c2c2c;
+	border: 1px solid #555;
+	box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+	user-select: none;
+}
+.ps-picker-header {
+	background: #383838;
+	padding: 5px 10px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	border-bottom: 1px solid #1a1a1a;
+	cursor: default;
+}
+.ps-picker-header span {
+	color: #c8c8c8;
+	font-size: 12px;
+	font-weight: 400;
+}
+.ps-picker-close {
+	background: transparent !important;
+	border: none !important;
+	color: #999 !important;
+	font-size: 18px !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	cursor: pointer !important;
+	line-height: 1 !important;
+	min-width: auto !important;
+	min-height: auto !important;
+	width: auto !important;
+	height: auto !important;
+	box-shadow: none !important;
+	opacity: 1 !important;
+}
+.ps-picker-close:hover {
+	color: #fff !important;
+	background: transparent !important;
+}
+.ps-picker-body {
+	display: flex;
+	padding: 12px;
+	gap: 12px;
+}
+.ps-picker-left {
+	display: flex;
+	gap: 8px;
+	flex-shrink: 0;
+}
+.ps-picker-sv-wrap {
+	position: relative;
+	width: 256px;
+	height: 256px;
+	cursor: crosshair;
+}
+.ps-picker-sv {
+	display: block;
+	border: 1px solid #1a1a1a;
+}
+.ps-picker-sv-cursor {
+	position: absolute;
+	width: 12px;
+	height: 12px;
+	border: 1.5px solid #fff;
+	border-radius: 50%;
+	box-shadow: 0 0 0 1px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.3);
+	pointer-events: none;
+	transform: translate(-6px, -6px);
+}
+.ps-picker-hue-wrap {
+	position: relative;
+	width: 20px;
+	height: 256px;
+	cursor: crosshair;
+}
+.ps-picker-hue {
+	display: block;
+	border: 1px solid #1a1a1a;
+}
+.ps-picker-hue-cursor {
+	position: absolute;
+	left: -2px;
+	right: -2px;
+	height: 4px;
+	background: transparent;
+	border: 1.5px solid #fff;
+	box-shadow: 0 0 0 1px rgba(0,0,0,0.6);
+	pointer-events: none;
+	transform: translateY(-2px);
+}
+.ps-picker-right {
+	display: flex;
+	flex-direction: column;
+	width: 120px;
+	gap: 4px;
+}
+.ps-picker-preview {
+	display: flex;
+	flex-direction: column;
+	border: 1px solid #1a1a1a;
+	height: 44px;
+	overflow: hidden;
+}
+.ps-picker-new, .ps-picker-old {
+	flex: 1;
+}
+.ps-picker-ok {
+	width: 100% !important;
+	padding: 4px 0 !important;
+	background: #4a4a4a !important;
+	color: #e0e0e0 !important;
+	border: 1px solid #666 !important;
+	font-size: 12px !important;
+	height: auto !important;
+	min-height: auto !important;
+	min-width: auto !important;
+	border-radius: 2px !important;
+}
+.ps-picker-ok:hover {
+	background: #6C5CE7 !important;
+	color: #fff !important;
+	border-color: #6C5CE7 !important;
+}
+.ps-picker-cancel {
+	width: 100% !important;
+	padding: 4px 0 !important;
+	background: #3a3a3a !important;
+	color: #c8c8c8 !important;
+	border: 1px solid #555 !important;
+	font-size: 12px !important;
+	height: auto !important;
+	min-height: auto !important;
+	min-width: auto !important;
+	border-radius: 2px !important;
+}
+.ps-picker-cancel:hover {
+	background: #4a4a4a !important;
+	color: #e0e0e0 !important;
+}
+.ps-picker-fields {
+	margin-top: 2px;
+}
+.ps-picker-row {
+	display: flex;
+	align-items: center;
+	margin-bottom: 2px;
+	gap: 3px;
+}
+.ps-picker-row label {
+	width: 14px !important;
+	text-align: right !important;
+	color: #999 !important;
+	font-size: 11px !important;
+	flex-shrink: 0;
+}
+.ps-picker-row input[type="number"],
+.ps-picker-row input[type="text"] {
+	width: 58px !important;
+	height: 18px !important;
+	padding: 0 3px !important;
+	font-size: 11px !important;
+	background: #1a1a1a !important;
+	color: #c8c8c8 !important;
+	border: 1px solid #555 !important;
+	border-radius: 1px !important;
+}
+.ps-picker-row input:focus {
+	border-color: #6C5CE7 !important;
+	outline: none !important;
+}
+.ps-picker-row input[type="number"]::-webkit-inner-spin-button,
+.ps-picker-row input[type="number"]::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+.ps-picker-row input[type="number"] {
+	-moz-appearance: textfield;
+}
+.ps-unit {
+	color: #707070;
+	font-size: 10px;
+	width: 8px;
+}
+.ps-picker-sep {
+	height: 1px;
+	background: #1a1a1a;
+	margin: 4px 0;
+}
 </style>
 
 <script>
 (function() {
-	function initCustomUI() {
-		// Wait for miniPaint to initialize
-		if (typeof AppConfig === 'undefined' || !document.querySelector('.sidebar_left')) {
-			setTimeout(initCustomUI, 200);
-			return;
-		}
-		createColorTool();
-		initLayerThumbnails();
+	/* ── STATE ── */
+	var bgColor = '#ffffff';
+	var pickerCallback = null;
+	var pickerEl = null;
+	var currentH = 0, currentS = 0, currentV = 0;
+	var svCanvas, hueCanvas, svCtx, hueCtx;
+	var svCursor, hueCursor, svWrap, hueWrap;
+	var previewNew, previewOld;
+	var inputH, inputS, inputB, inputR, inputG, inputBval, inputHex;
+	var draggingSV = false, draggingHue = false;
+
+	/* ── COLOR CONVERSIONS ── */
+	function hsvToRgb(h, s, v) {
+		h = ((h % 360) + 360) % 360; s /= 100; v /= 100;
+		var c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
+		var r, g, b;
+		if (h < 60) { r=c; g=x; b=0; }
+		else if (h < 120) { r=x; g=c; b=0; }
+		else if (h < 180) { r=0; g=c; b=x; }
+		else if (h < 240) { r=0; g=x; b=c; }
+		else if (h < 300) { r=x; g=0; b=c; }
+		else { r=c; g=0; b=x; }
+		return [Math.round((r+m)*255), Math.round((g+m)*255), Math.round((b+m)*255)];
 	}
 
-	/* ── PS-STYLE COLOR TOOL ── */
+	function rgbToHsv(r, g, b) {
+		r /= 255; g /= 255; b /= 255;
+		var max = Math.max(r, g, b), min = Math.min(r, g, b);
+		var h, s, v = max, d = max - min;
+		s = max === 0 ? 0 : d / max;
+		if (d === 0) h = 0;
+		else if (max === r) h = ((g - b) / d + 6) % 6;
+		else if (max === g) h = (b - r) / d + 2;
+		else h = (r - g) / d + 4;
+		return [Math.round(h * 60), Math.round(s * 100), Math.round(v * 100)];
+	}
+
+	function rgbToHex(r, g, b) {
+		return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+	}
+
+	function hexToRgb(hex) {
+		hex = hex.replace(/^#/, '');
+		if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+		var n = parseInt(hex, 16);
+		if (isNaN(n)) return [0, 0, 0];
+		return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+	}
+
+	/* ── DRAWING ── */
+	function drawSVGradient() {
+		var w = 256, h = 256;
+		var rgb = hsvToRgb(currentH, 100, 100);
+		svCtx.fillStyle = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
+		svCtx.fillRect(0, 0, w, h);
+		var wg = svCtx.createLinearGradient(0, 0, w, 0);
+		wg.addColorStop(0, '#fff');
+		wg.addColorStop(1, 'rgba(255,255,255,0)');
+		svCtx.fillStyle = wg;
+		svCtx.fillRect(0, 0, w, h);
+		var bg = svCtx.createLinearGradient(0, 0, 0, h);
+		bg.addColorStop(0, 'rgba(0,0,0,0)');
+		bg.addColorStop(1, '#000');
+		svCtx.fillStyle = bg;
+		svCtx.fillRect(0, 0, w, h);
+	}
+
+	function drawHueStrip() {
+		var w = 20, h = 256;
+		for (var y = 0; y < h; y++) {
+			var rgb = hsvToRgb((y / h) * 360, 100, 100);
+			hueCtx.fillStyle = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
+			hueCtx.fillRect(0, y, w, 1);
+		}
+	}
+
+	function updateCursors() {
+		svCursor.style.left = ((currentS / 100) * 256) + 'px';
+		svCursor.style.top = ((1 - currentV / 100) * 256) + 'px';
+		hueCursor.style.top = ((currentH / 360) * 256) + 'px';
+	}
+
+	function updatePreviewAndInputs() {
+		var rgb = hsvToRgb(currentH, currentS, currentV);
+		var hex = rgbToHex(rgb[0], rgb[1], rgb[2]);
+		previewNew.style.backgroundColor = hex;
+		inputH.value = currentH;
+		inputS.value = currentS;
+		inputB.value = currentV;
+		inputR.value = rgb[0];
+		inputG.value = rgb[1];
+		inputBval.value = rgb[2];
+		inputHex.value = hex.slice(1);
+	}
+
+	/* ── PICKER DIALOG ── */
+	function createPickerDialog() {
+		var overlay = document.createElement('div');
+		overlay.className = 'ps-picker-overlay';
+		overlay.innerHTML =
+			'<div class="ps-picker">' +
+				'<div class="ps-picker-header">' +
+					'<span>Color Picker</span>' +
+					'<button class="ps-picker-close" type="button">&times;</button>' +
+				'</div>' +
+				'<div class="ps-picker-body">' +
+					'<div class="ps-picker-left">' +
+						'<div class="ps-picker-sv-wrap">' +
+							'<canvas class="ps-picker-sv" width="256" height="256"></canvas>' +
+							'<div class="ps-picker-sv-cursor"></div>' +
+						'</div>' +
+						'<div class="ps-picker-hue-wrap">' +
+							'<canvas class="ps-picker-hue" width="20" height="256"></canvas>' +
+							'<div class="ps-picker-hue-cursor"></div>' +
+						'</div>' +
+					'</div>' +
+					'<div class="ps-picker-right">' +
+						'<div class="ps-picker-preview">' +
+							'<div class="ps-picker-new"></div>' +
+							'<div class="ps-picker-old"></div>' +
+						'</div>' +
+						'<button class="ps-picker-ok" type="button">OK</button>' +
+						'<button class="ps-picker-cancel" type="button">Cancel</button>' +
+						'<div class="ps-picker-fields">' +
+							'<div class="ps-picker-row"><label>H:</label><input type="number" class="ps-input-h" min="0" max="360"><span class="ps-unit">&deg;</span></div>' +
+							'<div class="ps-picker-row"><label>S:</label><input type="number" class="ps-input-s" min="0" max="100"><span class="ps-unit">%</span></div>' +
+							'<div class="ps-picker-row"><label>B:</label><input type="number" class="ps-input-b" min="0" max="100"><span class="ps-unit">%</span></div>' +
+							'<div class="ps-picker-sep"></div>' +
+							'<div class="ps-picker-row"><label>R:</label><input type="number" class="ps-input-r" min="0" max="255"></div>' +
+							'<div class="ps-picker-row"><label>G:</label><input type="number" class="ps-input-g" min="0" max="255"></div>' +
+							'<div class="ps-picker-row"><label>B:</label><input type="number" class="ps-input-bval" min="0" max="255"></div>' +
+							'<div class="ps-picker-sep"></div>' +
+							'<div class="ps-picker-row"><label>#:</label><input type="text" class="ps-input-hex" maxlength="6" spellcheck="false"></div>' +
+						'</div>' +
+					'</div>' +
+				'</div>' +
+			'</div>';
+
+		document.body.appendChild(overlay);
+		pickerEl = overlay;
+
+		/* Get references */
+		svCanvas = overlay.querySelector('.ps-picker-sv');
+		hueCanvas = overlay.querySelector('.ps-picker-hue');
+		svCtx = svCanvas.getContext('2d');
+		hueCtx = hueCanvas.getContext('2d');
+		svCursor = overlay.querySelector('.ps-picker-sv-cursor');
+		hueCursor = overlay.querySelector('.ps-picker-hue-cursor');
+		svWrap = overlay.querySelector('.ps-picker-sv-wrap');
+		hueWrap = overlay.querySelector('.ps-picker-hue-wrap');
+		previewNew = overlay.querySelector('.ps-picker-new');
+		previewOld = overlay.querySelector('.ps-picker-old');
+		inputH = overlay.querySelector('.ps-input-h');
+		inputS = overlay.querySelector('.ps-input-s');
+		inputB = overlay.querySelector('.ps-input-b');
+		inputR = overlay.querySelector('.ps-input-r');
+		inputG = overlay.querySelector('.ps-input-g');
+		inputBval = overlay.querySelector('.ps-input-bval');
+		inputHex = overlay.querySelector('.ps-input-hex');
+
+		drawHueStrip();
+
+		/* SV canvas interaction */
+		function handleSV(e) {
+			var rect = svCanvas.getBoundingClientRect();
+			var x = Math.max(0, Math.min(255, e.clientX - rect.left));
+			var y = Math.max(0, Math.min(255, e.clientY - rect.top));
+			currentS = Math.round((x / 255) * 100);
+			currentV = Math.round((1 - y / 255) * 100);
+			updateCursors();
+			updatePreviewAndInputs();
+		}
+		svWrap.addEventListener('mousedown', function(e) {
+			e.preventDefault();
+			draggingSV = true;
+			handleSV(e);
+		});
+
+		/* Hue strip interaction */
+		function handleHue(e) {
+			var rect = hueCanvas.getBoundingClientRect();
+			var y = Math.max(0, Math.min(255, e.clientY - rect.top));
+			currentH = Math.round((y / 255) * 360);
+			drawSVGradient();
+			updateCursors();
+			updatePreviewAndInputs();
+		}
+		hueWrap.addEventListener('mousedown', function(e) {
+			e.preventDefault();
+			draggingHue = true;
+			handleHue(e);
+		});
+
+		/* Global mouse tracking for drag */
+		document.addEventListener('mousemove', function(e) {
+			if (draggingSV) handleSV(e);
+			if (draggingHue) handleHue(e);
+		});
+		document.addEventListener('mouseup', function() {
+			draggingSV = false;
+			draggingHue = false;
+		});
+
+		/* Input field handlers */
+		function onHSBInput() {
+			currentH = Math.max(0, Math.min(360, parseInt(inputH.value) || 0));
+			currentS = Math.max(0, Math.min(100, parseInt(inputS.value) || 0));
+			currentV = Math.max(0, Math.min(100, parseInt(inputB.value) || 0));
+			drawSVGradient();
+			updateCursors();
+			updatePreviewAndInputs();
+		}
+		inputH.addEventListener('input', onHSBInput);
+		inputS.addEventListener('input', onHSBInput);
+		inputB.addEventListener('input', onHSBInput);
+
+		function onRGBInput() {
+			var r = Math.max(0, Math.min(255, parseInt(inputR.value) || 0));
+			var g = Math.max(0, Math.min(255, parseInt(inputG.value) || 0));
+			var b = Math.max(0, Math.min(255, parseInt(inputBval.value) || 0));
+			var hsv = rgbToHsv(r, g, b);
+			currentH = hsv[0]; currentS = hsv[1]; currentV = hsv[2];
+			drawSVGradient();
+			updateCursors();
+			updatePreviewAndInputs();
+		}
+		inputR.addEventListener('input', onRGBInput);
+		inputG.addEventListener('input', onRGBInput);
+		inputBval.addEventListener('input', onRGBInput);
+
+		inputHex.addEventListener('input', function() {
+			var val = inputHex.value.replace(/[^0-9a-fA-F]/g, '');
+			if (val.length === 6 || val.length === 3) {
+				var rgb = hexToRgb(val);
+				var hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+				currentH = hsv[0]; currentS = hsv[1]; currentV = hsv[2];
+				drawSVGradient();
+				updateCursors();
+				var rgbN = hsvToRgb(currentH, currentS, currentV);
+				previewNew.style.backgroundColor = '#' + val;
+				inputH.value = currentH;
+				inputS.value = currentS;
+				inputB.value = currentV;
+				inputR.value = rgbN[0];
+				inputG.value = rgbN[1];
+				inputBval.value = rgbN[2];
+			}
+		});
+
+		/* OK / Cancel / Close */
+		overlay.querySelector('.ps-picker-ok').addEventListener('click', function() {
+			closePicker(true);
+		});
+		overlay.querySelector('.ps-picker-cancel').addEventListener('click', function() {
+			closePicker(false);
+		});
+		overlay.querySelector('.ps-picker-close').addEventListener('click', function() {
+			closePicker(false);
+		});
+		overlay.addEventListener('click', function(e) {
+			if (e.target === overlay) closePicker(false);
+		});
+
+		/* Keyboard: Escape=cancel, Enter=ok */
+		document.addEventListener('keydown', function(e) {
+			if (!pickerEl || pickerEl.style.display !== 'flex') return;
+			if (e.key === 'Escape') { e.preventDefault(); closePicker(false); }
+			if (e.key === 'Enter') { e.preventDefault(); closePicker(true); }
+		});
+
+		/* Draggable dialog header */
+		var header = overlay.querySelector('.ps-picker-header');
+		var dialog = overlay.querySelector('.ps-picker');
+		var dragOff = { x: 0, y: 0 }, isDragging = false;
+		header.addEventListener('mousedown', function(e) {
+			if (e.target.tagName === 'BUTTON') return;
+			isDragging = true;
+			var rect = dialog.getBoundingClientRect();
+			dragOff.x = e.clientX - rect.left;
+			dragOff.y = e.clientY - rect.top;
+			e.preventDefault();
+		});
+		document.addEventListener('mousemove', function(e) {
+			if (!isDragging) return;
+			dialog.style.position = 'fixed';
+			dialog.style.left = (e.clientX - dragOff.x) + 'px';
+			dialog.style.top = (e.clientY - dragOff.y) + 'px';
+			dialog.style.margin = '0';
+		});
+		document.addEventListener('mouseup', function() { isDragging = false; });
+	}
+
+	function openPicker(hexColor, callback) {
+		pickerCallback = callback;
+		var rgb = hexToRgb(hexColor);
+		var hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+		currentH = hsv[0]; currentS = hsv[1]; currentV = hsv[2];
+		previewOld.style.backgroundColor = hexColor;
+		previewNew.style.backgroundColor = hexColor;
+		drawSVGradient();
+		updateCursors();
+		updatePreviewAndInputs();
+		/* Reset dialog position to center */
+		var dialog = pickerEl.querySelector('.ps-picker');
+		dialog.style.position = '';
+		dialog.style.left = '';
+		dialog.style.top = '';
+		dialog.style.margin = '';
+		pickerEl.style.display = 'flex';
+	}
+
+	function closePicker(accepted) {
+		pickerEl.style.display = 'none';
+		if (accepted && pickerCallback) {
+			var rgb = hsvToRgb(currentH, currentS, currentV);
+			var hex = rgbToHex(rgb[0], rgb[1], rgb[2]);
+			pickerCallback(hex);
+		}
+		pickerCallback = null;
+	}
+
+	/* ── COLOR TOOL (toolbar swatches) ── */
 	function createColorTool() {
 		var sidebar = document.querySelector('.sidebar_left');
 		if (!sidebar) return;
-
-		var bgColor = '#ffffff';
 
 		var tool = document.createElement('div');
 		tool.className = 'ps-color-tool';
@@ -1282,55 +1794,28 @@ a:hover {
 		var swapBtn = tool.querySelector('.ps-swap');
 		var defaultBtn = tool.querySelector('.ps-default');
 
-		// Set initial colors
 		fgSwatch.style.backgroundColor = AppConfig.COLOR || '#000000';
 		bgSwatch.style.backgroundColor = bgColor;
 
-		// Click foreground → open color picker
+		/* Click fg → open picker for foreground */
 		fgSwatch.addEventListener('click', function(e) {
 			e.stopPropagation();
-			var sample = document.getElementById('selected_color_sample');
-			if (sample) sample.click();
+			openPicker(AppConfig.COLOR || '#000000', function(hex) {
+				AppConfig.COLOR = hex;
+				fgSwatch.style.backgroundColor = hex;
+			});
 		});
 
-		// Click background → swap into fg, open picker, then swap back on next change
+		/* Click bg → open picker for background */
 		bgSwatch.addEventListener('click', function(e) {
 			e.stopPropagation();
-			// Save current fg
-			var savedFg = AppConfig.COLOR;
-			// Put bg into fg so picker edits it
-			AppConfig.COLOR = bgColor;
-			fgSwatch.style.backgroundColor = bgColor;
-
-			var sample = document.getElementById('selected_color_sample');
-			if (sample) sample.click();
-
-			// Watch for picker changes — once user picks, that's the new bg
-			var watchInterval = setInterval(function() {
-				if (AppConfig.COLOR !== bgColor) {
-					bgColor = AppConfig.COLOR;
-					bgSwatch.style.backgroundColor = bgColor;
-					// Restore fg
-					AppConfig.COLOR = savedFg;
-					fgSwatch.style.backgroundColor = savedFg;
-					clearInterval(watchInterval);
-				}
-			}, 100);
-
-			// Also catch if picker closes without change (timeout after 30s)
-			setTimeout(function() {
-				clearInterval(watchInterval);
-				// If color is still what we set, restore fg
-				if (AppConfig.COLOR === bgColor) {
-					bgColor = AppConfig.COLOR;
-					bgSwatch.style.backgroundColor = bgColor;
-					AppConfig.COLOR = savedFg;
-					fgSwatch.style.backgroundColor = savedFg;
-				}
-			}, 30000);
+			openPicker(bgColor, function(hex) {
+				bgColor = hex;
+				bgSwatch.style.backgroundColor = hex;
+			});
 		});
 
-		// Swap button
+		/* Swap */
 		swapBtn.addEventListener('click', function(e) {
 			e.stopPropagation();
 			var tmp = AppConfig.COLOR;
@@ -1340,7 +1825,7 @@ a:hover {
 			bgSwatch.style.backgroundColor = bgColor;
 		});
 
-		// Default button
+		/* Default */
 		defaultBtn.addEventListener('click', function(e) {
 			e.stopPropagation();
 			AppConfig.COLOR = '#000000';
@@ -1349,22 +1834,19 @@ a:hover {
 			bgSwatch.style.backgroundColor = '#ffffff';
 		});
 
-		// Sync fg swatch with external color changes (e.g. from picker or tools)
+		/* Sync fg with external changes (e.g. eyedropper tool) */
 		setInterval(function() {
 			if (fgSwatch && AppConfig.COLOR) {
 				fgSwatch.style.backgroundColor = AppConfig.COLOR;
 			}
 		}, 200);
 
-		// Keyboard shortcuts (PS-style)
+		/* Keyboard shortcuts */
 		document.addEventListener('keydown', function(e) {
-			// Don't intercept when typing in inputs
 			if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-			if (e.key === 'x' || e.key === 'X') {
-				swapBtn.click();
-			} else if (e.key === 'd' || e.key === 'D') {
-				defaultBtn.click();
-			}
+			if (pickerEl && pickerEl.style.display === 'flex') return;
+			if (e.key === 'x' || e.key === 'X') swapBtn.click();
+			else if (e.key === 'd' || e.key === 'D') defaultBtn.click();
 		});
 	}
 
@@ -1376,75 +1858,57 @@ a:hover {
 		function renderThumbnails() {
 			var items = document.querySelectorAll('.layers_list .item');
 			if (!items.length) return;
-
 			items.forEach(function(item) {
 				var nameBtn = item.querySelector('.layer_name');
 				if (!nameBtn) return;
-
 				var layerId = parseInt(nameBtn.getAttribute('data-id'), 10);
 				if (isNaN(layerId)) return;
-
-				// Find matching layer
 				var layer = null;
 				if (AppConfig.layers) {
 					for (var i = 0; i < AppConfig.layers.length; i++) {
-						if (AppConfig.layers[i].id === layerId) {
-							layer = AppConfig.layers[i];
-							break;
-						}
+						if (AppConfig.layers[i].id === layerId) { layer = AppConfig.layers[i]; break; }
 					}
 				}
 				if (!layer) return;
-
-				// Get or create thumbnail canvas
 				var thumb = item.querySelector('.layer-thumb');
 				if (!thumb) {
 					thumb = document.createElement('canvas');
 					thumb.className = 'layer-thumb';
 					thumb.width = 32;
 					thumb.height = 24;
-					// Insert before the layer name button
 					item.insertBefore(thumb, nameBtn);
 				}
-
-				// Draw layer content scaled to fit
 				var ctx = thumb.getContext('2d');
 				ctx.clearRect(0, 0, 32, 24);
-
 				var src = layer.link_canvas || layer.link;
-				if (src && (src.width > 0 && src.height > 0)) {
+				if (src && src.width > 0 && src.height > 0) {
 					var scale = Math.min(32 / src.width, 24 / src.height);
-					var w = src.width * scale;
-					var h = src.height * scale;
-					var x = (32 - w) / 2;
-					var y = (24 - h) / 2;
-					try {
-						ctx.drawImage(src, x, y, w, h);
-					} catch(e) {
-						// Ignore cross-origin or empty canvas errors
-					}
+					var w = src.width * scale, h = src.height * scale;
+					var x = (32 - w) / 2, y = (24 - h) / 2;
+					try { ctx.drawImage(src, x, y, w, h); } catch(e) {}
 				}
 			});
 		}
 
-		// Observe layer list changes
-		var observer = new MutationObserver(function() {
-			setTimeout(renderThumbnails, 50);
-		});
+		var observer = new MutationObserver(function() { setTimeout(renderThumbnails, 50); });
 		observer.observe(layersBase, { childList: true, subtree: true });
-
-		// Also update on interval (catches paint operations)
 		setInterval(renderThumbnails, 1000);
-
-		// Initial render
 		setTimeout(renderThumbnails, 100);
 	}
 
-	// Start after DOM + bundle init
+	/* ── INIT ── */
+	function initCustomUI() {
+		if (typeof AppConfig === 'undefined' || !document.querySelector('.sidebar_left')) {
+			setTimeout(initCustomUI, 200);
+			return;
+		}
+		createPickerDialog();
+		createColorTool();
+		initLayerThumbnails();
+	}
+
 	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', function() {
-			setTimeout(initCustomUI, 500);
-		});
+		document.addEventListener('DOMContentLoaded', function() { setTimeout(initCustomUI, 500); });
 	} else {
 		setTimeout(initCustomUI, 500);
 	}
