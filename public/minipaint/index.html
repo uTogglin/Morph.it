@@ -64,5 +64,554 @@
 	</div>
 	<div class="hidden" id="tmp"></div>
 	<div id="popups"></div>
+
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   Convert.it — Photopea-style dark purple theme for miniPaint
+   Overrides all bundle.js injected styles
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Variable overrides ── */
+:root {
+	--background: #0F0F13 !important;
+	--text-color: #E0E0E8 !important;
+	--text-color-muted: #8A8A9A !important;
+	--text-color-active: #FFFFFF !important;
+	--text-color-red: #e38282 !important;
+	--text-color-green: #8bdb8b !important;
+	--text-color-blue: #a4a4ff !important;
+	--link-color: #6C5CE7 !important;
+
+	--section-background-color: #16161E !important;
+	--area-background-color: #1A1A24 !important;
+	--block-background-color: #1A1A24 !important;
+	--header-background-color: #16161E !important;
+
+	--button-background-color: #1E1E2A !important;
+	--button-background-color-hover: #6C5CE7 !important;
+	--button-background-color-active: #2A2A38 !important;
+	--button-shadow-color: rgba(0,0,0,0.3) !important;
+	--button-text-color-active: #B8B0F0 !important;
+	--button-toggle-background-color: #252533 !important;
+	--button-toggle-background-color-hover: #2A2A38 !important;
+
+	--input-background-color: #1E1E2A !important;
+	--input-background-color-hover: #252533 !important;
+	--input-text-color: #E0E0E8 !important;
+	--input-border-color: #2A2A38 !important;
+	--input-border-color-active: #6C5CE7 !important;
+	--input-group-border-color: #16161E !important;
+
+	--menu-background-color: #111117 !important;
+	--menu-icons-filter: invert(1) !important;
+	--menu-text-color: #B0B0C0 !important;
+
+	--background-color-active: #6C5CE7 !important;
+	--background-color-hover: #252533 !important;
+	--border-color: #2A2A38 !important;
+
+	--scrollbar-track-color: #0F0F13 !important;
+	--scrollbar-thumb-color: #2A2A38 !important;
+
+	/* Menu dropdowns — these were still white/green */
+	--menu-dropdown-background-color: #1A1A24 !important;
+	--menu-dropdown-border-color: #2A2A38 !important;
+	--menu-dropdown-text-color: #D0D0DC !important;
+	--menu-dropdown-text-muted-color: #8A8A9A !important;
+	--menu-dropdown-hover-background-color: #6C5CE7 !important;
+	--menu-dropdown-hover-text-color: #FFFFFF !important;
+	--menu-dropdown-divider-color: #2A2A38 !important;
+}
+
+/* ── Base ── */
+body {
+	background: #0F0F13 !important;
+	color: #E0E0E8 !important;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+	margin: 0 !important;
+}
+
+/* ── Main wrapper layout — tighter gaps like Photopea ── */
+.wrapper {
+	top: 28px !important;
+	bottom: 0 !important;
+	gap: 0 !important;
+	grid-template-rows: auto 1fr !important;
+}
+
+/* ── Top menu bar ── */
+.main_menu {
+	background: #111117 !important;
+}
+.main_menu > ul.menu_bar {
+	height: 28px !important;
+	background: #111117 !important;
+	padding-left: 6px !important;
+	gap: 0 !important;
+}
+.main_menu > ul.menu_bar > li > a {
+	font-size: 12px !important;
+	color: #B0B0C0 !important;
+	padding: 0 9px !important;
+	height: 100% !important;
+	transition: background 0.1s !important;
+}
+.main_menu > ul.menu_bar > li > a:hover {
+	background: #6C5CE7 !important;
+	color: #FFFFFF !important;
+}
+.main_menu > ul.menu_bar > li > a:focus {
+	box-shadow: 0 -2px #6C5CE7 inset !important;
+}
+/* Active/open state */
+.main_menu > ul.menu_bar > li > a[aria-expanded="true"] {
+	background: #1A1A24 !important;
+	color: #FFFFFF !important;
+}
+
+/* ── Menu dropdowns ── */
+.main_menu > ul.menu_dropdown {
+	background: #1A1A24 !important;
+	border: 1px solid #333345 !important;
+	border-radius: 4px !important;
+	box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
+	padding: 4px 0 !important;
+}
+.main_menu > ul.menu_dropdown > li > a {
+	color: #D0D0DC !important;
+	font-size: 12px !important;
+	height: 28px !important;
+	line-height: 28px !important;
+	padding: 0 24px 0 10px !important;
+	border-radius: 0 !important;
+}
+.main_menu > ul.menu_dropdown > li > a:hover,
+.main_menu > ul.menu_dropdown > li > a:focus {
+	background: #6C5CE7 !important;
+	color: #FFFFFF !important;
+	box-shadow: none !important;
+}
+.main_menu > ul.menu_dropdown > li > a .shortcut {
+	color: #666678 !important;
+}
+.main_menu > ul.menu_dropdown > li > a:hover .shortcut {
+	color: rgba(255,255,255,0.7) !important;
+}
+.main_menu > ul.menu_dropdown > li hr {
+	border-color: #2A2A38 !important;
+	margin: 4px 0 !important;
+}
+.main_menu > ul.menu_dropdown > li > a[aria-haspopup="true"]::after {
+	color: #666678 !important;
+}
+
+/* ── Submenu / tool options bar ── */
+.submenu {
+	background-color: #16161E !important;
+	margin-bottom: 1px !important;
+	padding: 0 !important;
+	min-height: 32px !important;
+	border-bottom: 1px solid #2A2A38 !important;
+}
+.submenu .block.attributes {
+	background: transparent !important;
+	border: none !important;
+	margin: 0 !important;
+	padding: 2px 8px !important;
+}
+.submenu .block.attributes label {
+	color: #B0B0C0 !important;
+	font-size: 11px !important;
+}
+.submenu .block.attributes select,
+.submenu .block.attributes input {
+	background: #1E1E2A !important;
+	color: #E0E0E8 !important;
+	border: 1px solid #2A2A38 !important;
+	border-radius: 3px !important;
+	font-size: 11px !important;
+}
+.submenu .block.attributes select:focus,
+.submenu .block.attributes input:focus {
+	border-color: #6C5CE7 !important;
+	outline: none !important;
+}
+
+/* ── Logo (miniPaint branding) — subtle ── */
+.logo {
+	font-size: 12px !important;
+	color: #666678 !important;
+	padding: 5px 5px 5px 30px !important;
+	margin: 0 4px !important;
+	height: auto !important;
+	width: auto !important;
+	opacity: 0.7 !important;
+}
+.logo:hover {
+	color: #8A8A9A !important;
+}
+
+/* ── Undo button ── */
+.undo_button {
+	width: 32px !important;
+	height: 32px !important;
+	margin-left: auto !important;
+	background-size: auto 18px !important;
+	opacity: 0.6 !important;
+}
+.undo_button:hover {
+	opacity: 1 !important;
+	background-color: transparent !important;
+}
+
+/* ── Left sidebar / tools panel ── */
+.sidebar_left {
+	width: 36px !important;
+	background-color: #16161E !important;
+	padding: 4px 2px 4px 2px !important;
+	margin-right: 1px !important;
+	border-right: 1px solid #2A2A38 !important;
+	gap: 0 !important;
+}
+.sidebar_left button {
+	width: 30px !important;
+	height: 30px !important;
+	margin: 1px !important;
+	padding: 0 !important;
+	border-radius: 3px !important;
+	background-size: 20px !important;
+	border: none !important;
+	box-shadow: none !important;
+}
+.sidebar_left button:hover {
+	background-color: #252533 !important;
+}
+.sidebar_left button.active {
+	background-color: #6C5CE7 !important;
+	border-radius: 3px !important;
+}
+
+/* ── Right sidebar / panels ── */
+.sidebar_right {
+	width: 240px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	background: #0F0F13 !important;
+	border-left: 1px solid #2A2A38 !important;
+	gap: 0 !important;
+}
+.sidebar_right::-webkit-scrollbar {
+	width: 6px !important;
+}
+.sidebar_right::-webkit-scrollbar-track {
+	background: transparent !important;
+}
+.sidebar_right::-webkit-scrollbar-thumb {
+	background: #2A2A38 !important;
+	border-radius: 3px !important;
+}
+.sidebar_right::-webkit-scrollbar-thumb:hover {
+	background: #6C5CE7 !important;
+}
+
+/* ── Panel blocks in right sidebar ── */
+.sidebar_right .block {
+	background-color: #16161E !important;
+	border: none !important;
+	border-bottom: 1px solid #2A2A38 !important;
+	border-radius: 0 !important;
+	margin-bottom: 0 !important;
+}
+.sidebar_right .block:last-child {
+	border-bottom: none !important;
+}
+.sidebar_right .block h2 {
+	background-color: #111117 !important;
+	color: #B0B0C0 !important;
+	font-size: 11px !important;
+	font-weight: 600 !important;
+	text-transform: uppercase !important;
+	letter-spacing: 0.5px !important;
+	padding: 6px 8px !important;
+	margin: 0 !important;
+	border-radius: 0 !important;
+	border-bottom: 1px solid #2A2A38 !important;
+	cursor: pointer !important;
+}
+.sidebar_right .block h2:hover {
+	color: #E0E0E8 !important;
+}
+.sidebar_right .block h2.toggled {
+	border-bottom: none !important;
+}
+.sidebar_right .block .content {
+	padding: 6px 8px !important;
+}
+
+/* ── Layers panel ── */
+.sidebar_right .layers {
+	flex: 1 !important;
+}
+.sidebar_right .layers .content {
+	padding: 4px !important;
+}
+.layer_name {
+	background-color: #1E1E2A !important;
+	border: 1px solid #2A2A38 !important;
+	color: #E0E0E8 !important;
+	border-radius: 3px !important;
+	font-size: 11px !important;
+	padding: 2px 6px !important;
+}
+.layer_name:hover {
+	border-color: #6C5CE7 !important;
+}
+.layers .active .layer_name {
+	background-color: #6C5CE7 !important;
+	border-color: #6C5CE7 !important;
+	color: #FFFFFF !important;
+}
+
+/* Layer visibility & delete buttons */
+.visibility {
+	opacity: 0.5 !important;
+}
+.visibility:hover {
+	opacity: 1 !important;
+}
+
+/* ── Canvas area ── */
+.middle_area {
+	background: #0F0F13 !important;
+}
+.main_wrapper {
+	background: #0F0F13 !important;
+}
+.ruler_left, .ruler_top {
+	background-color: #16161E !important;
+}
+
+/* ── General form elements ── */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="url"],
+textarea {
+	background: #1E1E2A !important;
+	color: #E0E0E8 !important;
+	border: 1px solid #2A2A38 !important;
+	border-radius: 3px !important;
+	font-size: 12px !important;
+}
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
+textarea:focus {
+	border-color: #6C5CE7 !important;
+	outline: none !important;
+}
+
+select {
+	background: #1E1E2A !important;
+	color: #E0E0E8 !important;
+	border: 1px solid #2A2A38 !important;
+	border-radius: 3px !important;
+	font-size: 12px !important;
+}
+select:focus {
+	border-color: #6C5CE7 !important;
+	outline: none !important;
+}
+
+label {
+	color: #B0B0C0 !important;
+	font-size: 12px !important;
+}
+
+/* ── Buttons ── */
+button {
+	background-color: #1E1E2A !important;
+	color: #E0E0E8 !important;
+	border: 1px solid #2A2A38 !important;
+	border-radius: 3px !important;
+	font-size: 12px !important;
+	cursor: pointer !important;
+	transition: background 0.1s, border-color 0.1s !important;
+}
+button:hover {
+	background-color: #252533 !important;
+	border-color: #6C5CE7 !important;
+}
+.button {
+	background-color: #1E1E2A !important;
+	color: #E0E0E8 !important;
+	border: 1px solid #2A2A38 !important;
+	border-radius: 4px !important;
+	padding: 6px 16px !important;
+	font-size: 12px !important;
+}
+.button:hover {
+	background-color: #6C5CE7 !important;
+	border-color: #6C5CE7 !important;
+	color: #FFFFFF !important;
+}
+
+/* ── Checkboxes / toggles ── */
+input[type="checkbox"] {
+	accent-color: #6C5CE7 !important;
+}
+input[type="range"] {
+	accent-color: #6C5CE7 !important;
+}
+
+/* ── Popups / dialogs (miniPaint native) ── */
+.popup {
+	background-color: #1A1A24 !important;
+	border: 1px solid #333345 !important;
+	border-radius: 8px !important;
+	box-shadow: 0 0 0 4000px rgba(0,0,0,0.5), 0 12px 40px rgba(0,0,0,0.6) !important;
+	color: #E0E0E8 !important;
+}
+.popup h2 {
+	background-color: #16161E !important;
+	color: #E0E0E8 !important;
+	border-radius: 8px 8px 0 0 !important;
+	font-size: 1.4rem !important;
+	border-bottom: 1px solid #2A2A38 !important;
+}
+.popup .buttons {
+	background-color: #16161E !important;
+	border-top: 1px solid #2A2A38 !important;
+	border-radius: 0 0 8px 8px !important;
+}
+.popup .close {
+	color: #8A8A9A !important;
+	border: none !important;
+	background: transparent !important;
+	font-size: 24px !important;
+}
+.popup .close:hover {
+	color: #FFFFFF !important;
+	background: transparent !important;
+}
+
+/* ── Alertify dialogs ── */
+.ajs-dialog {
+	background-color: #1A1A24 !important;
+	border: 1px solid #333345 !important;
+	border-radius: 8px !important;
+	box-shadow: 0 12px 40px rgba(0,0,0,0.6) !important;
+	color: #E0E0E8 !important;
+}
+.ajs-header {
+	background-color: #16161E !important;
+	color: #E0E0E8 !important;
+	border-bottom: 1px solid #2A2A38 !important;
+	border-radius: 8px 8px 0 0 !important;
+}
+.ajs-body {
+	color: #E0E0E8 !important;
+}
+.ajs-body .ajs-content {
+	color: #E0E0E8 !important;
+}
+.ajs-body input[type="text"],
+.ajs-body textarea {
+	background: #1E1E2A !important;
+	color: #E0E0E8 !important;
+	border: 1px solid #2A2A38 !important;
+	border-radius: 4px !important;
+	width: 100% !important;
+}
+.ajs-footer {
+	background-color: #16161E !important;
+	border-top: 1px solid #2A2A38 !important;
+	border-radius: 0 0 8px 8px !important;
+}
+.ajs-footer .ajs-button {
+	background: #1E1E2A !important;
+	color: #E0E0E8 !important;
+	border: 1px solid #2A2A38 !important;
+	border-radius: 4px !important;
+	padding: 6px 16px !important;
+	font-size: 12px !important;
+}
+.ajs-footer .ajs-button:hover {
+	background: #6C5CE7 !important;
+	border-color: #6C5CE7 !important;
+	color: #FFFFFF !important;
+}
+.ajs-dimmer {
+	background-color: #000000 !important;
+	opacity: 0.6 !important;
+}
+
+/* ── Scrollbars (global) ── */
+::-webkit-scrollbar {
+	width: 6px !important;
+	height: 6px !important;
+}
+::-webkit-scrollbar-track {
+	background: transparent !important;
+}
+::-webkit-scrollbar-track-piece {
+	background: transparent !important;
+}
+::-webkit-scrollbar-thumb {
+	background: #2A2A38 !important;
+	border-radius: 3px !important;
+}
+::-webkit-scrollbar-thumb:hover {
+	background: #6C5CE7 !important;
+}
+* {
+	scrollbar-width: thin !important;
+	scrollbar-color: #2A2A38 transparent !important;
+}
+
+/* ── Color picker area ── */
+.sidebar_right .colors .content canvas {
+	border-radius: 3px !important;
+}
+
+/* ── Active layer highlight — purple ── */
+.active {
+	background-color: #6C5CE7 !important;
+	color: #FFFFFF !important;
+}
+
+/* ── Horizontal rules ── */
+hr {
+	border-color: #2A2A38 !important;
+}
+
+/* ── Preview canvas area ── */
+.canvas_preview_details {
+	background: #16161E !important;
+}
+.canvas_preview_details .details button {
+	font-size: 11px !important;
+	padding: 2px 6px !important;
+}
+
+/* ── Selection text (prevent white-on-white) ── */
+::selection {
+	background: #6C5CE7 !important;
+	color: #FFFFFF !important;
+}
+
+/* ── Row layout spacing ── */
+.row {
+	margin-bottom: 3px !important;
+}
+.row label {
+	font-size: 11px !important;
+}
+
+/* ── Info text ── */
+.text_muted {
+	color: #8A8A9A !important;
+}
+</style>
 </body>
 </html>
