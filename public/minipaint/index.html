@@ -2771,7 +2771,13 @@ a:hover {
 
 			/* Save current state */
 			savedColor = AppConfig.COLOR || '#000000';
-			savedAlpha = typeof AppConfig.ALPHA !== 'undefined' ? AppConfig.ALPHA : 1;
+			savedAlpha = typeof AppConfig.ALPHA !== 'undefined' ? AppConfig.ALPHA : 255;
+
+			/* Record existing layer IDs before insert */
+			var existingIds = {};
+			for (var i = 0; i < AppConfig.layers.length; i++) {
+				existingIds[AppConfig.layers[i].id] = true;
+			}
 
 			/* Create a transparent canvas to use as initial layer data */
 			var dims = Layers.get_dimensions();
@@ -2779,7 +2785,7 @@ a:hover {
 			initCanvas.width = dims.width;
 			initCanvas.height = dims.height;
 
-			/* Create mask layer with canvas data so brush can paint on it */
+			/* Layers.insert() is async — poll for the new layer */
 			Layers.insert({
 				name: 'Inpaint Mask',
 				type: 'image',
@@ -2790,31 +2796,35 @@ a:hover {
 				height_original: dims.height
 			});
 
-			/* Find the mask layer we just created (search from end since newest) */
-			maskLayerId = null;
-			var allLayers = AppConfig.layers;
-			for (var i = allLayers.length - 1; i >= 0; i--) {
-				if (allLayers[i].name === 'Inpaint Mask') {
-					maskLayerId = allLayers[i].id;
-					break;
-				}
-			}
-
-			/* Select it and set drawing color */
-			if (maskLayerId !== null) Layers.select(maskLayerId);
-			AppConfig.COLOR = '#ff0000';
-			AppConfig.ALPHA = 200; /* 0-255 scale, ~78% opacity */
-
-			/* Activate brush tool by clicking its button */
-			var brushEl = findBrushBtn();
-			if (brushEl) brushEl.click();
-
-			/* Sync brush size after tool activates */
-			setTimeout(syncBrushSize, 100);
-
-			/* Show action bar, highlight button */
+			/* Show action bar, highlight button immediately */
 			bar.style.display = 'flex';
 			btn.classList.add('active');
+
+			/* Poll until the new layer appears (async insert) */
+			var attempts = 0;
+			var findLayer = setInterval(function() {
+				attempts++;
+				maskLayerId = null;
+				for (var i = 0; i < AppConfig.layers.length; i++) {
+					if (!existingIds[AppConfig.layers[i].id]) {
+						maskLayerId = AppConfig.layers[i].id;
+						break;
+					}
+				}
+				if (maskLayerId !== null || attempts > 50) {
+					clearInterval(findLayer);
+					if (maskLayerId !== null) {
+						Layers.select(maskLayerId);
+					}
+					AppConfig.COLOR = '#ff0000';
+					AppConfig.ALPHA = 200; /* 0-255 scale */
+
+					/* Activate brush tool */
+					var brushEl = findBrushBtn();
+					if (brushEl) brushEl.click();
+					setTimeout(syncBrushSize, 150);
+				}
+			}, 50);
 		}
 
 		/* ── Deactivate / cleanup ── */
@@ -2879,7 +2889,7 @@ a:hover {
 				maskCanvas.width = dims.width;
 				maskCanvas.height = dims.height;
 				var maskCtx = maskCanvas.getContext('2d');
-				Layers.convert_layers_to_canvas(maskCtx, false);
+				Layers.convert_layers_to_canvas(maskCtx);
 
 				/* 2. Render all layers EXCEPT the mask */
 				for (var i = 0; i < allLayers.length; i++) {
@@ -2889,7 +2899,7 @@ a:hover {
 				compCanvas.width = dims.width;
 				compCanvas.height = dims.height;
 				var compCtx = compCanvas.getContext('2d');
-				Layers.convert_layers_to_canvas(compCtx, false);
+				Layers.convert_layers_to_canvas(compCtx);
 
 				/* 3. Restore original visibility */
 				for (var i = 0; i < allLayers.length; i++) {
