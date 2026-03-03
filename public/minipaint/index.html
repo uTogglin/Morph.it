@@ -1466,6 +1466,31 @@ a:hover {
 	background: #1a1a1a;
 	margin: 4px 0;
 }
+
+
+/* ══════════════════════════════════════════
+   20. FONT SEARCH INPUT (Fontsource)
+   ══════════════════════════════════════════ */
+.ps-font-search {
+	width: 80px !important;
+	height: 18px !important;
+	font-size: 10px !important;
+	padding: 0 4px !important;
+	background: #1a1a1a !important;
+	color: #c8c8c8 !important;
+	border: 1px solid #333 !important;
+	border-radius: 2px !important;
+	margin-right: 2px !important;
+	vertical-align: middle !important;
+}
+.ps-font-search::placeholder {
+	color: #666 !important;
+	font-size: 9px !important;
+}
+.ps-font-search:focus {
+	border-color: #6C5CE7 !important;
+	outline: none !important;
+}
 </style>
 
 <script>
@@ -2142,6 +2167,186 @@ a:hover {
 		}, 300);
 	}
 
+	/* ── FONTSOURCE FONT INTEGRATION ── */
+	function initFontOverride() {
+		var SYSTEM_FONTS = [
+			{ id: '_arial', family: 'Arial' },
+			{ id: '_calibri', family: 'Calibri' },
+			{ id: '_cambria', family: 'Cambria' },
+			{ id: '_comic-sans', family: 'Comic Sans MS' },
+			{ id: '_consolas', family: 'Consolas' },
+			{ id: '_courier', family: 'Courier New' },
+			{ id: '_garamond', family: 'Garamond' },
+			{ id: '_georgia', family: 'Georgia' },
+			{ id: '_helvetica', family: 'Helvetica' },
+			{ id: '_impact', family: 'Impact' },
+			{ id: '_palatino', family: 'Palatino Linotype' },
+			{ id: '_segoe', family: 'Segoe UI' },
+			{ id: '_tahoma', family: 'Tahoma' },
+			{ id: '_times', family: 'Times New Roman' },
+			{ id: '_trebuchet', family: 'Trebuchet MS' },
+			{ id: '_verdana', family: 'Verdana' }
+		];
+
+		var fontsCache = null;
+		var fetchProm = null;
+		var loadedFonts = {};
+
+		function fetchFonts() {
+			if (fontsCache) return Promise.resolve(fontsCache);
+			if (fetchProm) return fetchProm;
+			fetchProm = fetch('https://api.fontsource.org/v1/fonts?subsets=latin')
+				.then(function(r) { return r.json(); })
+				.then(function(data) {
+					fontsCache = [];
+					for (var i = 0; i < data.length; i++) {
+						fontsCache.push({ id: data[i].id, family: data[i].family });
+					}
+					return fontsCache;
+				})
+				.catch(function() { return []; });
+			return fetchProm;
+		}
+
+		function loadFont(fontId, family) {
+			if (loadedFonts[fontId] || fontId.charAt(0) === '_') return Promise.resolve();
+			loadedFonts[fontId] = true;
+			var promises = [];
+			var weights = [400, 700];
+			var styles = ['normal', 'italic'];
+			for (var w = 0; w < weights.length; w++) {
+				for (var s = 0; s < styles.length; s++) {
+					try {
+						var url = 'https://cdn.jsdelivr.net/fontsource/fonts/' + fontId +
+							'@latest/latin-' + weights[w] + '-' + styles[s] + '.woff2';
+						var face = new FontFace(family, 'url(' + url + ')', {
+							weight: String(weights[w]),
+							style: styles[s]
+						});
+						promises.push(
+							face.load()
+								.then(function(f) { document.fonts.add(f); })
+								.catch(function() {})
+						);
+					} catch (e) {}
+				}
+			}
+			return Promise.all(promises).then(function() {
+				if (typeof AppConfig !== 'undefined') AppConfig.need_render = true;
+			});
+		}
+
+		function populateSelect(sel, fonts, filter) {
+			var frag = document.createDocumentFragment();
+			var count = 0;
+			var lc = (filter || '').toLowerCase();
+
+			/* System fonts */
+			for (var i = 0; i < SYSTEM_FONTS.length; i++) {
+				if (lc && SYSTEM_FONTS[i].family.toLowerCase().indexOf(lc) < 0) continue;
+				var o = document.createElement('option');
+				o.value = SYSTEM_FONTS[i].family;
+				o.textContent = SYSTEM_FONTS[i].family;
+				o.dataset.fid = SYSTEM_FONTS[i].id;
+				frag.appendChild(o);
+				count++;
+			}
+
+			/* Web fonts (cap at 120 visible) */
+			for (var j = 0; j < fonts.length; j++) {
+				if (count >= 120) break;
+				if (lc && fonts[j].family.toLowerCase().indexOf(lc) < 0) continue;
+				var o2 = document.createElement('option');
+				o2.value = fonts[j].family;
+				o2.textContent = fonts[j].family;
+				o2.dataset.fid = fonts[j].id;
+				frag.appendChild(o2);
+				count++;
+			}
+
+			sel.innerHTML = '';
+			sel.appendChild(frag);
+		}
+
+		var knownDefaults = ['arial', 'courier', 'times', 'verdana', 'georgia', 'tahoma', 'impact'];
+
+		function isFontSelect(sel) {
+			if (sel.dataset.fontOverride) return false;
+			for (var i = 0; i < Math.min(sel.options.length, 10); i++) {
+				var v = sel.options[i].value.toLowerCase();
+				for (var k = 0; k < knownDefaults.length; k++) {
+					if (v.indexOf(knownDefaults[k]) >= 0) return true;
+				}
+			}
+			return false;
+		}
+
+		function replaceFontSelect(sel) {
+			if (sel.dataset.fontOverride) return;
+			sel.dataset.fontOverride = '1';
+
+			/* Add search input before the select */
+			var search = document.createElement('input');
+			search.type = 'text';
+			search.placeholder = 'Search fonts\u2026';
+			search.className = 'ps-font-search';
+			sel.parentNode.insertBefore(search, sel);
+
+			fetchFonts().then(function(fonts) {
+				populateSelect(sel, fonts, '');
+				if (!sel.value) sel.value = 'Arial';
+
+				search.addEventListener('input', function() {
+					var prev = sel.value;
+					populateSelect(sel, fonts, search.value);
+					/* Restore previous selection if still visible */
+					for (var i = 0; i < sel.options.length; i++) {
+						if (sel.options[i].value === prev) {
+							sel.value = prev;
+							break;
+						}
+					}
+				});
+			});
+
+			sel.addEventListener('change', function() {
+				var opt = sel.options[sel.selectedIndex];
+				if (opt && opt.dataset.fid && opt.dataset.fid.charAt(0) !== '_') {
+					loadFont(opt.dataset.fid, opt.value);
+				}
+			});
+		}
+
+		function scanForFontSelects() {
+			var selects = document.querySelectorAll('select');
+			for (var i = 0; i < selects.length; i++) {
+				if (isFontSelect(selects[i])) replaceFontSelect(selects[i]);
+			}
+		}
+
+		/* Observe panels where font selects appear */
+		var watchIds = ['action_attributes', 'popups'];
+		for (var t = 0; t < watchIds.length; t++) {
+			var el = document.getElementById(watchIds[t]);
+			if (el) {
+				new MutationObserver(function() {
+					setTimeout(scanForFontSelects, 50);
+				}).observe(el, { childList: true, subtree: true });
+			}
+		}
+
+		/* Broad body observer for any dynamic font selects */
+		new MutationObserver(function() {
+			setTimeout(scanForFontSelects, 200);
+		}).observe(document.body, { childList: true, subtree: true });
+
+		setInterval(scanForFontSelects, 3000);
+		scanForFontSelects();
+
+		/* Pre-fetch the font list so it's ready when user picks text tool */
+		fetchFonts();
+	}
+
 	/* ── INIT ── */
 	function initCustomUI() {
 		if (typeof AppConfig === 'undefined' || !document.querySelector('.sidebar_left')) {
@@ -2155,6 +2360,7 @@ a:hover {
 		fixDeleteIcons();
 		interceptColorPickers();
 		cleanActiveToolBgs();
+		initFontOverride();
 	}
 
 	if (document.readyState === 'loading') {
