@@ -3590,51 +3590,71 @@ a:hover {
 			return segs;
 		}
 
-		/* ── Marching ants animation ── */
+		/* ── Marching ants animation (double-buffered) ── */
+		var offCanvas = null, offCtx = null;
+
 		function drawAnts() {
-			ensureOverlay();
-			if (!overlayCtx || !cachedSegments || cachedSegments.length === 0) return;
+			if (!overlayCanvas || !overlayCtx || !cachedSegments || cachedSegments.length === 0) {
+				animFrame = requestAnimationFrame(drawAnts);
+				return;
+			}
 
 			var zoom = (typeof AppConfig !== 'undefined' && AppConfig.ZOOM) ? AppConfig.ZOOM : 1;
 
-			/* Check canvas size sync */
+			/* Sync overlay size with main canvas (only when changed) */
 			var mainCanvas = document.getElementById('canvas_minipaint');
 			if (mainCanvas) {
-				if (overlayCanvas.width !== mainCanvas.width || overlayCanvas.height !== mainCanvas.height) {
-					overlayCanvas.width = mainCanvas.width;
-					overlayCanvas.height = mainCanvas.height;
-					overlayCanvas.style.width = mainCanvas.style.width || (mainCanvas.width + 'px');
-					overlayCanvas.style.height = mainCanvas.style.height || (mainCanvas.height + 'px');
+				var cw = mainCanvas.width, ch = mainCanvas.height;
+				var csW = mainCanvas.style.width || (cw + 'px');
+				var csH = mainCanvas.style.height || (ch + 'px');
+				if (overlayCanvas.width !== cw || overlayCanvas.height !== ch) {
+					overlayCanvas.width = cw;
+					overlayCanvas.height = ch;
 				}
+				if (overlayCanvas.style.width !== csW) overlayCanvas.style.width = csW;
+				if (overlayCanvas.style.height !== csH) overlayCanvas.style.height = csH;
 			}
 
-			overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+			var ow = overlayCanvas.width, oh = overlayCanvas.height;
 
+			/* Lazy-create offscreen buffer */
+			if (!offCanvas || offCanvas.width !== ow || offCanvas.height !== oh) {
+				offCanvas = document.createElement('canvas');
+				offCanvas.width = ow;
+				offCanvas.height = oh;
+				offCtx = offCanvas.getContext('2d');
+			}
+
+			/* Draw to offscreen buffer */
+			offCtx.clearRect(0, 0, ow, oh);
 			var segs = cachedSegments;
 
 			/* Pass 1: black dashes */
-			overlayCtx.strokeStyle = 'rgba(0,0,0,0.8)';
-			overlayCtx.lineWidth = 1;
-			overlayCtx.setLineDash([4, 4]);
-			overlayCtx.lineDashOffset = dashOffset;
-			overlayCtx.beginPath();
+			offCtx.strokeStyle = 'rgba(0,0,0,0.8)';
+			offCtx.lineWidth = 1;
+			offCtx.setLineDash([4, 4]);
+			offCtx.lineDashOffset = dashOffset;
+			offCtx.beginPath();
 			for (var i = 0; i < segs.length; i += 4) {
-				overlayCtx.moveTo(segs[i] * zoom, segs[i + 1] * zoom);
-				overlayCtx.lineTo(segs[i + 2] * zoom, segs[i + 3] * zoom);
+				offCtx.moveTo(segs[i] * zoom, segs[i + 1] * zoom);
+				offCtx.lineTo(segs[i + 2] * zoom, segs[i + 3] * zoom);
 			}
-			overlayCtx.stroke();
+			offCtx.stroke();
 
 			/* Pass 2: white dashes (offset) */
-			overlayCtx.strokeStyle = 'rgba(255,255,255,0.9)';
-			overlayCtx.lineDashOffset = dashOffset + 4;
-			overlayCtx.beginPath();
+			offCtx.strokeStyle = 'rgba(255,255,255,0.9)';
+			offCtx.lineDashOffset = dashOffset + 4;
+			offCtx.beginPath();
 			for (var i = 0; i < segs.length; i += 4) {
-				overlayCtx.moveTo(segs[i] * zoom, segs[i + 1] * zoom);
-				overlayCtx.lineTo(segs[i + 2] * zoom, segs[i + 3] * zoom);
+				offCtx.moveTo(segs[i] * zoom, segs[i + 1] * zoom);
+				offCtx.lineTo(segs[i + 2] * zoom, segs[i + 3] * zoom);
 			}
-			overlayCtx.stroke();
+			offCtx.stroke();
+			offCtx.setLineDash([]);
 
-			overlayCtx.setLineDash([]);
+			/* Blit to visible overlay in one shot */
+			overlayCtx.clearRect(0, 0, ow, oh);
+			overlayCtx.drawImage(offCanvas, 0, 0);
 
 			dashOffset -= 0.4;
 			if (dashOffset < -12) dashOffset = 0;
