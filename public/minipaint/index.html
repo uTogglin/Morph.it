@@ -2840,10 +2840,10 @@ a:hover {
 		/* Delete all layers created during inpaint mode */
 		function deleteNewLayers() {
 			var layers = AppConfig.layers;
-			/* Select a pre-existing layer first */
+			/* Set active layer to a pre-existing one (synchronous, avoids async Layers.select) */
 			for (var j = 0; j < layers.length; j++) {
 				if (preExistingIds[layers[j].id]) {
-					Layers.select(layers[j].id);
+					AppConfig.layer = layers[j];
 					break;
 				}
 			}
@@ -2925,7 +2925,7 @@ a:hover {
 									 maskData.data[p + 2] > 10 || maskData.data[p + 3] > 10;
 					if (hasContent) hasPaint = true;
 					maskData.data[p] = maskData.data[p + 1] = maskData.data[p + 2] = hasContent ? 255 : 0;
-					maskData.data[p + 3] = 255;
+					maskData.data[p + 3] = hasContent ? 255 : 0;
 				}
 
 				if (!hasPaint) {
