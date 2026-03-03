@@ -55,6 +55,7 @@ import n64romHandler from "./n64rom.ts";
 import vexflowHandler from "./vexflow.ts";
 import toonHandler from "./toon.ts";
 import rpgmvpHandler from "./rpgmvp.ts";
+import terrariaWldHandler from "./terrariawld.ts";
 
 const handlers: FormatHandler[] = [];
 try { handlers.push(new svgTraceHandler()) } catch (_) { };
@@ -115,5 +116,6 @@ try { handlers.push(new n64romHandler()) } catch (_) { };
 try { handlers.push(new vexflowHandler()) } catch (_) { };
 try { handlers.push(new toonHandler()) } catch (_) { };
 try { handlers.push(new rpgmvpHandler()) } catch (_) { };
+try { handlers.push(new terrariaWldHandler()) } catch (_) { };
 
 export default handlers;
