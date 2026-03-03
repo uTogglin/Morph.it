@@ -561,20 +561,27 @@ body {
 	display: flex !important;
 	align-items: center !important;
 	border-bottom: 1px solid #1a1a1a !important;
+	min-height: 38px !important;
+	padding: 3px 4px !important;
+	cursor: grab !important;
+	user-select: none !important;
+}
+.layers_list .item button {
+	cursor: pointer !important;
 }
 
 /* Layer name — Photoshop style */
 .layer_name {
 	display: block !important;
-	padding: 2px 6px !important;
+	padding: 4px 8px !important;
 	height: auto !important;
-	min-height: 20px !important;
+	min-height: 28px !important;
 	background: #252525 !important;
 	border: 1px solid transparent !important;
 	border-radius: 0 !important;
 	color: #c8c8c8 !important;
-	font-size: 11px !important;
-	line-height: 16px !important;
+	font-size: 12px !important;
+	line-height: 20px !important;
 	cursor: pointer !important;
 	white-space: nowrap !important;
 	overflow: hidden !important;
@@ -595,9 +602,9 @@ body {
 
 /* Layer visibility eye */
 .visibility {
-	opacity: 0.35 !important;
-	width: 16px !important;
-	min-width: 16px !important;
+	opacity: 0.4 !important;
+	width: 20px !important;
+	min-width: 20px !important;
 	padding: 0 2px !important;
 	margin: 0 !important;
 	cursor: pointer !important;
@@ -614,19 +621,21 @@ body {
 	opacity: 0.9 !important;
 }
 
-/* Layer delete button */
+/* Layer delete button — white icon */
 .delete {
-	width: 16px !important;
-	min-width: 16px !important;
-	opacity: 0.35 !important;
-	background-size: 10px !important;
+	width: 20px !important;
+	min-width: 20px !important;
+	opacity: 0.5 !important;
+	background-size: 12px !important;
 	border: none !important;
 	box-shadow: none !important;
+	filter: invert(1) !important;
 }
 .delete:hover {
 	opacity: 1 !important;
 	background-color: transparent !important;
 	border: none !important;
+	filter: invert(1) !important;
 }
 
 /* Layer filter items */
@@ -1094,6 +1103,11 @@ a:hover {
 	filter: none !important;
 	border-left: 2px solid #6C5CE7 !important;
 }
+#tools_container button.active:hover,
+.sidebar_left button.active:hover {
+	background-color: transparent !important;
+	background: transparent !important;
+}
 
 
 /* ══════════════════════════════════════════
@@ -1209,11 +1223,12 @@ a:hover {
    18. LAYER THUMBNAILS
    ══════════════════════════════════════════ */
 .layer-thumb {
-	width: 32px;
-	height: 24px;
+	width: 42px;
+	height: 32px;
 	flex-shrink: 0;
 	border: 1px solid #1a1a1a;
-	margin-right: 4px;
+	margin-right: 6px;
+	border-radius: 2px;
 	background-image:
 		linear-gradient(45deg, #3a3a3a 25%, transparent 25%),
 		linear-gradient(-45deg, #3a3a3a 25%, transparent 25%),
@@ -1224,13 +1239,21 @@ a:hover {
 	background-color: #2a2a2a;
 	image-rendering: auto;
 }
-.layers_list .item {
-	display: flex !important;
-	align-items: center !important;
-}
 .layers_list .item .layer_name {
 	flex: 1 !important;
 	min-width: 0 !important;
+}
+
+/* Layer drag-and-drop */
+.layer-dragging {
+	opacity: 0.35 !important;
+}
+.layer-drop-above {
+	border-top: 2px solid #6C5CE7 !important;
+}
+.layer-drop-below {
+	border-bottom-color: #6C5CE7 !important;
+	border-bottom-width: 2px !important;
 }
 
 
@@ -1874,17 +1897,17 @@ a:hover {
 				if (!thumb) {
 					thumb = document.createElement('canvas');
 					thumb.className = 'layer-thumb';
-					thumb.width = 32;
-					thumb.height = 24;
+					thumb.width = 42;
+					thumb.height = 32;
 					item.insertBefore(thumb, nameBtn);
 				}
 				var ctx = thumb.getContext('2d');
-				ctx.clearRect(0, 0, 32, 24);
+				ctx.clearRect(0, 0, 42, 32);
 				var src = layer.link_canvas || layer.link;
 				if (src && src.width > 0 && src.height > 0) {
-					var scale = Math.min(32 / src.width, 24 / src.height);
+					var scale = Math.min(42 / src.width, 32 / src.height);
 					var w = src.width * scale, h = src.height * scale;
-					var x = (32 - w) / 2, y = (24 - h) / 2;
+					var x = (42 - w) / 2, y = (32 - h) / 2;
 					try { ctx.drawImage(src, x, y, w, h); } catch(e) {}
 				}
 			});
@@ -1896,6 +1919,126 @@ a:hover {
 		setTimeout(renderThumbnails, 100);
 	}
 
+	/* ── LAYER DRAG-AND-DROP REORDER ── */
+	function initLayerDragDrop() {
+		var layersBase = document.getElementById('layers_base');
+		if (!layersBase) return;
+
+		var dragItem = null;
+		var startY = 0;
+		var isDragging = false;
+
+		layersBase.addEventListener('mousedown', function(e) {
+			var item = e.target.closest('.layers_list .item');
+			if (!item) return;
+			/* Let button clicks (eye, delete, name) pass through */
+			if (e.target.closest('button')) return;
+
+			dragItem = item;
+			startY = e.clientY;
+			isDragging = false;
+		});
+
+		document.addEventListener('mousemove', function(e) {
+			if (!dragItem) return;
+
+			if (!isDragging && Math.abs(e.clientY - startY) > 4) {
+				isDragging = true;
+				dragItem.classList.add('layer-dragging');
+			}
+			if (!isDragging) return;
+
+			e.preventDefault();
+
+			/* Clear all drop indicators */
+			var allItems = layersBase.querySelectorAll('.layers_list .item');
+			for (var i = 0; i < allItems.length; i++) {
+				allItems[i].classList.remove('layer-drop-above', 'layer-drop-below');
+			}
+
+			/* Find target item & show indicator */
+			for (var j = 0; j < allItems.length; j++) {
+				if (allItems[j] === dragItem) continue;
+				var rect = allItems[j].getBoundingClientRect();
+				var midY = rect.top + rect.height / 2;
+				if (e.clientY >= rect.top && e.clientY < midY) {
+					allItems[j].classList.add('layer-drop-above');
+					break;
+				} else if (e.clientY >= midY && e.clientY <= rect.bottom) {
+					allItems[j].classList.add('layer-drop-below');
+					break;
+				}
+			}
+		});
+
+		document.addEventListener('mouseup', function() {
+			if (!dragItem) return;
+
+			if (isDragging) {
+				/* Move DOM element to new position */
+				var target = layersBase.querySelector('.layer-drop-above, .layer-drop-below');
+				if (target) {
+					var isAbove = target.classList.contains('layer-drop-above');
+					if (isAbove) {
+						target.parentNode.insertBefore(dragItem, target);
+					} else {
+						target.parentNode.insertBefore(dragItem, target.nextSibling);
+					}
+				}
+
+				/* Clean up classes */
+				dragItem.classList.remove('layer-dragging');
+				var allItems = layersBase.querySelectorAll('.layers_list .item');
+				for (var i = 0; i < allItems.length; i++) {
+					allItems[i].classList.remove('layer-drop-above', 'layer-drop-below');
+				}
+
+				/* Update layer order values: top DOM item = highest order = renders on top */
+				updateLayerOrders();
+			}
+
+			dragItem = null;
+			isDragging = false;
+		});
+
+		function updateLayerOrders() {
+			var items = Array.from(layersBase.querySelectorAll('.layers_list .item'));
+			if (!items.length || !AppConfig.layers) return;
+
+			/* Collect existing order values */
+			var orderValues = [];
+			items.forEach(function(item) {
+				var nameBtn = item.querySelector('.layer_name');
+				if (!nameBtn) return;
+				var id = parseInt(nameBtn.getAttribute('data-id'), 10);
+				for (var i = 0; i < AppConfig.layers.length; i++) {
+					if (AppConfig.layers[i].id === id) {
+						orderValues.push(AppConfig.layers[i].order);
+						break;
+					}
+				}
+			});
+
+			/* Sort descending — first DOM item gets highest order */
+			orderValues.sort(function(a, b) { return b - a; });
+
+			/* Reassign */
+			items.forEach(function(item, idx) {
+				var nameBtn = item.querySelector('.layer_name');
+				if (!nameBtn) return;
+				var id = parseInt(nameBtn.getAttribute('data-id'), 10);
+				for (var i = 0; i < AppConfig.layers.length; i++) {
+					if (AppConfig.layers[i].id === id) {
+						AppConfig.layers[i].order = orderValues[idx];
+						break;
+					}
+				}
+			});
+
+			AppConfig.need_render = true;
+		}
+	}
+
 	/* ── INIT ── */
 	function initCustomUI() {
 		if (typeof AppConfig === 'undefined' || !document.querySelector('.sidebar_left')) {
@@ -1905,6 +2048,7 @@ a:hover {
 		createPickerDialog();
 		createColorTool();
 		initLayerThumbnails();
+		initLayerDragDrop();
 	}
 
 	if (document.readyState === 'loading') {
