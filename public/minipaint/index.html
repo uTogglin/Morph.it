@@ -16,6 +16,13 @@
 			<button class="undo_button" id="undo_button" type="button">
 				<span class="sr_only">Undo</span>
 			</button>
+			<button class="submenu-save-btn" id="submenu_save_btn" type="button" title="Save &amp; Download">
+				<svg viewBox="0 0 24 24" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+			</button>
+			<button class="submenu-fs-btn" id="submenu_fs_btn" type="button" title="Toggle fullscreen">
+				<svg class="fs-expand" viewBox="0 0 24 24" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+				<svg class="fs-collapse" style="display:none" viewBox="0 0 24 24" fill="none" stroke="#c8c8c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+			</button>
 		</div>
 		<div class="sidebar_left" id="tools_container"></div>
 		<div class="middle_area" id="middle_area">
@@ -359,6 +366,33 @@ body {
 	border: none !important;
 	box-shadow: none !important;
 	background-color: transparent !important;
+}
+
+/* Save & Fullscreen buttons in submenu */
+.submenu-save-btn,
+.submenu-fs-btn {
+	width: 22px !important;
+	height: 22px !important;
+	padding: 0 !important;
+	margin: 0 2px !important;
+	border: none !important;
+	background: transparent !important;
+	cursor: pointer !important;
+	opacity: 0.55 !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	flex-shrink: 0 !important;
+	box-shadow: none !important;
+}
+.submenu-save-btn:hover,
+.submenu-fs-btn:hover {
+	opacity: 1 !important;
+}
+.submenu-save-btn svg,
+.submenu-fs-btn svg {
+	width: 15px;
+	height: 15px;
 }
 .undo_button:hover {
 	opacity: 1 !important;
@@ -3288,6 +3322,43 @@ a:hover {
 		});
 	}
 
+	/* ══════════════════════════════════════════════════════
+	   FULLSCREEN & SAVE BUTTONS (in submenu bar)
+	   Communicate with parent via postMessage since the
+	   iframe can't fullscreen the parent container directly.
+	   ══════════════════════════════════════════════════════ */
+	function initSubmenuButtons() {
+		var fsBtn = document.getElementById('submenu_fs_btn');
+		var saveBtn = document.getElementById('submenu_save_btn');
+
+		/* Fullscreen toggle */
+		if (fsBtn) {
+			fsBtn.addEventListener('click', function(e) {
+				e.stopPropagation();
+				parent.postMessage({ type: 'fullscreen-toggle' }, '*');
+			});
+		}
+
+		/* Save & Download */
+		if (saveBtn) {
+			saveBtn.addEventListener('click', function(e) {
+				e.stopPropagation();
+				parent.postMessage({ type: 'save-download' }, '*');
+			});
+		}
+
+		/* Listen for fullscreen state changes from parent */
+		window.addEventListener('message', function(e) {
+			if (!e.data) return;
+			if (e.data.type === 'fullscreen-changed' && fsBtn) {
+				var expand = fsBtn.querySelector('.fs-expand');
+				var collapse = fsBtn.querySelector('.fs-collapse');
+				if (expand) expand.style.display = e.data.isFullscreen ? 'none' : '';
+				if (collapse) collapse.style.display = e.data.isFullscreen ? '' : 'none';
+			}
+		});
+	}
+
 	/* ── INIT ── */
 	function initCustomUI() {
 		if (typeof AppConfig === 'undefined' || !document.querySelector('.sidebar_left')) {
@@ -3304,6 +3375,7 @@ a:hover {
 		initFontOverride();
 		initRemoveBgTool();
 		initInpaintTool();
+		initSubmenuButtons();
 	}
 
 	if (document.readyState === 'loading') {

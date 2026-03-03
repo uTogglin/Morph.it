@@ -340,11 +340,6 @@ const ui = {
   // Image tools UI
   imgDropZone: document.querySelector("#img-drop-zone") as HTMLDivElement,
   imgFrame: document.querySelector("#minipaint-frame") as HTMLIFrameElement,
-  imgActionBar: document.querySelector("#img-action-bar") as HTMLDivElement,
-  imgRemoveBgBtn: document.querySelector("#img-removebg-btn") as HTMLButtonElement,
-  imgInpaintBtn: document.querySelector("#img-inpaint-btn") as HTMLButtonElement,
-  imgSaveBtn: document.querySelector("#img-save-btn") as HTMLButtonElement,
-  imgFullscreenBtn: document.querySelector("#img-fullscreen-btn") as HTMLButtonElement,
   imgEditorContainer: document.querySelector("#img-editor-container") as HTMLDivElement,
   imgFileInput: document.querySelector("#img-file-input") as HTMLInputElement,
   imgInpaintModelToggle: document.querySelector("#inpaint-model-toggle") as HTMLButtonElement,
@@ -3092,7 +3087,6 @@ function getMaskFromMiniPaint(): ImageData | null {
 function showMiniPaintEditor() {
   ui.imgDropZone?.classList.add("hidden");
   ui.imgFrame?.classList.remove("hidden");
-  ui.imgActionBar?.classList.remove("hidden");
 }
 
 /** Reset image tools state — show drop zone, reload iframe */
@@ -3110,7 +3104,6 @@ function imgResetState() {
   // Show drop zone, hide editor
   ui.imgDropZone?.classList.remove("hidden");
   ui.imgFrame?.classList.add("hidden");
-  ui.imgActionBar?.classList.add("hidden");
   // Reset iframe
   if (ui.imgFrame) ui.imgFrame.removeAttribute("src");
 }
@@ -3160,76 +3153,6 @@ ui.imgFileInput?.addEventListener("change", () => {
     imgLoadFiles(Array.from(files));
     ui.imgFileInput.value = "";
   }
-});
-
-// Action: Remove Background
-ui.imgRemoveBgBtn?.addEventListener("click", async () => {
-  const imageBytes = getImageFromMiniPaint();
-  if (!imageBytes) return;
-
-  removeBg = true;
-  try { localStorage.setItem("convert-remove-bg", "true"); } catch {}
-  syncModalSettingsUI();
-
-  const fileData: FileData[] = [{ name: "image.png", bytes: imageBytes }];
-  const result = await applyBgRemoval(fileData);
-  if (result.length > 0 && result[0].bytes !== imageBytes) {
-    await loadBytesIntoMiniPaint(result[0].bytes, "No Background");
-    window.showPopup(
-      `<h2>Background removed!</h2>` +
-      `<p>Result added as a new layer.</p>` +
-      `<button onclick="window.hidePopup()">OK</button>`
-    );
-  }
-});
-
-// Action: Object Removal (inpainting)
-ui.imgInpaintBtn?.addEventListener("click", async () => {
-  const maskData = getMaskFromMiniPaint();
-
-  // Check if mask has any painted pixels
-  if (!maskData) {
-    window.showPopup(
-      `<h2>Object Removal</h2>` +
-      `<p>To remove objects from your image:</p>` +
-      `<ol style="text-align:left;margin:12px 0;">` +
-      `<li>In the editor, go to <b>Layer → New layer</b></li>` +
-      `<li>Name it <b>Mask</b></li>` +
-      `<li>Use the brush/pencil tool to paint over objects you want to remove</li>` +
-      `<li>Click <b>Object Removal</b> again</li>` +
-      `</ol>` +
-      `<button onclick="window.hidePopup()">Got it</button>`
-    );
-    return;
-  }
-
-  // Verify mask has painted content
-  let hasPaint = false;
-  for (let i = 3; i < maskData.data.length; i += 4) {
-    if (maskData.data[i] > 0) { hasPaint = true; break; }
-  }
-  if (!hasPaint) {
-    window.showPopup(
-      `<h2>Empty mask</h2>` +
-      `<p>Paint over the objects you want to remove on the "Mask" layer, then try again.</p>` +
-      `<button onclick="window.hidePopup()">OK</button>`
-    );
-    return;
-  }
-
-  const imageBytes = getImageFromMiniPaint();
-  if (!imageBytes) return;
-
-  inpaintEnabled = true;
-  if (inpaintFeather) applyGaussianBlur(maskData, maskData.width, maskData.height, 3);
-
-  const result = await runInpainting(imageBytes, "png", maskData);
-  await loadBytesIntoMiniPaint(result, "Inpainted");
-  window.showPopup(
-    `<h2>Objects removed!</h2>` +
-    `<p>Result added as a new layer.</p>` +
-    `<button onclick="window.hidePopup()">OK</button>`
-  );
 });
 
 // Bridge: iframe inpaint tool → parent runInpainting() → iframe result
@@ -3300,8 +3223,10 @@ window.addEventListener("message", async (e) => {
   }
 });
 
-// Action: Save & Download
-ui.imgSaveBtn?.addEventListener("click", async () => {
+// Bridge: iframe save button → parent Save & Download pipeline
+window.addEventListener("message", async (e) => {
+  if (e.data?.type !== "save-download") return;
+
   const imageBytes = getImageFromMiniPaint();
   if (!imageBytes) return;
 
@@ -3322,8 +3247,9 @@ ui.imgSaveBtn?.addEventListener("click", async () => {
   );
 });
 
-// Action: Fullscreen toggle (browser Fullscreen API)
-ui.imgFullscreenBtn?.addEventListener("click", () => {
+// Bridge: iframe fullscreen button → parent Fullscreen API toggle
+window.addEventListener("message", (e) => {
+  if (e.data?.type !== "fullscreen-toggle") return;
   const container = ui.imgEditorContainer;
   if (!container) return;
   if (document.fullscreenElement) {
@@ -3335,8 +3261,11 @@ ui.imgFullscreenBtn?.addEventListener("click", () => {
 
 document.addEventListener("fullscreenchange", () => {
   const isFs = !!document.fullscreenElement;
-  ui.imgFullscreenBtn?.querySelector(".img-icon-expand")?.classList.toggle("hidden", isFs);
-  ui.imgFullscreenBtn?.querySelector(".img-icon-collapse")?.classList.toggle("hidden", !isFs);
+  // Notify iframe of fullscreen state change
+  const iframe = ui.imgFrame;
+  if (iframe?.contentWindow) {
+    iframe.contentWindow.postMessage({ type: "fullscreen-changed", isFullscreen: isFs }, "*");
+  }
 });
 
 // ── Video Editor: Upload, Preview, Timeline, Processing ─────────────────────
