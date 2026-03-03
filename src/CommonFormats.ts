@@ -41,6 +41,20 @@ const CommonFormats = {
         "image/webp",
         Category.IMAGE
     ),
+    TIFF: new FormatDefinition(
+        "Tagged Image File Format",
+        "tiff",
+        "tiff",
+        "image/tiff",
+        Category.IMAGE
+    ),
+    BMP: new FormatDefinition(
+        "Microsoft Windows bitmap image",
+        "bmp",
+        "bmp",
+        "image/bmp",
+        Category.IMAGE
+    ),
     GIF: new FormatDefinition(
         "CompuServe Graphics Interchange Format (GIF)",
         "gif",
@@ -103,14 +117,14 @@ const CommonFormats = {
         "markdown",
         "markdown",
         "text/markdown",
-        ["document", "text"]
+        [Category.DOCUMENT, Category.TEXT]
     ),
     BATCH: new FormatDefinition(
         "Windows Batch file",
         "batch",
         "bat",
         "text/windows-batch",
-        ["text"]
+        Category.TEXT
     ),
     PYTHON: new FormatDefinition(
         "Python Script",

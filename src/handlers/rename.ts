@@ -98,7 +98,16 @@ export const renameZipHandler = renameHandler("renamezip", [
   CommonFormats.ZIP.builder("ipa").allowFrom()
     .withFormat("ipa").withExt("ipa").named("iOS Application"),
   CommonFormats.ZIP.builder("app").allowFrom()
-    .withFormat("app").withExt("app").named("macOS Application Bundle")
+    .withFormat("app").withExt("app").named("macOS Application Bundle"),
+  {
+    name: "Comic Book Archive (ZIP)",
+    format: "cbz",
+    extension: "cbz",
+    mime: "application/vnd.comicbook+zip",
+    from: true,
+    to: false,
+    internal: "cbz",
+  },
 ]);
 /// handler for renaming text-based formats
 export const renameTxtHandler = renameHandler("renametxt", [
