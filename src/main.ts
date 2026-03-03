@@ -3232,6 +3232,34 @@ ui.imgInpaintBtn?.addEventListener("click", async () => {
   );
 });
 
+// Bridge: iframe inpaint tool → parent runInpainting() → iframe result
+window.addEventListener("message", async (e) => {
+  if (e.data?.type !== "inpaint-request") return;
+  const iframe = ui.imgFrame;
+  if (!iframe?.contentWindow) return;
+
+  try {
+    const { image, mask, width, height } = e.data;
+    const imageBytes = new Uint8Array(image);
+    const maskImageData = new ImageData(new Uint8ClampedArray(mask), width, height);
+
+    inpaintEnabled = true;
+    if (inpaintFeather) applyGaussianBlur(maskImageData, width, height, 3);
+
+    const resultBytes = await runInpainting(imageBytes, "png", maskImageData);
+
+    iframe.contentWindow.postMessage({
+      type: "inpaint-result",
+      image: Array.from(resultBytes),
+    }, "*");
+  } catch (err: any) {
+    iframe.contentWindow!.postMessage({
+      type: "inpaint-error",
+      error: err?.message || String(err),
+    }, "*");
+  }
+});
+
 // Action: Save & Download
 ui.imgSaveBtn?.addEventListener("click", async () => {
   const imageBytes = getImageFromMiniPaint();

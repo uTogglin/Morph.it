@@ -1469,27 +1469,222 @@ a:hover {
 
 
 /* ══════════════════════════════════════════
-   20. FONT SEARCH INPUT (Fontsource)
+   20. FONT PICKER (Fontsource)
    ══════════════════════════════════════════ */
-.ps-font-search {
-	width: 80px !important;
-	height: 18px !important;
-	font-size: 10px !important;
-	padding: 0 4px !important;
+.ps-font-picker {
+	position: relative;
+	display: inline-block;
+	vertical-align: middle;
+}
+.ps-font-picker-toggle {
 	background: #1a1a1a !important;
 	color: #c8c8c8 !important;
 	border: 1px solid #333 !important;
 	border-radius: 2px !important;
-	margin-right: 2px !important;
-	vertical-align: middle !important;
+	font-size: 10px !important;
+	height: 18px !important;
+	padding: 0 16px 0 4px !important;
+	cursor: pointer !important;
+	min-width: 90px !important;
+	max-width: 140px !important;
+	text-align: left !important;
+	overflow: hidden !important;
+	text-overflow: ellipsis !important;
+	white-space: nowrap !important;
+	width: auto !important;
+	position: relative !important;
+	line-height: 18px !important;
 }
-.ps-font-search::placeholder {
-	color: #666 !important;
-	font-size: 9px !important;
+.ps-font-picker-toggle::after {
+	content: '\25BC';
+	position: absolute;
+	right: 3px;
+	top: 50%;
+	transform: translateY(-50%);
+	font-size: 7px;
+	color: #888;
+	pointer-events: none;
 }
-.ps-font-search:focus {
+.ps-font-picker-toggle:hover {
+	border-color: #555 !important;
+}
+.ps-font-picker-toggle:focus,
+.ps-font-picker.open .ps-font-picker-toggle {
 	border-color: #6C5CE7 !important;
 	outline: none !important;
+}
+.ps-font-dropdown {
+	display: none;
+	position: absolute;
+	top: 100%;
+	left: 0;
+	width: 220px;
+	max-height: 320px;
+	background: #1e1e1e;
+	border: 1px solid #444;
+	border-radius: 4px;
+	box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+	z-index: 9999;
+	flex-direction: column;
+	overflow: hidden;
+	margin-top: 2px;
+}
+.ps-font-picker.open .ps-font-dropdown {
+	display: flex;
+}
+.ps-font-dropdown-search {
+	width: 100% !important;
+	box-sizing: border-box !important;
+	height: 26px !important;
+	padding: 0 8px !important;
+	font-size: 11px !important;
+	background: #151515 !important;
+	color: #ddd !important;
+	border: none !important;
+	border-bottom: 1px solid #333 !important;
+	border-radius: 0 !important;
+	outline: none !important;
+}
+.ps-font-dropdown-search:focus {
+	border-bottom-color: #6C5CE7 !important;
+}
+.ps-font-dropdown-search::placeholder {
+	color: #555 !important;
+}
+.ps-font-dropdown-list {
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+.ps-font-dropdown-list::-webkit-scrollbar {
+	width: 5px;
+}
+.ps-font-dropdown-list::-webkit-scrollbar-track {
+	background: transparent;
+}
+.ps-font-dropdown-list::-webkit-scrollbar-thumb {
+	background: #444;
+	border-radius: 3px;
+}
+.ps-font-item {
+	padding: 4px 8px;
+	font-size: 11px;
+	color: #c8c8c8;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.ps-font-item:hover,
+.ps-font-item.highlighted {
+	background: #333;
+}
+.ps-font-item.selected {
+	background: #6C5CE7;
+	color: #fff;
+}
+.ps-font-item .ps-font-tag {
+	font-size: 8px;
+	color: #888;
+	margin-left: 6px;
+	vertical-align: middle;
+}
+.ps-font-item.selected .ps-font-tag {
+	color: rgba(255,255,255,0.6);
+}
+
+/* ══════════════════════════════════════════
+   21. INPAINT TOOL
+   ══════════════════════════════════════════ */
+#tools_container .inpaint-tool-btn {
+	width: 32px !important;
+	height: 32px !important;
+	min-width: 32px !important;
+	min-height: 32px !important;
+	cursor: pointer;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c8c8c8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 17l4-4 3 3 4-4 4 4'/%3E%3Ccircle cx='18' cy='6' r='3'/%3E%3Cpath d='M18 3v0' stroke='%23f9ca24' stroke-width='2'/%3E%3Cpath d='M21 6h0' stroke='%23f9ca24' stroke-width='2'/%3E%3Cpath d='M18 9v0' stroke='%23f9ca24' stroke-width='2'/%3E%3Cpath d='M15 6h0' stroke='%23f9ca24' stroke-width='2'/%3E%3C/svg%3E") !important;
+	background-repeat: no-repeat !important;
+}
+.inpaint-bar {
+	position: fixed;
+	top: 8px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: #2b2b2b;
+	border: 1px solid #444;
+	border-radius: 8px;
+	padding: 6px 14px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	z-index: 9999;
+	box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	font-size: 12px;
+	color: #c8c8c8;
+}
+.inpaint-bar label {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+}
+.inpaint-bar input[type="range"] {
+	width: 80px;
+	height: 4px;
+	accent-color: #6C5CE7;
+}
+.inpaint-bar button {
+	padding: 4px 12px !important;
+	border: none !important;
+	border-radius: 4px !important;
+	font-size: 12px !important;
+	cursor: pointer !important;
+	font-weight: 600 !important;
+	width: auto !important;
+	height: auto !important;
+	min-width: 0 !important;
+	min-height: 0 !important;
+	opacity: 1 !important;
+	background-size: initial !important;
+	background-position: initial !important;
+}
+.inpaint-bar .inpaint-apply {
+	background: #27ae60 !important;
+	color: #fff !important;
+}
+.inpaint-bar .inpaint-apply:hover {
+	background: #2ecc71 !important;
+}
+.inpaint-bar .inpaint-cancel {
+	background: #c0392b !important;
+	color: #fff !important;
+}
+.inpaint-bar .inpaint-cancel:hover {
+	background: #e74c3c !important;
+}
+.inpaint-overlay {
+	position: fixed;
+	top: 0; left: 0; right: 0; bottom: 0;
+	background: rgba(0,0,0,0.7);
+	z-index: 10000;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	color: #fff;
+}
+.inpaint-overlay .spinner {
+	width: 40px; height: 40px;
+	border: 3px solid rgba(255,255,255,0.2);
+	border-top-color: #6C5CE7;
+	border-radius: 50%;
+	animation: inpaint-spin 0.8s linear infinite;
+	margin-bottom: 12px;
+}
+@keyframes inpaint-spin {
+	to { transform: rotate(360deg); }
 }
 </style>
 
@@ -2236,38 +2431,6 @@ a:hover {
 			});
 		}
 
-		function populateSelect(sel, fonts, filter) {
-			var frag = document.createDocumentFragment();
-			var count = 0;
-			var lc = (filter || '').toLowerCase();
-
-			/* System fonts */
-			for (var i = 0; i < SYSTEM_FONTS.length; i++) {
-				if (lc && SYSTEM_FONTS[i].family.toLowerCase().indexOf(lc) < 0) continue;
-				var o = document.createElement('option');
-				o.value = SYSTEM_FONTS[i].family;
-				o.textContent = SYSTEM_FONTS[i].family;
-				o.dataset.fid = SYSTEM_FONTS[i].id;
-				frag.appendChild(o);
-				count++;
-			}
-
-			/* Web fonts (cap at 120 visible) */
-			for (var j = 0; j < fonts.length; j++) {
-				if (count >= 120) break;
-				if (lc && fonts[j].family.toLowerCase().indexOf(lc) < 0) continue;
-				var o2 = document.createElement('option');
-				o2.value = fonts[j].family;
-				o2.textContent = fonts[j].family;
-				o2.dataset.fid = fonts[j].id;
-				frag.appendChild(o2);
-				count++;
-			}
-
-			sel.innerHTML = '';
-			sel.appendChild(frag);
-		}
-
 		var knownDefaults = ['arial', 'courier', 'times', 'verdana', 'georgia', 'tahoma', 'impact'];
 
 		function isFontSelect(sel) {
@@ -2281,40 +2444,194 @@ a:hover {
 			return false;
 		}
 
+		/* Build filtered font list items */
+		function buildItems(list, allFonts, filter, selectedFamily) {
+			list.innerHTML = '';
+			var lc = (filter || '').toLowerCase();
+			var count = 0;
+
+			/* System fonts first */
+			for (var i = 0; i < SYSTEM_FONTS.length; i++) {
+				if (lc && SYSTEM_FONTS[i].family.toLowerCase().indexOf(lc) < 0) continue;
+				var div = document.createElement('div');
+				div.className = 'ps-font-item';
+				if (SYSTEM_FONTS[i].family === selectedFamily) div.className += ' selected';
+				div.textContent = SYSTEM_FONTS[i].family;
+				div.dataset.fid = SYSTEM_FONTS[i].id;
+				div.dataset.family = SYSTEM_FONTS[i].family;
+				list.appendChild(div);
+				count++;
+			}
+
+			/* Web fonts */
+			for (var j = 0; j < allFonts.length; j++) {
+				if (count >= 200) break;
+				if (lc && allFonts[j].family.toLowerCase().indexOf(lc) < 0) continue;
+				var div2 = document.createElement('div');
+				div2.className = 'ps-font-item';
+				if (allFonts[j].family === selectedFamily) div2.className += ' selected';
+				div2.innerHTML = allFonts[j].family + '<span class="ps-font-tag">web</span>';
+				div2.dataset.fid = allFonts[j].id;
+				div2.dataset.family = allFonts[j].family;
+				list.appendChild(div2);
+				count++;
+			}
+		}
+
 		function replaceFontSelect(sel) {
 			if (sel.dataset.fontOverride) return;
 			sel.dataset.fontOverride = '1';
 
-			/* Add search input before the select */
-			var search = document.createElement('input');
-			search.type = 'text';
-			search.placeholder = 'Search fonts\u2026';
-			search.className = 'ps-font-search';
-			sel.parentNode.insertBefore(search, sel);
+			/* Hide original select */
+			sel.style.display = 'none';
 
-			fetchFonts().then(function(fonts) {
-				populateSelect(sel, fonts, '');
-				if (!sel.value) sel.value = 'Arial';
+			/* Remove any old ps-font-search siblings */
+			var prev = sel.previousElementSibling;
+			if (prev && prev.classList.contains('ps-font-search')) prev.remove();
 
-				search.addEventListener('input', function() {
-					var prev = sel.value;
-					populateSelect(sel, fonts, search.value);
-					/* Restore previous selection if still visible */
-					for (var i = 0; i < sel.options.length; i++) {
-						if (sel.options[i].value === prev) {
-							sel.value = prev;
-							break;
-						}
+			/* Build custom picker */
+			var picker = document.createElement('div');
+			picker.className = 'ps-font-picker';
+
+			var toggle = document.createElement('button');
+			toggle.type = 'button';
+			toggle.className = 'ps-font-picker-toggle';
+			toggle.textContent = sel.value || 'Arial';
+
+			var dropdown = document.createElement('div');
+			dropdown.className = 'ps-font-dropdown';
+
+			var searchInput = document.createElement('input');
+			searchInput.type = 'text';
+			searchInput.className = 'ps-font-dropdown-search';
+			searchInput.placeholder = 'Search fonts\u2026';
+
+			var list = document.createElement('div');
+			list.className = 'ps-font-dropdown-list';
+
+			dropdown.appendChild(searchInput);
+			dropdown.appendChild(list);
+			picker.appendChild(toggle);
+			picker.appendChild(dropdown);
+			sel.parentNode.insertBefore(picker, sel);
+
+			var currentFamily = sel.value || 'Arial';
+			var highlightIdx = -1;
+
+			function syncToNativeSelect(family, fontId) {
+				/* Update native select so miniPaint reads the value */
+				var found = false;
+				for (var i = 0; i < sel.options.length; i++) {
+					if (sel.options[i].value === family) {
+						sel.value = family;
+						found = true;
+						break;
 					}
+				}
+				if (!found) {
+					/* Add option if not present */
+					var opt = document.createElement('option');
+					opt.value = family;
+					opt.textContent = family;
+					sel.appendChild(opt);
+					sel.value = family;
+				}
+				sel.dispatchEvent(new Event('input', { bubbles: true }));
+				sel.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+
+			function selectFont(family, fontId) {
+				currentFamily = family;
+				toggle.textContent = family;
+				closePicker();
+
+				/* Load web font if needed */
+				if (fontId && fontId.charAt(0) !== '_') {
+					loadFont(fontId, family);
+				}
+				syncToNativeSelect(family, fontId);
+			}
+
+			function openPkr() {
+				picker.classList.add('open');
+				searchInput.value = '';
+				highlightIdx = -1;
+				fetchFonts().then(function(fonts) {
+					buildItems(list, fonts, '', currentFamily);
+					/* Scroll selected into view */
+					var sel2 = list.querySelector('.selected');
+					if (sel2) sel2.scrollIntoView({ block: 'center' });
+				});
+				setTimeout(function() { searchInput.focus(); }, 10);
+			}
+
+			function closePicker() {
+				picker.classList.remove('open');
+				highlightIdx = -1;
+			}
+
+			toggle.addEventListener('click', function(e) {
+				e.stopPropagation();
+				if (picker.classList.contains('open')) closePicker();
+				else openPkr();
+			});
+
+			searchInput.addEventListener('input', function() {
+				highlightIdx = -1;
+				fetchFonts().then(function(fonts) {
+					buildItems(list, fonts, searchInput.value, currentFamily);
 				});
 			});
 
-			sel.addEventListener('change', function() {
-				var opt = sel.options[sel.selectedIndex];
-				if (opt && opt.dataset.fid && opt.dataset.fid.charAt(0) !== '_') {
-					loadFont(opt.dataset.fid, opt.value);
+			/* Click on font item */
+			list.addEventListener('click', function(e) {
+				var item = e.target.closest('.ps-font-item');
+				if (item) selectFont(item.dataset.family, item.dataset.fid);
+			});
+
+			/* Keyboard navigation */
+			searchInput.addEventListener('keydown', function(e) {
+				var items = list.querySelectorAll('.ps-font-item');
+				if (e.key === 'ArrowDown') {
+					e.preventDefault();
+					highlightIdx = Math.min(highlightIdx + 1, items.length - 1);
+					updateHighlight(items);
+				} else if (e.key === 'ArrowUp') {
+					e.preventDefault();
+					highlightIdx = Math.max(highlightIdx - 1, 0);
+					updateHighlight(items);
+				} else if (e.key === 'Enter') {
+					e.preventDefault();
+					if (highlightIdx >= 0 && items[highlightIdx]) {
+						selectFont(items[highlightIdx].dataset.family, items[highlightIdx].dataset.fid);
+					}
+				} else if (e.key === 'Escape') {
+					e.preventDefault();
+					closePicker();
 				}
 			});
+
+			function updateHighlight(items) {
+				for (var i = 0; i < items.length; i++) {
+					items[i].classList.toggle('highlighted', i === highlightIdx);
+				}
+				if (highlightIdx >= 0 && items[highlightIdx]) {
+					items[highlightIdx].scrollIntoView({ block: 'nearest' });
+				}
+			}
+
+			/* Close on outside click */
+			document.addEventListener('click', function(e) {
+				if (!picker.contains(e.target)) closePicker();
+			});
+
+			/* Keep toggle label in sync if native select changes externally */
+			var syncInterval = setInterval(function() {
+				if (sel.value && sel.value !== currentFamily) {
+					currentFamily = sel.value;
+					toggle.textContent = currentFamily;
+				}
+			}, 500);
 		}
 
 		function scanForFontSelects() {
@@ -2347,6 +2664,289 @@ a:hover {
 		fetchFonts();
 	}
 
+	/* ── INPAINT TOOL ── */
+	function initInpaintTool() {
+		var toolbar = document.getElementById('tools_container');
+		if (!toolbar) return;
+
+		/* ── State ── */
+		var inpaintActive = false;
+		var maskLayerId = null;
+		var savedColor = '';
+		var savedAlpha = 1;
+		var bar = null;
+		var overlay = null;
+
+		/* ── Create toolbar button ── */
+		var btn = document.createElement('button');
+		btn.className = 'inpaint-tool-btn';
+		btn.title = 'Inpaint (object removal)';
+		toolbar.appendChild(btn);
+
+		/* ── Create floating action bar (hidden initially) ── */
+		bar = document.createElement('div');
+		bar.className = 'inpaint-bar';
+		bar.style.display = 'none';
+		bar.innerHTML =
+			'<label>Size <input type="range" class="inpaint-brush-size" min="1" max="200" value="30"></label>' +
+			'<button class="inpaint-apply" type="button">&#x2714; Apply</button>' +
+			'<button class="inpaint-cancel" type="button">&#x2716; Cancel</button>';
+		document.body.appendChild(bar);
+
+		var sizeSlider = bar.querySelector('.inpaint-brush-size');
+		var applyBtn = bar.querySelector('.inpaint-apply');
+		var cancelBtn = bar.querySelector('.inpaint-cancel');
+
+		/* ── Create loading overlay (hidden initially) ── */
+		overlay = document.createElement('div');
+		overlay.className = 'inpaint-overlay';
+		overlay.style.display = 'none';
+		overlay.innerHTML = '<div class="spinner"></div><div>Removing objects\u2026</div>';
+		document.body.appendChild(overlay);
+
+		/* ── Brush size sync ── */
+		sizeSlider.addEventListener('input', function() {
+			if (typeof AppConfig !== 'undefined') AppConfig.TOOL_SIZES = parseInt(sizeSlider.value, 10);
+		});
+
+		/* ── Activate inpaint mode ── */
+		function activate() {
+			if (inpaintActive) return;
+			inpaintActive = true;
+
+			/* Save current state */
+			savedColor = AppConfig.COLOR || '#000000';
+			savedAlpha = typeof AppConfig.ALPHA !== 'undefined' ? AppConfig.ALPHA : 1;
+
+			/* Create mask layer */
+			var dims = Layers.get_dimensions();
+			Layers.insert({
+				name: 'Inpaint Mask',
+				type: 'image',
+				width: dims.width,
+				height: dims.height,
+				width_original: dims.width,
+				height_original: dims.height
+			});
+
+			/* Find the mask layer we just created */
+			var allLayers = AppConfig.layers;
+			for (var i = 0; i < allLayers.length; i++) {
+				if (allLayers[i].name === 'Inpaint Mask') {
+					maskLayerId = allLayers[i].id;
+					break;
+				}
+			}
+
+			/* Select it and set drawing color */
+			if (maskLayerId !== null) Layers.select(maskLayerId);
+			AppConfig.COLOR = '#ff0000';
+			AppConfig.ALPHA = 0.6;
+
+			/* Activate brush tool by clicking its button */
+			var brushBtn = toolbar.querySelector('[title="Brush"]') || toolbar.querySelector('[id*="brush"]');
+			if (brushBtn) brushBtn.click();
+
+			/* Sync brush size */
+			AppConfig.TOOL_SIZES = parseInt(sizeSlider.value, 10);
+
+			/* Show action bar, highlight button */
+			bar.style.display = 'flex';
+			btn.classList.add('active');
+		}
+
+		/* ── Deactivate / cleanup ── */
+		function deactivate() {
+			if (!inpaintActive) return;
+			inpaintActive = false;
+
+			/* Delete mask layer */
+			deleteMaskLayer();
+
+			/* Restore state */
+			AppConfig.COLOR = savedColor;
+			AppConfig.ALPHA = savedAlpha;
+			AppConfig.need_render = true;
+
+			/* Hide UI */
+			bar.style.display = 'none';
+			overlay.style.display = 'none';
+			btn.classList.remove('active');
+			maskLayerId = null;
+		}
+
+		function deleteMaskLayer() {
+			if (maskLayerId === null) return;
+			var layers = AppConfig.layers;
+			for (var i = 0; i < layers.length; i++) {
+				if (layers[i].id === maskLayerId) {
+					/* Select another layer first */
+					var otherId = null;
+					for (var j = 0; j < layers.length; j++) {
+						if (layers[j].id !== maskLayerId) { otherId = layers[j].id; break; }
+					}
+					if (otherId !== null) Layers.select(otherId);
+					AppConfig.layers.splice(i, 1);
+					Layers.render_layers();
+					AppConfig.need_render = true;
+					break;
+				}
+			}
+		}
+
+		/* ── Apply inpainting ── */
+		function applyInpaint() {
+			if (!inpaintActive || maskLayerId === null) return;
+			overlay.style.display = 'flex';
+
+			try {
+				/* 1. Composite all visible layers EXCEPT the mask */
+				var dims = Layers.get_dimensions();
+				var compCanvas = document.createElement('canvas');
+				compCanvas.width = dims.width;
+				compCanvas.height = dims.height;
+				var compCtx = compCanvas.getContext('2d');
+
+				var layers = AppConfig.layers.slice().sort(function(a, b) { return a.order - b.order; });
+				for (var i = 0; i < layers.length; i++) {
+					var layer = layers[i];
+					if (!layer.visible || layer.id === maskLayerId) continue;
+					var src = layer.link_canvas || layer.link;
+					if (src) {
+						compCtx.globalAlpha = typeof layer.opacity !== 'undefined' ? layer.opacity / 100 : 1;
+						compCtx.drawImage(src, layer.x || 0, layer.y || 0, layer.width, layer.height);
+					}
+				}
+				compCtx.globalAlpha = 1;
+
+				/* 2. Extract mask: painted areas → white, rest → black */
+				var maskLayer = null;
+				for (var i = 0; i < AppConfig.layers.length; i++) {
+					if (AppConfig.layers[i].id === maskLayerId) { maskLayer = AppConfig.layers[i]; break; }
+				}
+				if (!maskLayer) { overlay.style.display = 'none'; return; }
+
+				var maskSrc = maskLayer.link_canvas || maskLayer.link;
+				var maskCanvas = document.createElement('canvas');
+				maskCanvas.width = dims.width;
+				maskCanvas.height = dims.height;
+				var maskCtx = maskCanvas.getContext('2d');
+				if (maskSrc) maskCtx.drawImage(maskSrc, maskLayer.x || 0, maskLayer.y || 0, maskLayer.width, maskLayer.height);
+				var maskData = maskCtx.getImageData(0, 0, dims.width, dims.height);
+
+				/* Convert to binary mask: any pixel with alpha > threshold → white */
+				for (var p = 0; p < maskData.data.length; p += 4) {
+					var hasContent = maskData.data[p + 3] > 10;
+					maskData.data[p] = maskData.data[p + 1] = maskData.data[p + 2] = hasContent ? 255 : 0;
+					maskData.data[p + 3] = 255;
+				}
+
+				/* Check mask has any painted pixels */
+				var hasPaint = false;
+				for (var p = 0; p < maskData.data.length; p += 4) {
+					if (maskData.data[p] > 0) { hasPaint = true; break; }
+				}
+				if (!hasPaint) {
+					overlay.style.display = 'none';
+					alert('Paint over objects to remove first.');
+					return;
+				}
+
+				/* 3. Export composited image as PNG bytes */
+				compCanvas.toBlob(function(blob) {
+					var reader = new FileReader();
+					reader.onload = function() {
+						var imageBytes = new Uint8Array(reader.result);
+						/* 4. Send to parent via postMessage */
+						parent.postMessage({
+							type: 'inpaint-request',
+							image: Array.from(imageBytes),
+							mask: Array.from(maskData.data),
+							width: dims.width,
+							height: dims.height
+						}, '*');
+					};
+					reader.readAsArrayBuffer(blob);
+				}, 'image/png');
+
+			} catch (err) {
+				overlay.style.display = 'none';
+				alert('Inpainting error: ' + (err.message || err));
+			}
+		}
+
+		/* ── Receive result from parent ── */
+		window.addEventListener('message', function(e) {
+			if (!e.data) return;
+
+			if (e.data.type === 'inpaint-result') {
+				var resultBytes = new Uint8Array(e.data.image);
+				var blob = new Blob([resultBytes], { type: 'image/png' });
+				var img = new Image();
+				img.onload = function() {
+					/* Delete mask layer first */
+					deleteMaskLayer();
+					maskLayerId = null;
+
+					/* Insert result as new layer */
+					Layers.insert({
+						name: 'Inpainted',
+						type: 'image',
+						data: img,
+						width: img.naturalWidth || img.width,
+						height: img.naturalHeight || img.height,
+						width_original: img.naturalWidth || img.width,
+						height_original: img.naturalHeight || img.height
+					});
+					URL.revokeObjectURL(img.src);
+
+					/* Restore state */
+					AppConfig.COLOR = savedColor;
+					AppConfig.ALPHA = savedAlpha;
+					AppConfig.need_render = true;
+
+					/* Hide UI */
+					inpaintActive = false;
+					bar.style.display = 'none';
+					overlay.style.display = 'none';
+					btn.classList.remove('active');
+				};
+				img.onerror = function() {
+					overlay.style.display = 'none';
+					alert('Failed to load inpainted result.');
+					deactivate();
+				};
+				img.src = URL.createObjectURL(blob);
+			}
+
+			if (e.data.type === 'inpaint-error') {
+				overlay.style.display = 'none';
+				alert('Inpainting failed: ' + (e.data.error || 'Unknown error'));
+			}
+		});
+
+		/* ── Event handlers ── */
+		btn.addEventListener('click', function(e) {
+			e.stopPropagation();
+			if (inpaintActive) {
+				deactivate();
+			} else {
+				activate();
+			}
+		});
+
+		applyBtn.addEventListener('click', function() { applyInpaint(); });
+		cancelBtn.addEventListener('click', function() { deactivate(); });
+
+		/* Keyboard shortcuts */
+		document.addEventListener('keydown', function(e) {
+			if (!inpaintActive) return;
+			if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+			if (e.key === 'Enter') { e.preventDefault(); applyInpaint(); }
+			else if (e.key === 'Escape') { e.preventDefault(); deactivate(); }
+		});
+	}
+
 	/* ── INIT ── */
 	function initCustomUI() {
 		if (typeof AppConfig === 'undefined' || !document.querySelector('.sidebar_left')) {
@@ -2361,6 +2961,7 @@ a:hover {
 		interceptColorPickers();
 		cleanActiveToolBgs();
 		initFontOverride();
+		initInpaintTool();
 	}
 
 	if (document.readyState === 'loading') {
