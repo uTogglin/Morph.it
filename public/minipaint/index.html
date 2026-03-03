@@ -2339,6 +2339,28 @@ a:hover {
 				}
 				/* Also update the sample swatch visually */
 				if (colorSample) colorSample.style.backgroundColor = hex;
+
+				/* ── Directly update miniPaint state ──
+				   The uiColorInput widget stores values in jQuery .data(),
+				   not on the input element, so native events alone won't
+				   propagate the new color to miniPaint's internal state. */
+				var wrapper = input ? input.closest('.ui_color_input') : null;
+				var wrapId = wrapper ? wrapper.getAttribute('id') : null;
+
+				if (wrapId === 'detail_color') {
+					/* Layer color (non-text layers) */
+					if (AppConfig.layer) {
+						AppConfig.layer.color = hex;
+						AppConfig.need_render = true;
+					}
+				} else if (wrapId && AppConfig.layer && AppConfig.layer.params
+						&& typeof AppConfig.layer.params[wrapId] === 'string'
+						&& AppConfig.layer.params[wrapId].charAt(0) === '#') {
+					/* Tool parameter color (text fill, stroke, etc.) */
+					AppConfig.layer.params[wrapId] = hex;
+					AppConfig.need_render = true;
+					AppConfig.need_render_changed_params = true;
+				}
 			});
 		}, true); /* capture phase */
 	}
