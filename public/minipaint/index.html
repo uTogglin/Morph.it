@@ -2051,7 +2051,7 @@ a:hover {
 				fgSwatch.style.backgroundColor = hex;
 				/* If a text layer is selected, also update its fill color */
 				if (AppConfig.layer && AppConfig.layer.type === 'text') {
-					applyTextFill(AppConfig.layer, hex);
+					applyTextColor(AppConfig.layer, 'fill', hex);
 				}
 			});
 		});
@@ -2296,41 +2296,84 @@ a:hover {
 
 	/* ══════════════════════════════════════════════════════
 	   COMPLETE COLOR SYSTEM REPLACEMENT
-	   Instead of intercepting miniPaint's jQuery-based color
-	   widgets, we physically block them with overlay divs and
-	   handle all colour picking ourselves.
+	   Physically blocks miniPaint's jQuery color widgets with
+	   overlay divs. For text layers, drives miniPaint's own
+	   on_params_update() to update span metadata correctly.
 	   ══════════════════════════════════════════════════════ */
 
-	/* ── Text span helpers ──
-	   Text layers store colour per-span in layer.data (lines→spans→meta).
-	   The renderer reads span.meta.fill_color / stroke_color, NOT params.fill.
-	   We must walk every span and set the metadata directly. */
-	function setTextSpanMeta(layer, metaKey, value) {
-		if (!layer || layer.type !== 'text' || !layer.data) return;
-		var lines = layer.data;
-		for (var i = 0; i < lines.length; i++) {
-			if (!Array.isArray(lines[i])) continue;
-			for (var j = 0; j < lines[i].length; j++) {
-				if (!lines[i][j].meta) lines[i][j].meta = {};
-				lines[i][j].meta[metaKey] = value;
+	/* ── Get miniPaint text tool internals ── */
+	function getTextTool() {
+		try {
+			return Layers.Base_gui.GUI_tools.tools_modules["text"].object;
+		} catch (e) { return null; }
+	}
+
+	/* ── Apply a text colour via miniPaint's on_params_update ──
+	   paramKey = "fill" | "stroke"
+	   This drives the real text tool code-path:
+	     1. get_editor(layer) → per-layer editor
+	     2. select-all in the editor
+	     3. on_params_update() → set_meta_range() on selection
+	     4. undo action recorded, Base_layers.render() called   */
+	function applyTextColor(layer, paramKey, hex) {
+		if (!layer || layer.type !== 'text') return;
+		var textTool = getTextTool();
+		if (!textTool) return;
+
+		try {
+			var editor = textTool.get_editor(layer);
+			if (!editor || !editor.document) return;
+
+			/* Save & set textTool.layer (on_params_update uses this.layer for undo) */
+			var origLayer = textTool.layer;
+			textTool.layer = layer;
+
+			/* Save current selection */
+			var ss = { line: editor.selection.start.line, ch: editor.selection.start.character };
+			var se = { line: editor.selection.end.line, ch: editor.selection.end.character };
+
+			/* Select ALL text so on_params_update applies to every span */
+			var lineCount = editor.document.get_line_count();
+			var lastLine = lineCount - 1;
+			var lastChar = editor.document.get_line_character_count(lastLine);
+			editor.selection.set_position(0, 0, false);
+			editor.selection.set_position(lastLine, lastChar, true);
+
+			/* Drive the real code-path */
+			textTool.on_params_update({ key: paramKey, value: hex });
+
+			/* Also update the layer param so the widget swatch & attribute panel stay in sync */
+			if (layer.params) layer.params[paramKey] = hex;
+
+			/* Collapse selection (avoid visible highlight artifacts) */
+			editor.selection.set_position(0, 0, false);
+
+			/* Restore text tool layer ref */
+			textTool.layer = origLayer;
+
+			/* Sync the text tool singleton's document.lines to this layer's
+			   data so the render function (which reads this.document.lines)
+			   processes the correct layer when calculate_text_placement runs. */
+			textTool.set_lines(layer.data);
+			textTool.hasValueChanged = true;
+			AppConfig.need_render = true;
+			AppConfig.need_render_changed_params = true;
+		} catch (ex) {
+			/* Fallback: brute-force span metadata + render flags */
+			if (layer.params) layer.params[paramKey] = hex;
+			var metaKey = paramKey === 'fill' ? 'fill_color' : 'stroke_color';
+			if (layer.data) {
+				for (var i = 0; i < layer.data.length; i++) {
+					if (!Array.isArray(layer.data[i])) continue;
+					for (var j = 0; j < layer.data[i].length; j++) {
+						if (!layer.data[i][j].meta) layer.data[i][j].meta = {};
+						layer.data[i][j].meta[metaKey] = hex;
+					}
+				}
 			}
+			AppConfig.need_render = true;
+			AppConfig.need_render_changed_params = true;
 		}
-	}
-
-	function applyTextFill(layer, hex) {
-		if (!layer || layer.type !== 'text') return;
-		if (layer.params) layer.params.fill = hex;
-		setTextSpanMeta(layer, 'fill_color', hex);
-		AppConfig.need_render = true;
-		AppConfig.need_render_changed_params = true;
-	}
-
-	function applyTextStroke(layer, hex) {
-		if (!layer || layer.type !== 'text') return;
-		if (layer.params) layer.params.stroke = hex;
-		setTextSpanMeta(layer, 'stroke_color', hex);
-		AppConfig.need_render = true;
-		AppConfig.need_render_changed_params = true;
 	}
 
 	/* ── Read current colour from miniPaint state for a widget ── */
@@ -2353,8 +2396,8 @@ a:hover {
 			return;
 		}
 		if (layer && layer.type === 'text') {
-			if (wrapId === 'fill') { applyTextFill(layer, hex); return; }
-			if (wrapId === 'stroke') { applyTextStroke(layer, hex); return; }
+			if (wrapId === 'fill') { applyTextColor(layer, 'fill', hex); return; }
+			if (wrapId === 'stroke') { applyTextColor(layer, 'stroke', hex); return; }
 		}
 		if (layer && layer.params
 				&& typeof layer.params[wrapId] === 'string'
@@ -2443,7 +2486,7 @@ a:hover {
 					AppConfig.COLOR = hex;
 					mainSwatch.style.backgroundColor = hex;
 					if (AppConfig.layer && AppConfig.layer.type === 'text')
-						applyTextFill(AppConfig.layer, hex);
+						applyTextColor(AppConfig.layer, 'fill', hex);
 				});
 			});
 		}
