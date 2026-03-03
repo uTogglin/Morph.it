@@ -2750,17 +2750,25 @@ a:hover {
 		document.body.appendChild(overlay);
 
 		/* ── Brush size sync ── */
-		sizeSlider.addEventListener('input', function() {
-			if (typeof AppConfig !== 'undefined') {
-				var s = parseInt(sizeSlider.value, 10);
-				AppConfig.TOOL_SIZES = s;
-				if (AppConfig.tool && AppConfig.tool.size !== undefined) AppConfig.tool.size = s;
+		function syncBrushSize() {
+			var s = parseInt(sizeSlider.value, 10);
+			/* Set via TOOL.attributes (how miniPaint stores tool params) */
+			if (AppConfig.TOOL && AppConfig.TOOL.attributes) {
+				AppConfig.TOOL.attributes.size = s;
 			}
-		});
+			/* Also try the right-panel size input so UI stays in sync */
+			var sizeInput = document.querySelector('#action_attributes input[id*="size"], #action_attributes input[type="number"]');
+			if (sizeInput) {
+				var nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+				nativeSet.call(sizeInput, String(s));
+				sizeInput.dispatchEvent(new Event('input', { bubbles: true }));
+				sizeInput.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+		}
+		sizeSlider.addEventListener('input', syncBrushSize);
 
 		/* ── Find the brush tool button ── */
 		function findBrushBtn() {
-			/* Try multiple selectors */
 			var b = toolbar.querySelector('[title="Brush"]');
 			if (b) return b;
 			var allBtns = toolbar.querySelectorAll('button');
@@ -2768,7 +2776,6 @@ a:hover {
 				var t = (allBtns[i].title || '').toLowerCase();
 				if (t.indexOf('brush') >= 0 || t.indexOf('paint') >= 0) return allBtns[i];
 			}
-			/* Try by background-image containing 'brush' */
 			for (var i = 0; i < allBtns.length; i++) {
 				var bg = window.getComputedStyle(allBtns[i]).backgroundImage || '';
 				if (bg.indexOf('brush') >= 0) return allBtns[i];
@@ -2815,16 +2822,14 @@ a:hover {
 			/* Select it and set drawing color */
 			if (maskLayerId !== null) Layers.select(maskLayerId);
 			AppConfig.COLOR = '#ff0000';
-			AppConfig.ALPHA = 0.6;
+			AppConfig.ALPHA = 200; /* 0-255 scale, ~78% opacity */
 
 			/* Activate brush tool by clicking its button */
 			var brushEl = findBrushBtn();
 			if (brushEl) brushEl.click();
 
-			/* Sync brush size */
-			var s = parseInt(sizeSlider.value, 10);
-			AppConfig.TOOL_SIZES = s;
-			if (AppConfig.tool && AppConfig.tool.size !== undefined) AppConfig.tool.size = s;
+			/* Sync brush size after tool activates */
+			setTimeout(syncBrushSize, 100);
 
 			/* Show action bar, highlight button */
 			bar.style.display = 'flex';
@@ -2876,64 +2881,65 @@ a:hover {
 			overlay.style.display = 'flex';
 
 			try {
-				/* 1. Composite all visible layers EXCEPT the mask */
 				var dims = Layers.get_dimensions();
-				var compCanvas = document.createElement('canvas');
-				compCanvas.width = dims.width;
-				compCanvas.height = dims.height;
-				var compCtx = compCanvas.getContext('2d');
+				var allLayers = AppConfig.layers;
 
-				var layers = AppConfig.layers.slice().sort(function(a, b) { return a.order - b.order; });
-				for (var i = 0; i < layers.length; i++) {
-					var layer = layers[i];
-					if (!layer.visible || layer.id === maskLayerId) continue;
-					var src = layer.link_canvas || layer.link;
-					if (src) {
-						compCtx.globalAlpha = typeof layer.opacity !== 'undefined' ? layer.opacity / 100 : 1;
-						compCtx.drawImage(src, layer.x || 0, layer.y || 0, layer.width, layer.height);
-					}
+				/* Save visibility state of all layers */
+				var savedVis = [];
+				for (var i = 0; i < allLayers.length; i++) {
+					savedVis.push(allLayers[i].visible);
 				}
-				compCtx.globalAlpha = 1;
 
-				/* 2. Extract mask: painted areas → white, rest → black */
-				var maskLayer = null;
-				for (var i = 0; i < AppConfig.layers.length; i++) {
-					if (AppConfig.layers[i].id === maskLayerId) { maskLayer = AppConfig.layers[i]; break; }
+				/* 1. Render ONLY the mask layer using miniPaint's own renderer */
+				for (var i = 0; i < allLayers.length; i++) {
+					allLayers[i].visible = (allLayers[i].id === maskLayerId);
 				}
-				if (!maskLayer) { overlay.style.display = 'none'; return; }
-
-				var maskSrc = maskLayer.link_canvas || maskLayer.link;
 				var maskCanvas = document.createElement('canvas');
 				maskCanvas.width = dims.width;
 				maskCanvas.height = dims.height;
 				var maskCtx = maskCanvas.getContext('2d');
-				if (maskSrc) maskCtx.drawImage(maskSrc, maskLayer.x || 0, maskLayer.y || 0, maskLayer.width, maskLayer.height);
-				var maskData = maskCtx.getImageData(0, 0, dims.width, dims.height);
+				Layers.convert_layers_to_canvas(maskCtx, false);
 
-				/* Convert to binary mask: any pixel with alpha > threshold → white */
+				/* 2. Render all layers EXCEPT the mask */
+				for (var i = 0; i < allLayers.length; i++) {
+					allLayers[i].visible = savedVis[i] && (allLayers[i].id !== maskLayerId);
+				}
+				var compCanvas = document.createElement('canvas');
+				compCanvas.width = dims.width;
+				compCanvas.height = dims.height;
+				var compCtx = compCanvas.getContext('2d');
+				Layers.convert_layers_to_canvas(compCtx, false);
+
+				/* 3. Restore original visibility */
+				for (var i = 0; i < allLayers.length; i++) {
+					allLayers[i].visible = savedVis[i];
+				}
+				AppConfig.need_render = true;
+
+				/* 4. Convert mask to binary: any pixel with content → white, else → black */
+				var maskData = maskCtx.getImageData(0, 0, dims.width, dims.height);
+				var hasPaint = false;
 				for (var p = 0; p < maskData.data.length; p += 4) {
-					var hasContent = maskData.data[p + 3] > 10;
+					/* Check any color channel or alpha for painted content */
+					var hasContent = maskData.data[p] > 10 || maskData.data[p + 1] > 10 ||
+									 maskData.data[p + 2] > 10 || maskData.data[p + 3] > 10;
+					if (hasContent) hasPaint = true;
 					maskData.data[p] = maskData.data[p + 1] = maskData.data[p + 2] = hasContent ? 255 : 0;
 					maskData.data[p + 3] = 255;
 				}
 
-				/* Check mask has any painted pixels */
-				var hasPaint = false;
-				for (var p = 0; p < maskData.data.length; p += 4) {
-					if (maskData.data[p] > 0) { hasPaint = true; break; }
-				}
 				if (!hasPaint) {
 					overlay.style.display = 'none';
 					alert('Paint over objects to remove first.');
 					return;
 				}
 
-				/* 3. Export composited image as PNG bytes, send via ArrayBuffer transfer */
+				/* 5. Export composited image as PNG, send via ArrayBuffer transfer */
 				compCanvas.toBlob(function(blob) {
 					var reader = new FileReader();
 					reader.onload = function() {
-						var imgBuf = reader.result; /* ArrayBuffer */
-						var maskBuf = maskData.data.buffer.slice(0); /* copy to get transferable */
+						var imgBuf = reader.result;
+						var maskBuf = maskData.data.buffer.slice(0);
 						parent.postMessage({
 							type: 'inpaint-request',
 							image: imgBuf,
