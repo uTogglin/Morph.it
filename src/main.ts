@@ -3269,6 +3269,45 @@ window.addEventListener("message", async (e) => {
   }
 });
 
+// Bridge: iframe remove-bg tool → parent applyBgRemoval() → iframe result
+window.addEventListener("message", async (e) => {
+  if (e.data?.type !== "removebg-request") return;
+  const iframe = ui.imgFrame;
+  if (!iframe?.contentWindow) return;
+
+  try {
+    const imageBytes = new Uint8Array(e.data.image as ArrayBuffer);
+    // Force enable bg removal for this call
+    const prevRemoveBg = removeBg;
+    removeBg = true;
+
+    const fileData: FileData[] = [{ name: "image.png", bytes: imageBytes }];
+    const result = await applyBgRemoval(fileData);
+    removeBg = prevRemoveBg;
+
+    if (result.length > 0 && result[0].bytes !== imageBytes) {
+      const resultBuf = result[0].bytes.buffer.slice(
+        result[0].bytes.byteOffset,
+        result[0].bytes.byteOffset + result[0].bytes.byteLength
+      );
+      iframe.contentWindow.postMessage({
+        type: "removebg-result",
+        image: resultBuf,
+      }, "*", [resultBuf]);
+    } else {
+      iframe.contentWindow.postMessage({
+        type: "removebg-error",
+        error: "Background removal produced no output.",
+      }, "*");
+    }
+  } catch (err: any) {
+    iframe.contentWindow!.postMessage({
+      type: "removebg-error",
+      error: err?.message || String(err),
+    }, "*");
+  }
+});
+
 // Action: Save & Download
 ui.imgSaveBtn?.addEventListener("click", async () => {
   const imageBytes = getImageFromMiniPaint();

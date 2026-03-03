@@ -1589,8 +1589,18 @@ a:hover {
 }
 
 /* ══════════════════════════════════════════
-   21. INPAINT TOOL
+   21. INPAINT TOOL  &  REMOVE-BG TOOL
    ══════════════════════════════════════════ */
+#tools_container .removebg-tool-btn {
+	width: 32px !important;
+	height: 32px !important;
+	min-width: 32px !important;
+	min-height: 32px !important;
+	cursor: pointer;
+	/* scissors icon (person cutout) */
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c8c8c8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2' stroke-dasharray='4 2'/%3E%3Cpath d='M12 7c-1.7 0-3 1.3-3 3s1.3 3 3 3 3-1.3 3-3-1.3-3-3-3z'/%3E%3Cpath d='M8 17c0-2.2 1.8-4 4-4s4 1.8 4 4' stroke='%2374b9ff'/%3E%3C/svg%3E") !important;
+	background-repeat: no-repeat !important;
+}
 #tools_container .inpaint-tool-btn {
 	width: 32px !important;
 	height: 32px !important;
@@ -2852,6 +2862,106 @@ a:hover {
 	}
 
 	/* ── INPAINT TOOL ── */
+	/* ══════════════════════════════════════════════════════
+	   REMOVE BACKGROUND TOOL (inside editor)
+	   One-click: composites visible layers → sends to parent
+	   for AI background removal → inserts result as new layer.
+	   ══════════════════════════════════════════════════════ */
+	function initRemoveBgTool() {
+		var toolbar = document.getElementById('tools_container');
+		if (!toolbar) return;
+
+		var busy = false;
+
+		/* ── Toolbar button ── */
+		var btn = document.createElement('button');
+		btn.className = 'removebg-tool-btn';
+		btn.title = 'Remove background (AI)';
+		toolbar.appendChild(btn);
+
+		/* ── Loading overlay (reuses inpaint-overlay styles) ── */
+		var overlay = document.createElement('div');
+		overlay.className = 'inpaint-overlay';
+		overlay.style.display = 'none';
+		overlay.innerHTML = '<div class="spinner"></div><div>Removing background\u2026</div>';
+		document.body.appendChild(overlay);
+
+		/* ── Run ── */
+		function run() {
+			if (busy) return;
+			busy = true;
+			overlay.style.display = 'flex';
+
+			try {
+				var dims = Layers.get_dimensions();
+				var compCanvas = document.createElement('canvas');
+				compCanvas.width = dims.width;
+				compCanvas.height = dims.height;
+				var compCtx = compCanvas.getContext('2d');
+				Layers.convert_layers_to_canvas(compCtx);
+
+				compCanvas.toBlob(function(blob) {
+					if (!blob) { finish('Failed to export image.'); return; }
+					var reader = new FileReader();
+					reader.onload = function() {
+						var imgBuf = reader.result;
+						parent.postMessage({
+							type: 'removebg-request',
+							image: imgBuf
+						}, '*', [imgBuf]);
+					};
+					reader.onerror = function() { finish('Failed to read image data.'); };
+					reader.readAsArrayBuffer(blob);
+				}, 'image/png');
+			} catch (err) {
+				finish('Error: ' + (err.message || err));
+			}
+		}
+
+		function finish(errMsg) {
+			overlay.style.display = 'none';
+			busy = false;
+			if (errMsg) alert(errMsg);
+		}
+
+		/* ── Receive result from parent ── */
+		window.addEventListener('message', function(e) {
+			if (!e.data) return;
+
+			if (e.data.type === 'removebg-result') {
+				var resultBuf = e.data.image;
+				var blob = new Blob([new Uint8Array(resultBuf)], { type: 'image/png' });
+				var img = new Image();
+				img.onload = function() {
+					Layers.insert({
+						name: 'No Background',
+						type: 'image',
+						data: img,
+						width: img.naturalWidth || img.width,
+						height: img.naturalHeight || img.height,
+						width_original: img.naturalWidth || img.width,
+						height_original: img.naturalHeight || img.height
+					});
+					URL.revokeObjectURL(img.src);
+					AppConfig.need_render = true;
+					finish(null);
+				};
+				img.onerror = function() { finish('Failed to load result image.'); };
+				img.src = URL.createObjectURL(blob);
+			}
+
+			if (e.data.type === 'removebg-error') {
+				finish('Background removal failed: ' + (e.data.error || 'Unknown error'));
+			}
+		});
+
+		/* ── Click handler ── */
+		btn.addEventListener('click', function(e) {
+			e.stopPropagation();
+			run();
+		});
+	}
+
 	function initInpaintTool() {
 		var toolbar = document.getElementById('tools_container');
 		if (!toolbar) return;
@@ -3192,6 +3302,7 @@ a:hover {
 		initColorSystem();
 		cleanActiveToolBgs();
 		initFontOverride();
+		initRemoveBgTool();
 		initInpaintTool();
 	}
 
