@@ -2426,6 +2426,10 @@ a:hover {
 			});
 		}
 
+		/* Persisted across picker recreations (survives panel rebuilds) */
+		var lastChosenFamily = null;
+		var lastChosenFontId = null;
+
 		var knownDefaults = ['arial', 'courier', 'times', 'verdana', 'georgia', 'tahoma', 'impact'];
 
 		function isFontSelect(sel) {
@@ -2491,7 +2495,23 @@ a:hover {
 			var toggle = document.createElement('button');
 			toggle.type = 'button';
 			toggle.className = 'ps-font-picker-toggle';
-			toggle.textContent = sel.value || 'Arial';
+			/* Use persisted choice if available (survives panel rebuilds) */
+			var initFamily = lastChosenFamily || sel.value || 'Arial';
+			toggle.textContent = initFamily;
+			/* Also sync the native select to our persisted choice */
+			if (lastChosenFamily) {
+				var hasOpt = false;
+				for (var z = 0; z < sel.options.length; z++) {
+					if (sel.options[z].value === lastChosenFamily) { hasOpt = true; break; }
+				}
+				if (!hasOpt) {
+					var newOpt = document.createElement('option');
+					newOpt.value = lastChosenFamily;
+					newOpt.textContent = lastChosenFamily;
+					sel.appendChild(newOpt);
+				}
+				sel.value = lastChosenFamily;
+			}
 
 			var dropdown = document.createElement('div');
 			dropdown.className = 'ps-font-dropdown';
@@ -2510,7 +2530,7 @@ a:hover {
 			document.body.appendChild(dropdown);
 			sel.parentNode.insertBefore(picker, sel);
 
-			var currentFamily = sel.value || 'Arial';
+			var currentFamily = lastChosenFamily || sel.value || 'Arial';
 			var highlightIdx = -1;
 
 			function ensureOption(family) {
@@ -2543,6 +2563,8 @@ a:hover {
 
 			function selectFont(family, fontId) {
 				currentFamily = family;
+				lastChosenFamily = family;
+				lastChosenFontId = fontId;
 				toggle.textContent = family;
 				closePicker();
 
