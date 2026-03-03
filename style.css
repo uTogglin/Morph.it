@@ -1596,20 +1596,9 @@ body[data-tool="image"] #archive-panel { display: none !important; }
 body[data-tool="image"] #output-tray { display: none !important; }
 body[data-tool="image"] #convert-button { display: none !important; }
 
-/* ── Image page header ── */
+/* ── Image page header (hidden — miniPaint has its own menu) ── */
 .img-page-header {
-  text-align: center;
-  margin-bottom: 20px;
-}
-.img-page-header h2 {
-  font-size: 1.4rem;
-  font-weight: 700;
-  margin: 0 0 4px;
-}
-.img-page-header p {
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  margin: 0;
+  display: none;
 }
 
 /* ── Editor container: drop zone + miniPaint iframe + action bar ── */
@@ -1650,7 +1639,7 @@ body[data-tool="image"] #convert-button { display: none !important; }
 /* miniPaint iframe */
 #minipaint-frame {
   width: 100%;
-  height: calc(100vh - 160px);
+  height: calc(100vh - 100px);
   min-height: 400px;
   border: 1px solid var(--input-border);
   border-radius: var(--radius) var(--radius) 0 0;

@@ -621,21 +621,28 @@ body {
 	opacity: 0.9 !important;
 }
 
-/* Layer delete button — white icon */
+/* Layer delete button — trash icon */
 .delete {
 	width: 20px !important;
 	min-width: 20px !important;
 	opacity: 0.5 !important;
-	background-size: 12px !important;
 	border: none !important;
 	box-shadow: none !important;
-	filter: invert(1) !important;
+	background-image: none !important;
+	background-color: transparent !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	padding: 0 !important;
 }
 .delete:hover {
 	opacity: 1 !important;
 	background-color: transparent !important;
+	background-image: none !important;
 	border: none !important;
-	filter: invert(1) !important;
+}
+.delete svg {
+	pointer-events: none;
 }
 
 /* Layer filter items */
@@ -1097,16 +1104,17 @@ a:hover {
 #tools_container .active,
 .sidebar_left .active {
 	background-color: transparent !important;
-	background: transparent !important;
 	opacity: 1 !important;
 	border-radius: 0 !important;
 	filter: none !important;
+	border: none !important;
 	border-left: 2px solid #6C5CE7 !important;
+	box-shadow: none !important;
+	outline: none !important;
 }
 #tools_container button.active:hover,
 .sidebar_left button.active:hover {
 	background-color: transparent !important;
-	background: transparent !important;
 }
 
 
@@ -2039,6 +2047,101 @@ a:hover {
 		}
 	}
 
+	/* ── REPLACE DELETE ICONS WITH TRASH SVG ── */
+	function fixDeleteIcons() {
+		var trashSVG = '<svg viewBox="0 0 14 16" width="12" height="14" fill="none" stroke="#ccc" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">' +
+			'<path d="M1 4h12M5 4V2.5A1.5 1.5 0 016.5 1h1A1.5 1.5 0 019 2.5V4"/>' +
+			'<path d="M2.5 4l.7 9.5a1.5 1.5 0 001.5 1.5h4.6a1.5 1.5 0 001.5-1.5L11.5 4"/>' +
+			'<path d="M5.5 7v5M8.5 7v5"/>' +
+			'</svg>';
+
+		function injectTrashIcons() {
+			var dels = document.querySelectorAll('.layers_list .delete');
+			for (var i = 0; i < dels.length; i++) {
+				if (!dels[i].querySelector('svg')) {
+					dels[i].style.backgroundImage = 'none';
+					dels[i].innerHTML = trashSVG;
+				}
+			}
+		}
+
+		/* Run on mutation + interval */
+		var layersBase = document.getElementById('layers_base');
+		if (layersBase) {
+			new MutationObserver(function() { setTimeout(injectTrashIcons, 60); })
+				.observe(layersBase, { childList: true, subtree: true });
+		}
+		setInterval(injectTrashIcons, 1500);
+		injectTrashIcons();
+	}
+
+	/* ── INTERCEPT ALL COLOR PICKERS APP-WIDE ── */
+	function interceptColorPickers() {
+		/* Capture-phase click handler to catch color inputs before miniPaint */
+		document.addEventListener('click', function(e) {
+			var target = e.target;
+			/* Match: color inputs, color sample divs, color swatch clicks */
+			var colorInput = target.closest('input[type="color"]');
+			var colorSample = target.closest('.ui_color_sample');
+			var colorInputWrap = target.closest('.ui_color_input');
+
+			if (!colorInput && !colorSample && !colorInputWrap) return;
+
+			e.preventDefault();
+			e.stopPropagation();
+			e.stopImmediatePropagation();
+
+			/* Find the actual <input type="color"> to read/write */
+			var input = colorInput;
+			if (!input && colorInputWrap) {
+				input = colorInputWrap.querySelector('input[type="color"]');
+			}
+			if (!input && colorSample) {
+				var parent = colorSample.closest('.ui_color_input') ||
+				             colorSample.parentElement;
+				if (parent) input = parent.querySelector('input[type="color"]');
+			}
+
+			var currentHex = '#000000';
+			if (input && input.value) {
+				currentHex = input.value;
+			} else if (colorSample) {
+				currentHex = colorSample.style.backgroundColor || '#000000';
+				/* Convert rgb() to hex if needed */
+				var m = currentHex.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+				if (m) currentHex = rgbToHex(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+			}
+
+			openPicker(currentHex, function(hex) {
+				if (input) {
+					/* Use native setter to bypass any framework */
+					var nativeSet = Object.getOwnPropertyDescriptor(
+						HTMLInputElement.prototype, 'value'
+					).set;
+					nativeSet.call(input, hex);
+					input.dispatchEvent(new Event('input', { bubbles: true }));
+					input.dispatchEvent(new Event('change', { bubbles: true }));
+				}
+				/* Also update the sample swatch visually */
+				if (colorSample) colorSample.style.backgroundColor = hex;
+			});
+		}, true); /* capture phase */
+	}
+
+	/* ── CLEAN ACTIVE TOOL BACKGROUNDS ── */
+	function cleanActiveToolBgs() {
+		/* Strip any inline background-color the bundle sets on active tools */
+		setInterval(function() {
+			var active = document.querySelectorAll('#tools_container button.active, #tools_container .active');
+			for (var i = 0; i < active.length; i++) {
+				var el = active[i];
+				if (el.style.backgroundColor && el.style.backgroundColor !== 'transparent') {
+					el.style.backgroundColor = 'transparent';
+				}
+			}
+		}, 300);
+	}
+
 	/* ── INIT ── */
 	function initCustomUI() {
 		if (typeof AppConfig === 'undefined' || !document.querySelector('.sidebar_left')) {
@@ -2049,6 +2152,9 @@ a:hover {
 		createColorTool();
 		initLayerThumbnails();
 		initLayerDragDrop();
+		fixDeleteIcons();
+		interceptColorPickers();
+		cleanActiveToolBgs();
 	}
 
 	if (document.readyState === 'loading') {
