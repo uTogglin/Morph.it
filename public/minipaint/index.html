@@ -2049,6 +2049,10 @@ a:hover {
 			openPicker(AppConfig.COLOR || '#000000', function(hex) {
 				AppConfig.COLOR = hex;
 				fgSwatch.style.backgroundColor = hex;
+				/* If a text layer is selected, also update its fill color */
+				if (AppConfig.layer && AppConfig.layer.type === 'text') {
+					applyTextFill(AppConfig.layer, hex);
+				}
 			});
 		});
 
@@ -2290,12 +2294,42 @@ a:hover {
 		injectTrashIcons();
 	}
 
+	/* ── HELPERS: UPDATE TEXT LAYER SPAN METADATA ──
+	   Text layers store color per-span in layer.data (lines→spans→meta).
+	   The renderer reads span.meta.fill_color / stroke_color, NOT params.fill.
+	   So we must walk every span and set the metadata directly. */
+	function setTextSpanMeta(layer, metaKey, value) {
+		if (!layer || layer.type !== 'text' || !layer.data) return;
+		var lines = layer.data;
+		for (var i = 0; i < lines.length; i++) {
+			if (!Array.isArray(lines[i])) continue;
+			for (var j = 0; j < lines[i].length; j++) {
+				if (!lines[i][j].meta) lines[i][j].meta = {};
+				lines[i][j].meta[metaKey] = value;
+			}
+		}
+	}
+
+	function applyTextFill(layer, hex) {
+		if (!layer || layer.type !== 'text') return;
+		if (layer.params) layer.params.fill = hex;
+		setTextSpanMeta(layer, 'fill_color', hex);
+		AppConfig.need_render = true;
+		AppConfig.need_render_changed_params = true;
+	}
+
+	function applyTextStroke(layer, hex) {
+		if (!layer || layer.type !== 'text') return;
+		if (layer.params) layer.params.stroke = hex;
+		setTextSpanMeta(layer, 'stroke_color', hex);
+		AppConfig.need_render = true;
+		AppConfig.need_render_changed_params = true;
+	}
+
 	/* ── INTERCEPT ALL COLOR PICKERS APP-WIDE ── */
 	function interceptColorPickers() {
-		/* Capture-phase click handler to catch color inputs before miniPaint */
 		document.addEventListener('click', function(e) {
 			var target = e.target;
-			/* Match: color inputs, color sample divs, color swatch clicks */
 			var colorInput = target.closest('input[type="color"]');
 			var colorSample = target.closest('.ui_color_sample');
 			var colorInputWrap = target.closest('.ui_color_input');
@@ -2306,60 +2340,71 @@ a:hover {
 			e.stopPropagation();
 			e.stopImmediatePropagation();
 
-			/* Find the actual <input type="color"> to read/write */
-			var input = colorInput;
-			if (!input && colorInputWrap) {
-				input = colorInputWrap.querySelector('input[type="color"]');
-			}
-			if (!input && colorSample) {
-				var parent = colorSample.closest('.ui_color_input') ||
-				             colorSample.parentElement;
-				if (parent) input = parent.querySelector('input[type="color"]');
-			}
+			/* Identify which widget wrapper was clicked */
+			var wrapper = colorInputWrap
+				|| (colorInput && colorInput.closest('.ui_color_input'))
+				|| null;
+			var wrapId = wrapper ? wrapper.getAttribute('id') : null;
+			var layer = AppConfig.layer;
 
+			/* Read current color from miniPaint state (authoritative source) */
 			var currentHex = '#000000';
-			if (input && input.value) {
-				currentHex = input.value;
+			if (wrapId === 'detail_color' && layer && layer.color) {
+				currentHex = layer.color;
+			} else if (wrapId === 'fill' && layer && layer.params && layer.params.fill) {
+				currentHex = layer.params.fill;
+			} else if (wrapId === 'stroke' && layer && layer.params && layer.params.stroke) {
+				currentHex = layer.params.stroke;
+			} else if (wrapId && layer && layer.params
+					&& typeof layer.params[wrapId] === 'string'
+					&& layer.params[wrapId].charAt(0) === '#') {
+				currentHex = layer.params[wrapId];
 			} else if (colorSample) {
-				currentHex = colorSample.style.backgroundColor || '#000000';
-				/* Convert rgb() to hex if needed */
-				var m = currentHex.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-				if (m) currentHex = rgbToHex(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+				currentHex = AppConfig.COLOR || '#000000';
+			} else if (wrapper) {
+				var inp = wrapper.querySelector('input[type="color"]');
+				if (inp && inp.value) currentHex = inp.value;
 			}
 
 			openPicker(currentHex, function(hex) {
-				if (input) {
-					/* Use native setter to bypass any framework */
-					var nativeSet = Object.getOwnPropertyDescriptor(
-						HTMLInputElement.prototype, 'value'
-					).set;
-					nativeSet.call(input, hex);
-					input.dispatchEvent(new Event('input', { bubbles: true }));
-					input.dispatchEvent(new Event('change', { bubbles: true }));
+				/* ── Visual: update the widget swatch ── */
+				if (wrapper) {
+					var inp = wrapper.querySelector('input[type="color"]');
+					if (inp) {
+						try {
+							Object.getOwnPropertyDescriptor(
+								HTMLInputElement.prototype, 'value'
+							).set.call(inp, hex);
+						} catch (ex) {}
+					}
 				}
-				/* Also update the sample swatch visually */
 				if (colorSample) colorSample.style.backgroundColor = hex;
 
-				/* ── Directly update miniPaint state ──
-				   The uiColorInput widget stores values in jQuery .data(),
-				   not on the input element, so native events alone won't
-				   propagate the new color to miniPaint's internal state. */
-				var wrapper = input ? input.closest('.ui_color_input') : null;
-				var wrapId = wrapper ? wrapper.getAttribute('id') : null;
-
+				/* ── State: directly update miniPaint internals ──
+				   No native event dispatch — the uiColorInput widget's
+				   jQuery change handlers read from a stale .data() cache
+				   and would revert our changes. */
 				if (wrapId === 'detail_color') {
-					/* Layer color (non-text layers) */
-					if (AppConfig.layer) {
-						AppConfig.layer.color = hex;
+					if (layer) {
+						layer.color = hex;
 						AppConfig.need_render = true;
 					}
-				} else if (wrapId && AppConfig.layer && AppConfig.layer.params
-						&& typeof AppConfig.layer.params[wrapId] === 'string'
-						&& AppConfig.layer.params[wrapId].charAt(0) === '#') {
-					/* Tool parameter color (text fill, stroke, etc.) */
-					AppConfig.layer.params[wrapId] = hex;
+				} else if (wrapId === 'fill' && layer && layer.type === 'text') {
+					applyTextFill(layer, hex);
+				} else if (wrapId === 'stroke' && layer && layer.type === 'text') {
+					applyTextStroke(layer, hex);
+				} else if (wrapId && layer && layer.params
+						&& typeof layer.params[wrapId] === 'string'
+						&& layer.params[wrapId].charAt(0) === '#') {
+					layer.params[wrapId] = hex;
 					AppConfig.need_render = true;
 					AppConfig.need_render_changed_params = true;
+				} else if (!wrapper) {
+					/* Toolbar color swatch */
+					AppConfig.COLOR = hex;
+					if (layer && layer.type === 'text') {
+						applyTextFill(layer, hex);
+					}
 				}
 			});
 		}, true); /* capture phase */
