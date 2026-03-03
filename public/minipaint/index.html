@@ -2709,7 +2709,7 @@ a:hover {
 
 		/* ── State ── */
 		var inpaintActive = false;
-		var maskLayerId = null;
+		var preExistingIds = {}; /* layer IDs that existed before inpaint mode */
 		var savedColor = '';
 		var savedAlpha = 1;
 		var savedTool = null;
@@ -2795,58 +2795,27 @@ a:hover {
 			savedColor = AppConfig.COLOR || '#000000';
 			savedAlpha = typeof AppConfig.ALPHA !== 'undefined' ? AppConfig.ALPHA : 255;
 
-			/* Record existing layer IDs before insert */
-			var existingIds = {};
+			/* Record existing layer IDs — any layers created after this are mask layers.
+			   The brush tool creates its own vector layers (type:"brush"), so we don't
+			   pre-create a mask layer. Instead we let the brush naturally create layers
+			   and treat all new layers as the inpaint mask. */
+			preExistingIds = {};
 			for (var i = 0; i < AppConfig.layers.length; i++) {
-				existingIds[AppConfig.layers[i].id] = true;
+				preExistingIds[AppConfig.layers[i].id] = true;
 			}
 
-			/* Create a transparent canvas to use as initial layer data */
-			var dims = Layers.get_dimensions();
-			var initCanvas = document.createElement('canvas');
-			initCanvas.width = dims.width;
-			initCanvas.height = dims.height;
+			/* Set brush color/alpha for mask painting */
+			AppConfig.COLOR = '#ff0000';
+			AppConfig.ALPHA = 200; /* 0-255 scale */
 
-			/* Layers.insert() is async — poll for the new layer */
-			Layers.insert({
-				name: 'Inpaint Mask',
-				type: 'image',
-				data: initCanvas,
-				width: dims.width,
-				height: dims.height,
-				width_original: dims.width,
-				height_original: dims.height
-			});
+			/* Activate brush tool — this will create a new layer when user paints */
+			var brushEl = findBrushBtn();
+			if (brushEl) brushEl.click();
+			setTimeout(syncBrushSize, 150);
 
-			/* Show action bar, highlight button immediately */
+			/* Show action bar, highlight button */
 			bar.style.display = 'flex';
 			btn.classList.add('active');
-
-			/* Poll until the new layer appears (async insert) */
-			var attempts = 0;
-			var findLayer = setInterval(function() {
-				attempts++;
-				maskLayerId = null;
-				for (var i = 0; i < AppConfig.layers.length; i++) {
-					if (!existingIds[AppConfig.layers[i].id]) {
-						maskLayerId = AppConfig.layers[i].id;
-						break;
-					}
-				}
-				if (maskLayerId !== null || attempts > 50) {
-					clearInterval(findLayer);
-					if (maskLayerId !== null) {
-						Layers.select(maskLayerId);
-					}
-					AppConfig.COLOR = '#ff0000';
-					AppConfig.ALPHA = 200; /* 0-255 scale */
-
-					/* Activate brush tool */
-					var brushEl = findBrushBtn();
-					if (brushEl) brushEl.click();
-					setTimeout(syncBrushSize, 150);
-				}
-			}, 50);
 		}
 
 		/* ── Deactivate / cleanup ── */
@@ -2854,8 +2823,8 @@ a:hover {
 			if (!inpaintActive) return;
 			inpaintActive = false;
 
-			/* Delete mask layer */
-			deleteMaskLayer();
+			/* Delete all mask layers (any layers created during inpaint mode) */
+			deleteNewLayers();
 
 			/* Restore state */
 			AppConfig.COLOR = savedColor;
@@ -2866,36 +2835,54 @@ a:hover {
 			bar.style.display = 'none';
 			overlay.style.display = 'none';
 			btn.classList.remove('active');
-			maskLayerId = null;
 		}
 
-		function deleteMaskLayer() {
-			if (maskLayerId === null) return;
+		/* Delete all layers created during inpaint mode */
+		function deleteNewLayers() {
 			var layers = AppConfig.layers;
-			for (var i = 0; i < layers.length; i++) {
-				if (layers[i].id === maskLayerId) {
-					/* Select another layer first */
-					var otherId = null;
-					for (var j = 0; j < layers.length; j++) {
-						if (layers[j].id !== maskLayerId) { otherId = layers[j].id; break; }
-					}
-					if (otherId !== null) Layers.select(otherId);
-					AppConfig.layers.splice(i, 1);
-					Layers.render_layers();
-					AppConfig.need_render = true;
+			/* Select a pre-existing layer first */
+			for (var j = 0; j < layers.length; j++) {
+				if (preExistingIds[layers[j].id]) {
+					Layers.select(layers[j].id);
 					break;
 				}
 			}
+			/* Remove new layers (iterate backwards to avoid index shifts) */
+			for (var i = layers.length - 1; i >= 0; i--) {
+				if (!preExistingIds[layers[i].id]) {
+					layers.splice(i, 1);
+				}
+			}
+			Layers.refresh_gui();
+			AppConfig.need_render = true;
 		}
 
 		/* ── Apply inpainting ── */
 		function applyInpaint() {
-			if (!inpaintActive || maskLayerId === null) return;
+			if (!inpaintActive) return;
 			overlay.style.display = 'flex';
 
 			try {
 				var dims = Layers.get_dimensions();
 				var allLayers = AppConfig.layers;
+
+				/* Build set of new layer IDs (layers created during inpaint mode).
+				   The brush tool creates vector "brush" layers for strokes,
+				   so we treat ALL new layers as the inpaint mask. */
+				var newLayerIds = {};
+				var hasNewLayers = false;
+				for (var i = 0; i < allLayers.length; i++) {
+					if (!preExistingIds[allLayers[i].id]) {
+						newLayerIds[allLayers[i].id] = true;
+						hasNewLayers = true;
+					}
+				}
+
+				if (!hasNewLayers) {
+					overlay.style.display = 'none';
+					alert('Paint over objects to remove first.');
+					return;
+				}
 
 				/* Save visibility state of all layers */
 				var savedVis = [];
@@ -2903,9 +2890,9 @@ a:hover {
 					savedVis.push(allLayers[i].visible);
 				}
 
-				/* 1. Render ONLY the mask layer using miniPaint's own renderer */
+				/* 1. Render ONLY new layers (mask) using miniPaint's renderer */
 				for (var i = 0; i < allLayers.length; i++) {
-					allLayers[i].visible = (allLayers[i].id === maskLayerId);
+					allLayers[i].visible = !!newLayerIds[allLayers[i].id];
 				}
 				var maskCanvas = document.createElement('canvas');
 				maskCanvas.width = dims.width;
@@ -2913,9 +2900,9 @@ a:hover {
 				var maskCtx = maskCanvas.getContext('2d');
 				Layers.convert_layers_to_canvas(maskCtx);
 
-				/* 2. Render all layers EXCEPT the mask */
+				/* 2. Render all pre-existing layers (composite image without mask) */
 				for (var i = 0; i < allLayers.length; i++) {
-					allLayers[i].visible = savedVis[i] && (allLayers[i].id !== maskLayerId);
+					allLayers[i].visible = savedVis[i] && !newLayerIds[allLayers[i].id];
 				}
 				var compCanvas = document.createElement('canvas');
 				compCanvas.width = dims.width;
@@ -2980,9 +2967,8 @@ a:hover {
 				var blob = new Blob([new Uint8Array(resultBuf)], { type: 'image/png' });
 				var img = new Image();
 				img.onload = function() {
-					/* Delete mask layer first */
-					deleteMaskLayer();
-					maskLayerId = null;
+					/* Delete all mask/brush layers created during inpaint mode */
+					deleteNewLayers();
 
 					/* Insert result as new layer */
 					Layers.insert({
