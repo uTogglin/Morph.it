@@ -2512,51 +2512,37 @@ a:hover {
 
 			var currentFamily = sel.value || 'Arial';
 			var highlightIdx = -1;
-			var lastSetTime = 0; /* timestamp of last explicit selection */
+
+			function ensureOption(family) {
+				for (var i = 0; i < sel.options.length; i++) {
+					if (sel.options[i].value === family) return;
+				}
+				var o = document.createElement('option');
+				o.value = family;
+				o.textContent = family;
+				sel.appendChild(o);
+			}
 
 			function syncToNativeSelect(family, fontId) {
-				/* Update native select so miniPaint reads the value */
-				var found = false;
-				for (var i = 0; i < sel.options.length; i++) {
-					if (sel.options[i].value === family) {
-						sel.value = family;
-						found = true;
-						break;
-					}
-				}
-				if (!found) {
-					var opt = document.createElement('option');
-					opt.value = family;
-					opt.textContent = family;
-					sel.appendChild(opt);
-					sel.value = family;
-				}
+				ensureOption(family);
+				sel.value = family;
 				sel.dispatchEvent(new Event('input', { bubbles: true }));
 				sel.dispatchEvent(new Event('change', { bubbles: true }));
 
-				/* miniPaint may rebuild <select> options and lose our value;
-				   re-inject after a tick so the value sticks */
+				/* miniPaint rebuilds options on change; keep re-injecting our value */
 				var keepFamily = family;
-				setTimeout(function() {
+				var attempts = 0;
+				var enforcer = setInterval(function() {
+					if (++attempts > 20) { clearInterval(enforcer); return; }
 					if (sel.value !== keepFamily) {
-						var exists = false;
-						for (var i = 0; i < sel.options.length; i++) {
-							if (sel.options[i].value === keepFamily) { exists = true; break; }
-						}
-						if (!exists) {
-							var o = document.createElement('option');
-							o.value = keepFamily;
-							o.textContent = keepFamily;
-							sel.appendChild(o);
-						}
+						ensureOption(keepFamily);
 						sel.value = keepFamily;
 					}
-				}, 100);
+				}, 50);
 			}
 
 			function selectFont(family, fontId) {
 				currentFamily = family;
-				lastSetTime = Date.now();
 				toggle.textContent = family;
 				closePicker();
 
@@ -2658,15 +2644,10 @@ a:hover {
 				if (!picker.contains(e.target) && !dropdown.contains(e.target)) closePicker();
 			});
 
-			/* Keep toggle label in sync if native select changes externally,
-			   but ignore for 3s after an explicit selection (miniPaint rebuilds options) */
-			setInterval(function() {
-				if (Date.now() - lastSetTime < 3000) return;
-				if (sel.value && sel.value !== currentFamily) {
-					currentFamily = sel.value;
-					toggle.textContent = currentFamily;
-				}
-			}, 500);
+			/* No sync interval — our picker is the source of truth.
+			   When miniPaint rebuilds the select (e.g. switching text layers),
+			   the mutation observer triggers scanForFontSelects which creates
+			   a fresh picker with the correct current value. */
 		}
 
 		function scanForFontSelects() {
