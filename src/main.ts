@@ -3239,19 +3239,28 @@ window.addEventListener("message", async (e) => {
   if (!iframe?.contentWindow) return;
 
   try {
-    const { image, mask, width, height } = e.data;
-    const imageBytes = new Uint8Array(image);
-    const maskImageData = new ImageData(new Uint8ClampedArray(mask), width, height);
+    const { image, mask, width, height, model } = e.data;
+    const imageBytes = new Uint8Array(image as ArrayBuffer);
+    const maskImageData = new ImageData(new Uint8ClampedArray(mask as ArrayBuffer), width, height);
+
+    // Temporarily switch model if iframe requests a specific one
+    const prevModel = inpaintModel;
+    if (model === "lama" || model === "migan") inpaintModel = model;
 
     inpaintEnabled = true;
     if (inpaintFeather) applyGaussianBlur(maskImageData, width, height, 3);
 
     const resultBytes = await runInpainting(imageBytes, "png", maskImageData);
+    inpaintModel = prevModel;
 
+    const resultBuf = resultBytes.buffer.slice(
+      resultBytes.byteOffset,
+      resultBytes.byteOffset + resultBytes.byteLength
+    );
     iframe.contentWindow.postMessage({
       type: "inpaint-result",
-      image: Array.from(resultBytes),
-    }, "*");
+      image: resultBuf,
+    }, "*", [resultBuf]);
   } catch (err: any) {
     iframe.contentWindow!.postMessage({
       type: "inpaint-error",

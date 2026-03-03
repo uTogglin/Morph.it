@@ -2687,6 +2687,8 @@ a:hover {
 		var maskLayerId = null;
 		var savedColor = '';
 		var savedAlpha = 1;
+		var savedTool = null;
+		var inpaintModel = 'lama'; /* default model */
 		var bar = null;
 		var overlay = null;
 
@@ -2702,13 +2704,21 @@ a:hover {
 		bar.style.display = 'none';
 		bar.innerHTML =
 			'<label>Size <input type="range" class="inpaint-brush-size" min="1" max="200" value="30"></label>' +
+			'<button class="inpaint-model-btn" type="button" style="background:#444!important;color:#ccc!important;font-size:10px!important;">LaMa</button>' +
 			'<button class="inpaint-apply" type="button">&#x2714; Apply</button>' +
 			'<button class="inpaint-cancel" type="button">&#x2716; Cancel</button>';
 		document.body.appendChild(bar);
 
 		var sizeSlider = bar.querySelector('.inpaint-brush-size');
+		var modelBtn = bar.querySelector('.inpaint-model-btn');
 		var applyBtn = bar.querySelector('.inpaint-apply');
 		var cancelBtn = bar.querySelector('.inpaint-cancel');
+
+		/* ── Model toggle ── */
+		modelBtn.addEventListener('click', function() {
+			inpaintModel = inpaintModel === 'lama' ? 'migan' : 'lama';
+			modelBtn.textContent = inpaintModel === 'lama' ? 'LaMa' : 'MI-GAN';
+		});
 
 		/* ── Create loading overlay (hidden initially) ── */
 		overlay = document.createElement('div');
@@ -2719,8 +2729,30 @@ a:hover {
 
 		/* ── Brush size sync ── */
 		sizeSlider.addEventListener('input', function() {
-			if (typeof AppConfig !== 'undefined') AppConfig.TOOL_SIZES = parseInt(sizeSlider.value, 10);
+			if (typeof AppConfig !== 'undefined') {
+				var s = parseInt(sizeSlider.value, 10);
+				AppConfig.TOOL_SIZES = s;
+				if (AppConfig.tool && AppConfig.tool.size !== undefined) AppConfig.tool.size = s;
+			}
 		});
+
+		/* ── Find the brush tool button ── */
+		function findBrushBtn() {
+			/* Try multiple selectors */
+			var b = toolbar.querySelector('[title="Brush"]');
+			if (b) return b;
+			var allBtns = toolbar.querySelectorAll('button');
+			for (var i = 0; i < allBtns.length; i++) {
+				var t = (allBtns[i].title || '').toLowerCase();
+				if (t.indexOf('brush') >= 0 || t.indexOf('paint') >= 0) return allBtns[i];
+			}
+			/* Try by background-image containing 'brush' */
+			for (var i = 0; i < allBtns.length; i++) {
+				var bg = window.getComputedStyle(allBtns[i]).backgroundImage || '';
+				if (bg.indexOf('brush') >= 0) return allBtns[i];
+			}
+			return null;
+		}
 
 		/* ── Activate inpaint mode ── */
 		function activate() {
@@ -2731,20 +2763,27 @@ a:hover {
 			savedColor = AppConfig.COLOR || '#000000';
 			savedAlpha = typeof AppConfig.ALPHA !== 'undefined' ? AppConfig.ALPHA : 1;
 
-			/* Create mask layer */
+			/* Create a transparent canvas to use as initial layer data */
 			var dims = Layers.get_dimensions();
+			var initCanvas = document.createElement('canvas');
+			initCanvas.width = dims.width;
+			initCanvas.height = dims.height;
+
+			/* Create mask layer with canvas data so brush can paint on it */
 			Layers.insert({
 				name: 'Inpaint Mask',
 				type: 'image',
+				data: initCanvas,
 				width: dims.width,
 				height: dims.height,
 				width_original: dims.width,
 				height_original: dims.height
 			});
 
-			/* Find the mask layer we just created */
+			/* Find the mask layer we just created (search from end since newest) */
+			maskLayerId = null;
 			var allLayers = AppConfig.layers;
-			for (var i = 0; i < allLayers.length; i++) {
+			for (var i = allLayers.length - 1; i >= 0; i--) {
 				if (allLayers[i].name === 'Inpaint Mask') {
 					maskLayerId = allLayers[i].id;
 					break;
@@ -2757,11 +2796,13 @@ a:hover {
 			AppConfig.ALPHA = 0.6;
 
 			/* Activate brush tool by clicking its button */
-			var brushBtn = toolbar.querySelector('[title="Brush"]') || toolbar.querySelector('[id*="brush"]');
-			if (brushBtn) brushBtn.click();
+			var brushEl = findBrushBtn();
+			if (brushEl) brushEl.click();
 
 			/* Sync brush size */
-			AppConfig.TOOL_SIZES = parseInt(sizeSlider.value, 10);
+			var s = parseInt(sizeSlider.value, 10);
+			AppConfig.TOOL_SIZES = s;
+			if (AppConfig.tool && AppConfig.tool.size !== undefined) AppConfig.tool.size = s;
 
 			/* Show action bar, highlight button */
 			bar.style.display = 'flex';
@@ -2865,19 +2906,20 @@ a:hover {
 					return;
 				}
 
-				/* 3. Export composited image as PNG bytes */
+				/* 3. Export composited image as PNG bytes, send via ArrayBuffer transfer */
 				compCanvas.toBlob(function(blob) {
 					var reader = new FileReader();
 					reader.onload = function() {
-						var imageBytes = new Uint8Array(reader.result);
-						/* 4. Send to parent via postMessage */
+						var imgBuf = reader.result; /* ArrayBuffer */
+						var maskBuf = maskData.data.buffer.slice(0); /* copy to get transferable */
 						parent.postMessage({
 							type: 'inpaint-request',
-							image: Array.from(imageBytes),
-							mask: Array.from(maskData.data),
+							image: imgBuf,
+							mask: maskBuf,
 							width: dims.width,
-							height: dims.height
-						}, '*');
+							height: dims.height,
+							model: inpaintModel
+						}, '*', [imgBuf, maskBuf]);
 					};
 					reader.readAsArrayBuffer(blob);
 				}, 'image/png');
@@ -2893,8 +2935,8 @@ a:hover {
 			if (!e.data) return;
 
 			if (e.data.type === 'inpaint-result') {
-				var resultBytes = new Uint8Array(e.data.image);
-				var blob = new Blob([resultBytes], { type: 'image/png' });
+				var resultBuf = e.data.image; /* ArrayBuffer */
+				var blob = new Blob([new Uint8Array(resultBuf)], { type: 'image/png' });
 				var img = new Image();
 				img.onload = function() {
 					/* Delete mask layer first */
