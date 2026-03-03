@@ -3339,11 +3339,13 @@ a:hover {
 			});
 		}
 
-		/* Save & Download */
+		/* Save — open miniPaint's own Export dialog */
 		if (saveBtn) {
 			saveBtn.addEventListener('click', function(e) {
 				e.stopPropagation();
-				parent.postMessage({ type: 'save-download' }, '*');
+				if (typeof FileSave !== 'undefined' && FileSave.export) {
+					FileSave.export();
+				}
 			});
 		}
 

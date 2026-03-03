@@ -3223,30 +3223,6 @@ window.addEventListener("message", async (e) => {
   }
 });
 
-// Bridge: iframe save button → parent Save & Download pipeline
-window.addEventListener("message", async (e) => {
-  if (e.data?.type !== "save-download") return;
-
-  const imageBytes = getImageFromMiniPaint();
-  if (!imageBytes) return;
-
-  const fileName = imgToolFiles[0]?.name?.replace(/\.[^.]+$/, "") || "edited";
-  let fileData: FileData[] = [{ name: fileName + ".png", bytes: imageBytes }];
-
-  // Apply pipeline (rescale, metadata strip, etc.) but skip inpainting/bg removal (already done in-editor)
-  fileData = await applyMetadataStrip(fileData);
-  fileData = await applyRescale(fileData);
-
-  for (const f of fileData) downloadFile(f.bytes, f.name);
-
-  const totalSize = fileData.reduce((s, f) => s + f.bytes.length, 0);
-  window.showPopup(
-    `<h2>Image saved!</h2>` +
-    `<p>Size: ${formatFileSize(totalSize)}</p>` +
-    `<button onclick="window.hidePopup()">OK</button>`
-  );
-});
-
 // Bridge: iframe fullscreen button → parent Fullscreen API toggle
 window.addEventListener("message", (e) => {
   if (e.data?.type !== "fullscreen-toggle") return;
