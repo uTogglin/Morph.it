@@ -1515,23 +1515,18 @@ a:hover {
 }
 .ps-font-dropdown {
 	display: none;
-	position: absolute;
-	top: 100%;
-	left: 0;
-	width: 220px;
+	position: fixed;
+	width: 240px;
 	max-height: 320px;
 	background: #1e1e1e;
 	border: 1px solid #444;
 	border-radius: 4px;
 	box-shadow: 0 6px 20px rgba(0,0,0,0.6);
-	z-index: 9999;
+	z-index: 99999;
 	flex-direction: column;
 	overflow: hidden;
-	margin-top: 2px;
 }
-.ps-font-picker.open .ps-font-dropdown {
-	display: flex;
-}
+/* dropdown display toggled via JS (fixed positioning on body) */
 .ps-font-dropdown-search {
 	width: 100% !important;
 	box-sizing: border-box !important;
@@ -2512,7 +2507,7 @@ a:hover {
 			dropdown.appendChild(searchInput);
 			dropdown.appendChild(list);
 			picker.appendChild(toggle);
-			picker.appendChild(dropdown);
+			document.body.appendChild(dropdown);
 			sel.parentNode.insertBefore(picker, sel);
 
 			var currentFamily = sel.value || 'Arial';
@@ -2554,8 +2549,25 @@ a:hover {
 
 			function openPkr() {
 				picker.classList.add('open');
+				dropdown.style.display = 'flex';
 				searchInput.value = '';
 				highlightIdx = -1;
+
+				/* Position dropdown below toggle using fixed coords */
+				var rect = toggle.getBoundingClientRect();
+				dropdown.style.left = rect.left + 'px';
+				dropdown.style.top = (rect.bottom + 2) + 'px';
+				/* If it would overflow below viewport, open upward */
+				var spaceBelow = window.innerHeight - rect.bottom - 4;
+				if (spaceBelow < 200) {
+					dropdown.style.top = '';
+					dropdown.style.bottom = (window.innerHeight - rect.top + 2) + 'px';
+					dropdown.style.maxHeight = Math.min(320, rect.top - 4) + 'px';
+				} else {
+					dropdown.style.bottom = '';
+					dropdown.style.maxHeight = Math.min(320, spaceBelow) + 'px';
+				}
+
 				fetchFonts().then(function(fonts) {
 					buildItems(list, fonts, '', currentFamily);
 					/* Scroll selected into view */
@@ -2567,6 +2579,7 @@ a:hover {
 
 			function closePicker() {
 				picker.classList.remove('open');
+				dropdown.style.display = 'none';
 				highlightIdx = -1;
 			}
 
@@ -2622,7 +2635,7 @@ a:hover {
 
 			/* Close on outside click */
 			document.addEventListener('click', function(e) {
-				if (!picker.contains(e.target)) closePicker();
+				if (!picker.contains(e.target) && !dropdown.contains(e.target)) closePicker();
 			});
 
 			/* Keep toggle label in sync if native select changes externally */
