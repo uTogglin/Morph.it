@@ -3269,7 +3269,8 @@ window.addEventListener("message", async (e) => {
   }
 });
 
-// Bridge: iframe remove-bg tool → parent applyBgRemoval() → iframe result
+// Bridge: iframe remove-bg tool → parent removeBgLocal/Api() → iframe result
+// Calls the removal functions directly (not applyBgRemoval which shows its own popup).
 window.addEventListener("message", async (e) => {
   if (e.data?.type !== "removebg-request") return;
   const iframe = ui.imgFrame;
@@ -3277,29 +3278,20 @@ window.addEventListener("message", async (e) => {
 
   try {
     const imageBytes = new Uint8Array(e.data.image as ArrayBuffer);
-    // Force enable bg removal for this call
-    const prevRemoveBg = removeBg;
-    removeBg = true;
+    const f: FileData = { name: "image.png", bytes: imageBytes };
 
-    const fileData: FileData[] = [{ name: "image.png", bytes: imageBytes }];
-    const result = await applyBgRemoval(fileData);
-    removeBg = prevRemoveBg;
+    const outBytes = bgMode === "api"
+      ? await removeBgViaApi(f.bytes, "png")
+      : await removeBgLocal(f, "png");
 
-    if (result.length > 0 && result[0].bytes !== imageBytes) {
-      const resultBuf = result[0].bytes.buffer.slice(
-        result[0].bytes.byteOffset,
-        result[0].bytes.byteOffset + result[0].bytes.byteLength
-      );
-      iframe.contentWindow.postMessage({
-        type: "removebg-result",
-        image: resultBuf,
-      }, "*", [resultBuf]);
-    } else {
-      iframe.contentWindow.postMessage({
-        type: "removebg-error",
-        error: "Background removal produced no output.",
-      }, "*");
-    }
+    const resultBuf = outBytes.buffer.slice(
+      outBytes.byteOffset,
+      outBytes.byteOffset + outBytes.byteLength
+    );
+    iframe.contentWindow.postMessage({
+      type: "removebg-result",
+      image: resultBuf,
+    }, "*", [resultBuf]);
   } catch (err: any) {
     iframe.contentWindow!.postMessage({
       type: "removebg-error",
