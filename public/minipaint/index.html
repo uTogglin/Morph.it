@@ -4026,41 +4026,147 @@ a:hover {
 		});
 
 		/* ── Constrain other tools to selection (like Photoshop) ──
-		   Hook State.do_action so ALL tools (brush, pencil, fill, etc.)
-		   are clipped to the selection mask, not just Layers.update_layer_image. */
+		   Two-part approach:
+		   1) Hook State.do_action to mask the COMMITTED result for both
+		      direct Update_layer_image_action (.canvas) AND Bundle_action
+		      wrappers (.actions_to_do[] sub-actions).
+		   2) Snapshot + rAF loop to mask the LIVE PREVIEW (link_canvas)
+		      while painting, so strokes never visually appear outside
+		      the selection. */
+
+		/* Helper: mask a canvas so pixels outside selection keep their old values */
+		function maskCanvasToSelection(canvas, oldSource) {
+			if (!canvas || canvas.width !== imgW || canvas.height !== imgH) return;
+			if (!oldSource) return;
+			var w = imgW, h = imgH;
+			var tmp = document.createElement('canvas');
+			tmp.width = w; tmp.height = h;
+			var tmpCtx = tmp.getContext('2d');
+			tmpCtx.drawImage(oldSource, 0, 0);
+			var oldPx = tmpCtx.getImageData(0, 0, w, h).data;
+			var newCtx = canvas.getContext('2d');
+			var newData = newCtx.getImageData(0, 0, w, h);
+			var nd = newData.data;
+			for (var i = 0; i < selectionMask.length; i++) {
+				if (!selectionMask[i]) {
+					var off = i * 4;
+					nd[off]     = oldPx[off];
+					nd[off + 1] = oldPx[off + 1];
+					nd[off + 2] = oldPx[off + 2];
+					nd[off + 3] = oldPx[off + 3];
+				}
+			}
+			newCtx.putImageData(newData, 0, 0);
+		}
+
+		/* Part 1: Hook State.do_action for committed results */
 		var origDoAction = State.do_action.bind(State);
 		State.do_action = function(action, opts) {
-			if (selectionMask && action && action.canvas) {
-				var canvas = action.canvas;
-				var w = canvas.width, h = canvas.height;
-				if (w === imgW && h === imgH) {
-					var layer = AppConfig.layer;
-					if (layer && layer.link) {
-						/* Get old layer pixels */
-						var old = document.createElement('canvas');
-						old.width = w; old.height = h;
-						var oldCtx = old.getContext('2d');
-						oldCtx.drawImage(layer.link, 0, 0);
-						var oldPx = oldCtx.getImageData(0, 0, w, h).data;
-						/* Mask: keep old pixels outside selection */
-						var newCtx = canvas.getContext('2d');
-						var newData = newCtx.getImageData(0, 0, w, h);
-						var nd = newData.data;
-						for (var i = 0; i < selectionMask.length; i++) {
-							if (!selectionMask[i]) {
-								var off = i * 4;
-								nd[off] = oldPx[off];
-								nd[off + 1] = oldPx[off + 1];
-								nd[off + 2] = oldPx[off + 2];
-								nd[off + 3] = oldPx[off + 3];
-							}
+			if (selectionMask && action) {
+				var layer = AppConfig.layer;
+				var src = layer ? layer.link : null;
+				/* Direct Update_layer_image_action */
+				if (action.canvas) {
+					maskCanvasToSelection(action.canvas, src);
+				}
+				/* Bundle_action wrapping Update_layer_image_action(s) */
+				if (action.actions_to_do) {
+					for (var i = 0; i < action.actions_to_do.length; i++) {
+						var sub = action.actions_to_do[i];
+						if (sub && sub.canvas) {
+							maskCanvasToSelection(sub.canvas, src);
 						}
-						newCtx.putImageData(newData, 0, 0);
 					}
 				}
 			}
 			return origDoAction(action, opts);
 		};
+
+		/* Part 2: Live preview masking via snapshot + rAF.
+		   On mousedown we snapshot the layer; a rAF loop then
+		   continuously composites the preview canvas so that
+		   pixels outside the selection show the snapshot instead
+		   of the tool's unmasked strokes. We composite using
+		   GPU-accelerated drawImage + globalCompositeOperation
+		   instead of per-pixel loops for performance. */
+		var previewSnapshot = null;
+		var selMaskCanvas = null;   /* opaque-white where selected, transparent elsewhere */
+		var previewActive = false;
+
+		/* Build a mask canvas from selectionMask for compositing */
+		function buildMaskCanvas() {
+			selMaskCanvas = document.createElement('canvas');
+			selMaskCanvas.width = imgW;
+			selMaskCanvas.height = imgH;
+			var ctx = selMaskCanvas.getContext('2d');
+			var d = ctx.createImageData(imgW, imgH);
+			for (var i = 0; i < selectionMask.length; i++) {
+				if (selectionMask[i]) {
+					var off = i * 4;
+					d.data[off] = d.data[off + 1] = d.data[off + 2] = d.data[off + 3] = 255;
+				}
+			}
+			ctx.putImageData(d, 0, 0);
+		}
+
+		var _proxyCanvas = null, _proxyCtx = null;
+		function maskPreviewFrame() {
+			if (!previewActive || !selectionMask || !previewSnapshot) return;
+			var layer = AppConfig.layer;
+			if (!layer) return;
+			/* link_canvas is the live preview surface set by tools */
+			var lc = layer.link_canvas;
+			if (!lc || lc.width !== imgW || lc.height !== imgH) {
+				requestAnimationFrame(maskPreviewFrame);
+				return;
+			}
+			if (!selMaskCanvas) buildMaskCanvas();
+			/* Composite: new-inside-selection + old-outside-selection.
+			   Uses canvas compositing (GPU) instead of pixel loops. */
+			if (!_proxyCanvas || _proxyCanvas.width !== imgW) {
+				_proxyCanvas = document.createElement('canvas');
+				_proxyCanvas.width = imgW;
+				_proxyCanvas.height = imgH;
+				_proxyCtx = _proxyCanvas.getContext('2d');
+			}
+			_proxyCtx.globalCompositeOperation = 'source-over';
+			_proxyCtx.clearRect(0, 0, imgW, imgH);
+			/* Draw the tool's live canvas */
+			_proxyCtx.drawImage(lc, 0, 0);
+			/* Keep only pixels inside selection */
+			_proxyCtx.globalCompositeOperation = 'destination-in';
+			_proxyCtx.drawImage(selMaskCanvas, 0, 0);
+			/* Fill remaining (outside selection) with old snapshot */
+			_proxyCtx.globalCompositeOperation = 'destination-over';
+			_proxyCtx.drawImage(previewSnapshot, 0, 0);
+			/* Write result back to the tool's preview canvas */
+			var lcCtx = lc.getContext('2d');
+			lcCtx.clearRect(0, 0, imgW, imgH);
+			lcCtx.drawImage(_proxyCanvas, 0, 0);
+			AppConfig.need_render = true;
+			requestAnimationFrame(maskPreviewFrame);
+		}
+
+		var mainCanvas = document.getElementById('canvas_minipaint');
+		document.addEventListener('mousedown', function(e) {
+			if (!selectionMask || !mainCanvas) return;
+			if (e.target !== mainCanvas) return;
+			if (wandActive) return;  /* don't interfere with wand clicks */
+			var layer = AppConfig.layer;
+			if (!layer || !layer.link) return;
+			/* Snapshot the layer before any tool draws on it */
+			previewSnapshot = document.createElement('canvas');
+			previewSnapshot.width = imgW;
+			previewSnapshot.height = imgH;
+			previewSnapshot.getContext('2d').drawImage(layer.link, 0, 0);
+			previewActive = true;
+			selMaskCanvas = null; /* rebuild in case selection changed */
+			requestAnimationFrame(maskPreviewFrame);
+		}, true);
+
+		document.addEventListener('mouseup', function() {
+			previewActive = false;
+		}, true);
 	}
 
 	/* ══════════════════════════════════════════════════════
