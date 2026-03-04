@@ -3486,8 +3486,6 @@ a:hover {
 				overlayCanvas = document.createElement('canvas');
 				overlayCanvas.className = 'magicwand-overlay';
 				wrapper.appendChild(overlayCanvas);
-				/* Keep overlay synced when canvas resizes (zoom, window resize) */
-				new ResizeObserver(function() { syncOverlaySize(); }).observe(mainCanvas);
 			}
 			syncOverlaySize();
 		}
@@ -3512,47 +3510,57 @@ a:hover {
 			ctx.putImageData(imgData, 0, 0);
 		}
 
-		/* Draw the overlay using the same transform as the main canvas (survives zoom/pan) */
-		function renderOverlay() {
-			if (!overlayCanvas || !maskCanvas) return;
-			var mainCanvas = document.getElementById('canvas_minipaint');
-			var ctx = overlayCanvas.getContext('2d');
-			/* Reset transform to clear the whole canvas */
-			ctx.setTransform(1, 0, 0, 1, 0, 0);
-			ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-			/* Copy the main canvas transform so the overlay matches zoom/pan exactly */
-			if (mainCanvas) {
-				var t = mainCanvas.getContext('2d').getTransform();
-				ctx.setTransform(t.a, t.b, t.c, t.d, t.e, t.f);
-			}
-			ctx.imageSmoothingEnabled = false;
-			ctx.drawImage(maskCanvas, 0, 0);
+		/*
+		 * Compute the canvas transform from Layers.get_world_coords.
+		 * miniPaint save/restores its context transform each frame,
+		 * so we derive it: toScreen(0,0) gives the pan offset,
+		 * and the scale is ZOOM.
+		 */
+		function getCanvasTransform() {
+			var zoom = AppConfig.ZOOM || 1;
+			/* get_world_coords(0,0) returns the image coords at canvas pixel (0,0) */
+			var origin = Layers.get_world_coords(0, 0);
+			/* panX/panY = where image (0,0) appears in canvas pixels */
+			var panX = -origin.x * zoom;
+			var panY = -origin.y * zoom;
+			return { zoom: zoom, panX: panX, panY: panY };
 		}
 
-		/* Track main canvas transform changes and re-render overlay */
-		var lastTransformStr = '';
-		(function syncOverlayTransform() {
+		/* Draw overlay using the derived zoom/pan so it matches the main canvas */
+		function renderOverlay() {
+			if (!overlayCanvas || !maskCanvas) return;
+			var ctx = overlayCanvas.getContext('2d');
+			ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+			var t = getCanvasTransform();
+			ctx.setTransform(t.zoom, 0, 0, t.zoom, t.panX, t.panY);
+			ctx.imageSmoothingEnabled = false;
+			ctx.drawImage(maskCanvas, 0, 0);
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+		}
+
+		/* Re-render overlay whenever miniPaint renders (zoom, pan, resize) */
+		var lastOverlayState = '';
+		(function syncOverlay() {
 			if (overlayCanvas && maskCanvas) {
+				var t = getCanvasTransform();
 				var mainCanvas = document.getElementById('canvas_minipaint');
-				if (mainCanvas) {
-					var t = mainCanvas.getContext('2d').getTransform();
-					var s = t.a + ',' + t.d + ',' + t.e + ',' + t.f;
-					if (s !== lastTransformStr) {
-						lastTransformStr = s;
-						syncOverlaySize();
-						renderOverlay();
-					}
+				var cw = mainCanvas ? mainCanvas.width : 0;
+				var ch = mainCanvas ? mainCanvas.height : 0;
+				var state = cw + ',' + ch + ',' + t.zoom + ',' + t.panX + ',' + t.panY;
+				if (state !== lastOverlayState) {
+					lastOverlayState = state;
+					syncOverlaySize();
+					renderOverlay();
 				}
 			}
-			requestAnimationFrame(syncOverlayTransform);
+			requestAnimationFrame(syncOverlay);
 		})();
 
 		function clearOverlay() {
 			maskCanvas = null;
-			lastTransformStr = '';
+			lastOverlayState = '';
 			if (overlayCanvas) {
 				var ctx = overlayCanvas.getContext('2d');
-				ctx.setTransform(1, 0, 0, 1, 0, 0);
 				ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 			}
 		}
