@@ -138,6 +138,11 @@ let inpaintModel: "migan" | "lama" = (() => {
   try { const v = localStorage.getItem("convert-inpaint-model"); return v === "lama" ? "lama" : "migan"; } catch { return "migan" as const; }
 })();
 
+/** OpenRouter API key for AI image generation */
+let openrouterApiKey: string = (() => {
+  try { return localStorage.getItem("convert-openrouter-key") ?? ""; } catch { return ""; }
+})();
+
 /** Inpainting session state */
 let inpaintSession: any = null;
 let inpaintSessionModel: string = "";
@@ -344,6 +349,7 @@ const ui = {
   imgFileInput: document.querySelector("#img-file-input") as HTMLInputElement,
   imgInpaintModelToggle: document.querySelector("#inpaint-model-toggle") as HTMLButtonElement,
   imgInpaintFeatherToggle: document.querySelector("#inpaint-feather-toggle") as HTMLButtonElement,
+  openrouterApiKeyInput: document.querySelector("#openrouter-api-key") as HTMLInputElement,
   // Video editor UI
   vidCanvas: document.querySelector("#vid-canvas") as HTMLDivElement,
   vidDropPrompt: document.querySelector("#vid-drop-prompt") as HTMLDivElement,
@@ -1643,6 +1649,13 @@ if (ui.bgApiKeyInput) {
     bgApiKey = ui.bgApiKeyInput.value.trim();
     try { localStorage.setItem("convert-bg-api-key", bgApiKey); } catch {}
     syncImageSettingsUI();
+  });
+}
+if (ui.openrouterApiKeyInput) {
+  ui.openrouterApiKeyInput.value = openrouterApiKey;
+  ui.openrouterApiKeyInput.addEventListener("input", () => {
+    openrouterApiKey = ui.openrouterApiKeyInput.value.trim();
+    try { localStorage.setItem("convert-openrouter-key", openrouterApiKey); } catch {}
   });
 }
 updateBgUI();
@@ -3218,6 +3231,90 @@ window.addEventListener("message", async (e) => {
   } catch (err: any) {
     iframe.contentWindow!.postMessage({
       type: "removebg-error",
+      error: err?.message || String(err),
+    }, "*");
+  }
+});
+
+// ── AI Image Generation via OpenRouter ──────────────────────────────────────
+
+async function generateImageViaOpenRouter(
+  prompt: string,
+  model: string,
+  size: string,
+): Promise<Uint8Array> {
+  if (!openrouterApiKey) throw new Error("No OpenRouter API key. Add your key in Settings → Image Tools.");
+
+  const body: any = {
+    model,
+    messages: [{ role: "user", content: prompt }],
+    modalities: ["image", "text"],
+  };
+  if (size && size !== "auto") body.image_size = size;
+
+  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    referrerPolicy: "no-referrer",
+    headers: {
+      "Authorization": `Bearer ${openrouterApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`OpenRouter API error ${resp.status}: ${text || resp.statusText}`);
+  }
+
+  const json = await resp.json();
+  const choice = json.choices?.[0]?.message;
+  if (!choice) throw new Error("No response from model.");
+
+  // Find image_url part in content array
+  const parts: any[] = Array.isArray(choice.content) ? choice.content : [];
+  const imgPart = parts.find((p: any) => p.type === "image_url" && p.image_url?.url);
+  if (!imgPart) throw new Error("Model did not return an image. Try a different model or prompt.");
+
+  const dataUrl: string = imgPart.image_url.url;
+  // Handle both data URLs and regular URLs
+  let bytes: Uint8Array;
+  if (dataUrl.startsWith("data:")) {
+    const base64 = dataUrl.split(",")[1];
+    if (!base64) throw new Error("Invalid image data URL.");
+    const bin = atob(base64);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  } else {
+    // It's a regular URL, fetch it
+    const imgResp = await fetch(dataUrl, { referrerPolicy: "no-referrer" });
+    if (!imgResp.ok) throw new Error("Failed to fetch generated image.");
+    bytes = new Uint8Array(await imgResp.arrayBuffer());
+  }
+
+  return bytes;
+}
+
+// Bridge: iframe aigen tool → parent OpenRouter API → iframe result
+window.addEventListener("message", async (e) => {
+  if (e.data?.type !== "aigen-request") return;
+  const iframe = ui.imgFrame;
+  if (!iframe?.contentWindow) return;
+
+  try {
+    const { prompt, model, size } = e.data;
+    const resultBytes = await generateImageViaOpenRouter(prompt, model, size);
+    const resultBuf = resultBytes.buffer.slice(
+      resultBytes.byteOffset,
+      resultBytes.byteOffset + resultBytes.byteLength,
+    );
+    iframe.contentWindow.postMessage({
+      type: "aigen-result",
+      image: resultBuf,
+    }, "*", [resultBuf]);
+  } catch (err: any) {
+    iframe.contentWindow!.postMessage({
+      type: "aigen-error",
       error: err?.message || String(err),
     }, "*");
   }
