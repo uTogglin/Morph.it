@@ -3243,15 +3243,26 @@ async function generateImageViaOpenRouter(
   model: string,
   size: string,
   imageOnly: boolean,
+  canvasWidth: number,
+  canvasHeight: number,
 ): Promise<Uint8Array> {
   if (!openrouterApiKey) throw new Error("No OpenRouter API key. Add your key in Settings \u2192 Image Tools.");
+
+  // Pick the smallest sufficient size to reduce cost
+  let effectiveSize = size;
+  if (size === "auto" && canvasWidth > 0 && canvasHeight > 0) {
+    const mp = canvasWidth * canvasHeight;
+    if (mp <= 1024 * 1024) effectiveSize = "1024x1024";
+    else if (canvasWidth > canvasHeight) effectiveSize = "1536x1024";
+    else effectiveSize = "1024x1536";
+  }
 
   const body: any = {
     model,
     messages: [{ role: "user", content: prompt }],
     modalities: imageOnly ? ["image"] : ["image", "text"],
   };
-  if (size && size !== "auto") body.image_size = size;
+  if (effectiveSize && effectiveSize !== "auto") body.image_size = effectiveSize;
 
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -3313,8 +3324,8 @@ window.addEventListener("message", async (e) => {
   if (!iframe?.contentWindow) return;
 
   try {
-    const { prompt, model, size, imageOnly } = e.data;
-    const resultBytes = await generateImageViaOpenRouter(prompt, model, size, !!imageOnly);
+    const { prompt, model, size, imageOnly, canvasWidth, canvasHeight } = e.data;
+    const resultBytes = await generateImageViaOpenRouter(prompt, model, size, !!imageOnly, canvasWidth || 0, canvasHeight || 0);
     const resultBuf = resultBytes.buffer.slice(
       resultBytes.byteOffset,
       resultBytes.byteOffset + resultBytes.byteLength,

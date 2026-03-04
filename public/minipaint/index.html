@@ -3299,12 +3299,17 @@ a:hover {
 			var opt = modelSelect.options[modelSelect.selectedIndex];
 			var imageOnly = opt ? opt.getAttribute('data-image-only') === 'true' : false;
 
+			/* Send canvas dimensions so parent can request a right-sized image */
+			var dims = Layers.get_dimensions();
+
 			parent.postMessage({
 				type: 'aigen-request',
 				prompt: prompt,
 				model: modelSelect.value,
 				size: sizeSelect.value,
-				imageOnly: imageOnly
+				imageOnly: imageOnly,
+				canvasWidth: dims.width,
+				canvasHeight: dims.height
 			}, '*');
 		}
 
@@ -3323,14 +3328,26 @@ a:hover {
 				var blob = new Blob([new Uint8Array(resultBuf)], { type: 'image/png' });
 				var img = new Image();
 				img.onload = function() {
+					var iw = img.naturalWidth || img.width;
+					var ih = img.naturalHeight || img.height;
+					var dims = Layers.get_dimensions();
+					var w = iw, h = ih;
+
+					/* Scale down to fit canvas if larger */
+					if (iw > dims.width || ih > dims.height) {
+						var scale = Math.min(dims.width / iw, dims.height / ih);
+						w = Math.round(iw * scale);
+						h = Math.round(ih * scale);
+					}
+
 					Layers.insert({
 						name: 'AI Generated',
 						type: 'image',
 						data: img,
-						width: img.naturalWidth || img.width,
-						height: img.naturalHeight || img.height,
-						width_original: img.naturalWidth || img.width,
-						height_original: img.naturalHeight || img.height
+						width: w,
+						height: h,
+						width_original: iw,
+						height_original: ih
 					});
 					URL.revokeObjectURL(img.src);
 					AppConfig.need_render = true;
