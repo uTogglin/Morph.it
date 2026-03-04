@@ -1727,19 +1727,6 @@ a:hover {
 }
 
 /* ── Magic Wand Tool ── */
-#tools_container .magicwand-tool-btn {
-	width: 32px !important;
-	height: 32px !important;
-	min-width: 32px !important;
-	min-height: 32px !important;
-	cursor: pointer;
-	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c8c8c8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 21l10-10'/%3E%3Cpath d='M13 11l-1-1 1-4 4-1-1 4z' fill='%23f9ca24' stroke='%23f9ca24'/%3E%3Cpath d='M18 2l1 1' stroke='%23f9ca24' stroke-width='2'/%3E%3Cpath d='M21 5l1 0' stroke='%23f9ca24' stroke-width='2'/%3E%3Cpath d='M15 2l0-1' stroke='%23f9ca24' stroke-width='2'/%3E%3Cpath d='M21 8l0 1' stroke='%23f9ca24' stroke-width='2'/%3E%3C/svg%3E") !important;
-	background-repeat: no-repeat !important;
-}
-#tools_container .magicwand-tool-btn.active {
-	background-color: #555 !important;
-	outline: 2px solid #6C5CE7 !important;
-}
 .magicwand-overlay {
 	position: absolute;
 	top: 0;
@@ -3437,11 +3424,17 @@ a:hover {
 		var imgW = 0, imgH = 0;
 		var overlayCanvas = null;
 
-		/* ── Toolbar button ── */
-		var btn = document.createElement('button');
-		btn.className = 'magicwand-tool-btn';
+		/* ── Hijack the built-in magic eraser sidebar button ── */
+		var btn = toolbar.querySelector('.magic_erase');
+		if (!btn) return;
 		btn.title = 'Magic Wand (select by color)';
-		toolbar.appendChild(btn);
+
+		/* Intercept click in capture phase to prevent miniPaint from activating the eraser tool */
+		btn.addEventListener('click', function(e) {
+			e.stopImmediatePropagation();
+			e.preventDefault();
+			if (wandActive) deactivate(); else activate();
+		}, true);
 
 		/* ── Floating action bar ── */
 		var bar = document.createElement('div');
@@ -3621,13 +3614,11 @@ a:hover {
 		/* ── Activate / deactivate wand ── */
 		function activate() {
 			wandActive = true;
-			btn.classList.add('active');
 			bar.style.display = 'flex';
 		}
 
 		function deactivate() {
 			wandActive = false;
-			btn.classList.remove('active');
 			bar.style.display = 'none';
 			clearSelection();
 		}
@@ -3649,13 +3640,7 @@ a:hover {
 				if (selectionMask[i]) d[i * 4 + 3] = 0;
 			}
 			srcCtx.putImageData(pixData, 0, 0);
-			var dataUrl = srcCanvas.toDataURL('image/png');
-			var img = new Image();
-			img.onload = function() {
-				layer.link = img;
-				AppConfig.need_render = true;
-			};
-			img.src = dataUrl;
+			Layers.update_layer_image(srcCanvas);
 			clearSelection();
 		}
 
@@ -3682,13 +3667,7 @@ a:hover {
 				}
 			}
 			srcCtx.putImageData(pixData, 0, 0);
-			var dataUrl = srcCanvas.toDataURL('image/png');
-			var img = new Image();
-			img.onload = function() {
-				layer.link = img;
-				AppConfig.need_render = true;
-			};
-			img.src = dataUrl;
+			Layers.update_layer_image(srcCanvas);
 			clearSelection();
 		}
 
@@ -3706,9 +3685,11 @@ a:hover {
 		invertBtn.addEventListener('click', function() { doInvert(); });
 		deselectBtn.addEventListener('click', function() { clearSelection(); });
 
-		btn.addEventListener('click', function(e) {
-			e.stopPropagation();
-			if (wandActive) deactivate(); else activate();
+		/* ── Deactivate when another tool is selected ── */
+		toolbar.addEventListener('click', function(e) {
+			if (!wandActive) return;
+			var target = e.target.closest('span');
+			if (target && target !== btn) deactivate();
 		});
 
 		/* ── Keyboard shortcuts ── */
