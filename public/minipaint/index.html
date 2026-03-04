@@ -3468,16 +3468,18 @@ a:hover {
 		/*
 		 * ── Overlay canvas ──
 		 * The overlay stays at IMAGE resolution (imgW × imgH).
-		 * CSS width/height stretches it to match the main canvas display size.
-		 * This way zoom is handled entirely by CSS — no canvas transform needed,
-		 * no timing race with miniPaint's render loop.
+		 * Mask is drawn once via putImageData.  Zoom/pan is handled
+		 * by a CSS transform on the element — no canvas redraw needed.
+		 * canvas_wrapper clips the overlay to the visible editing area.
 		 */
 		function ensureOverlay() {
 			var wrapper = document.getElementById('canvas_wrapper');
 			if (!wrapper) return;
+			wrapper.style.overflow = 'hidden';
 			if (!overlayCanvas) {
 				overlayCanvas = document.createElement('canvas');
 				overlayCanvas.className = 'magicwand-overlay';
+				overlayCanvas.style.transformOrigin = '0 0';
 				wrapper.appendChild(overlayCanvas);
 			}
 			if (overlayCanvas.width !== imgW || overlayCanvas.height !== imgH) {
@@ -3503,24 +3505,31 @@ a:hover {
 			ctx.putImageData(imgData, 0, 0);
 		}
 
-		/* Keep overlay CSS size matched to the main canvas display size */
-		(function syncOverlayCSS() {
-			if (overlayCanvas) {
-				var mc = document.getElementById('canvas_minipaint');
-				if (mc) {
-					var w = mc.clientWidth + 'px';
-					var h = mc.clientHeight + 'px';
-					if (overlayCanvas.style.width !== w) overlayCanvas.style.width = w;
-					if (overlayCanvas.style.height !== h) overlayCanvas.style.height = h;
+		/*
+		 * Sync overlay position with the main canvas view.
+		 * miniPaint's rAF fires before ours (registered first at init),
+		 * so by the time we read get_world_coords the zoom library
+		 * has already been updated by scaleAt() in pre_render.
+		 */
+		(function syncOverlay() {
+			if (overlayCanvas && selectionMask) {
+				var zoom = AppConfig.ZOOM || 1;
+				var origin = Layers.get_world_coords(0, 0);
+				var panX = -origin.x * zoom;
+				var panY = -origin.y * zoom;
+				var tf = 'matrix(' + zoom + ',0,0,' + zoom + ',' + panX + ',' + panY + ')';
+				if (overlayCanvas.style.transform !== tf) {
+					overlayCanvas.style.transform = tf;
 				}
 			}
-			requestAnimationFrame(syncOverlayCSS);
+			requestAnimationFrame(syncOverlay);
 		})();
 
 		function clearOverlay() {
 			if (overlayCanvas) {
 				var ctx = overlayCanvas.getContext('2d');
 				ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+				overlayCanvas.style.transform = '';
 			}
 		}
 
@@ -3600,11 +3609,11 @@ a:hover {
 			e.stopPropagation();
 			e.preventDefault();
 
-			/* Use getBoundingClientRect for correct mapping on any screen size */
+			/* Use miniPaint's own coordinate pipeline — handles zoom, pan, and CSS scaling */
 			var rect = mainCanvas.getBoundingClientRect();
-			var zoom = AppConfig.ZOOM || 1;
-			var x = Math.floor((e.clientX - rect.left) * mainCanvas.width / rect.width / zoom);
-			var y = Math.floor((e.clientY - rect.top) * mainCanvas.height / rect.height / zoom);
+			var world = Layers.get_world_coords(e.clientX - rect.left, e.clientY - rect.top);
+			var x = Math.floor(world.x);
+			var y = Math.floor(world.y);
 
 			var result = magicSelect(x, y);
 			if (!result) return;
