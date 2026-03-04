@@ -3248,13 +3248,24 @@ async function generateImageViaOpenRouter(
 ): Promise<Uint8Array> {
   if (!openrouterApiKey) throw new Error("No OpenRouter API key. Add your key in Settings \u2192 Image Tools.");
 
-  // Pick the smallest sufficient size to reduce cost
-  let effectiveSize = size;
-  if (size === "auto" && canvasWidth > 0 && canvasHeight > 0) {
-    const mp = canvasWidth * canvasHeight;
-    if (mp <= 1024 * 1024) effectiveSize = "1024x1024";
-    else if (canvasWidth > canvasHeight) effectiveSize = "1536x1024";
-    else effectiveSize = "1024x1536";
+  // Pick aspect ratio from canvas dimensions
+  let aspect = "1:1";
+  if (canvasWidth > 0 && canvasHeight > 0) {
+    const r = canvasWidth / canvasHeight;
+    if (r > 1.3) aspect = "3:2";
+    else if (r < 0.77) aspect = "2:3";
+  }
+
+  // Determine image resolution tier from explicit size choice
+  let resTier = "1K"; // default
+  const isGemini = model.startsWith("google/");
+  if (size === "auto" || size === "1024x1024") {
+    // Use 0.5K on Gemini 3.1 Flash for cost savings (roughly half the tokens)
+    resTier = model === "google/gemini-3.1-flash-image-preview" ? "0.5K" : "1K";
+  } else if (size === "1024x1536" || size === "1536x1024") {
+    resTier = "1K";
+  } else if (size === "hd") {
+    resTier = "2K";
   }
 
   const body: any = {
@@ -3262,7 +3273,13 @@ async function generateImageViaOpenRouter(
     messages: [{ role: "user", content: prompt }],
     modalities: imageOnly ? ["image"] : ["image", "text"],
   };
-  if (effectiveSize && effectiveSize !== "auto") body.image_size = effectiveSize;
+
+  if (isGemini) {
+    // Gemini models use image_config for size/aspect control
+    body.image_config = { image_size: resTier, aspect_ratio: aspect };
+  } else if (size && size !== "auto") {
+    body.image_size = size;
+  }
 
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",

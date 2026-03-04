@@ -3202,7 +3202,7 @@ a:hover {
 
 		/* ── Models ── */
 		var models = [
-			{ id: 'google/gemini-3.1-flash-image-preview', label: 'Gemini 3.1 Flash (Nano Banana 2)', cost: '~$0.04/img', imageOnly: false },
+			{ id: 'google/gemini-3.1-flash-image-preview', label: 'Gemini 3.1 Flash (Nano Banana 2)', cost: '~$0.02/img', imageOnly: false },
 			{ id: 'openai/gpt-5-image-mini', label: 'GPT-5 Image Mini', cost: '~$0.07/img', imageOnly: false },
 			{ id: 'black-forest-labs/flux.2-pro', label: 'FLUX.2 Pro', cost: '~$0.03/img', imageOnly: true },
 			{ id: 'black-forest-labs/flux.2-flex', label: 'FLUX.2 Flex', cost: '~$0.06/img', imageOnly: true },
@@ -3211,10 +3211,11 @@ a:hover {
 			{ id: 'google/gemini-2.5-flash-image-preview', label: 'Gemini 2.5 Flash (Legacy)', cost: '~$0.04/img', imageOnly: false }
 		];
 		var sizes = [
-			{ value: 'auto', label: 'Auto' },
+			{ value: 'auto', label: 'Auto (matches canvas, cheapest)' },
 			{ value: '1024x1024', label: '1024 \u00d7 1024' },
 			{ value: '1024x1536', label: '1024 \u00d7 1536 (Portrait)' },
-			{ value: '1536x1024', label: '1536 \u00d7 1024 (Landscape)' }
+			{ value: '1536x1024', label: '1536 \u00d7 1024 (Landscape)' },
+			{ value: 'hd', label: 'HD (2K \u2014 higher cost)' }
 		];
 
 		/* ── Toolbar button ── */
