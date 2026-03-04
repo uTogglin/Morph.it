@@ -1741,26 +1741,12 @@ a:hover {
 	outline: 2px solid #6C5CE7 !important;
 }
 .magicwand-overlay {
-	position: fixed;
+	position: absolute;
+	top: 0;
+	left: 0;
 	pointer-events: none;
-	z-index: 9998;
-	overflow: hidden;
-}
-.magicwand-overlay path {
-	fill: none;
-	stroke-width: 1px;
-	vector-effect: non-scaling-stroke;
-}
-.magicwand-overlay .ants-black {
-	stroke: rgba(0,0,0,0.8);
-	stroke-dasharray: 4 4;
-	animation: marching-ants 0.4s linear infinite;
-}
-.magicwand-overlay .ants-white {
-	stroke: rgba(255,255,255,0.9);
-	stroke-dasharray: 4 4;
-	animation: marching-ants 0.4s linear infinite;
-	animation-delay: -0.2s;
+	z-index: 5;
+	image-rendering: pixelated;
 }
 .magicwand-bar {
 	position: fixed;
@@ -1836,9 +1822,6 @@ a:hover {
 }
 .magicwand-bar .mw-deselect:hover {
 	background: #666 !important;
-}
-@keyframes marching-ants {
-	to { stroke-dashoffset: -8; }
 }
 </style>
 
@@ -3448,11 +3431,11 @@ a:hover {
 
 		/* ── State ── */
 		var wandActive = false;
-		var selectionMask = null;   /* Uint8Array(w*h), 1=selected */
-		var cachedPathD = null;     /* SVG path d-string for boundary */
+		var selectionMask = null;   /* Uint8Array, 1=selected */
 		var tolerance = 15;
 		var contiguous = true;
 		var imgW = 0, imgH = 0;
+		var overlayCanvas = null;
 
 		/* ── Toolbar button ── */
 		var btn = document.createElement('button');
@@ -3460,7 +3443,7 @@ a:hover {
 		btn.title = 'Magic Wand (select by color)';
 		toolbar.appendChild(btn);
 
-		/* ── Floating action bar (hidden initially) ── */
+		/* ── Floating action bar ── */
 		var bar = document.createElement('div');
 		bar.className = 'magicwand-bar';
 		bar.style.display = 'none';
@@ -3489,214 +3472,150 @@ a:hover {
 			contiguous = contigCheck.checked;
 		});
 
-		/* ── SVG overlay (marching ants — visual only, pointer-events:none) ── */
-		var overlaySVG = null;
-		var mainCanvas = document.getElementById('canvas_minipaint');
-
+		/* ── Overlay canvas (static tint — no animation, no flicker) ── */
 		function ensureOverlay() {
-			if (!overlaySVG) {
-				overlaySVG = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-				overlaySVG.setAttribute('class', 'magicwand-overlay');
-				overlaySVG.style.display = 'none';
-				document.body.appendChild(overlaySVG);
+			var wrapper = document.getElementById('canvas_wrapper');
+			var mainCanvas = document.getElementById('canvas_minipaint');
+			if (!wrapper || !mainCanvas) return;
+			if (!overlayCanvas) {
+				overlayCanvas = document.createElement('canvas');
+				overlayCanvas.className = 'magicwand-overlay';
+				wrapper.appendChild(overlayCanvas);
 			}
-			if (!overlaySVG.parentNode) {
-				document.body.appendChild(overlaySVG);
+			overlayCanvas.width = mainCanvas.width;
+			overlayCanvas.height = mainCanvas.height;
+			overlayCanvas.style.width = mainCanvas.style.width || (mainCanvas.width + 'px');
+			overlayCanvas.style.height = mainCanvas.style.height || (mainCanvas.height + 'px');
+		}
+
+		function renderOverlay() {
+			if (!overlayCanvas || !selectionMask) return;
+			var ctx = overlayCanvas.getContext('2d');
+			var w = imgW, h = imgH;
+			ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+			/* Paint semi-transparent red over selected pixels (Quick Mask style) */
+			var imgData = ctx.createImageData(w, h);
+			var d = imgData.data;
+			for (var i = 0; i < selectionMask.length; i++) {
+				if (selectionMask[i]) {
+					d[i * 4] = 0;       /* R */
+					d[i * 4 + 1] = 120; /* G */
+					d[i * 4 + 2] = 255; /* B */
+					d[i * 4 + 3] = 80;  /* A — subtle blue tint */
+				}
+			}
+			ctx.putImageData(imgData, 0, 0);
+		}
+
+		function clearOverlay() {
+			if (overlayCanvas) {
+				var ctx = overlayCanvas.getContext('2d');
+				ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 			}
 		}
 
-		/* Sync overlay position & size to match the main canvas on screen */
-		function syncOverlayPosition() {
-			if (!mainCanvas || !overlaySVG) return;
-			var rect = mainCanvas.getBoundingClientRect();
-			overlaySVG.style.top = Math.round(rect.top) + 'px';
-			overlaySVG.style.left = Math.round(rect.left) + 'px';
-			overlaySVG.style.width = Math.round(rect.width) + 'px';
-			overlaySVG.style.height = Math.round(rect.height) + 'px';
-			var dims = Layers.get_dimensions();
-			overlaySVG.setAttribute('viewBox', '0 0 ' + dims.width + ' ' + dims.height);
+		/* ── Flood fill — matches miniPaint's magic_erase_general algorithm ── */
+		function magicSelect(clickX, clickY) {
+			var layer = AppConfig.layer;
+			if (!layer) return;
+			if (layer.type !== 'image') return;
+
+			var w = layer.width_original || AppConfig.WIDTH;
+			var h = layer.height_original || AppConfig.HEIGHT;
+
+			/* Read layer pixel data (same as magic eraser) */
+			var srcCanvas = document.createElement('canvas');
+			srcCanvas.width = w;
+			srcCanvas.height = h;
+			var srcCtx = srcCanvas.getContext('2d');
+			if (layer.link) srcCtx.drawImage(layer.link, 0, 0);
+			var pixData = srcCtx.getImageData(0, 0, w, h).data;
+
+			/* Click position relative to layer (same as magic eraser) */
+			var lx = Math.round(clickX) - layer.x;
+			var ly = Math.round(clickY) - layer.y;
+			if (lx < 0 || ly < 0 || lx >= w || ly >= h) return;
+
+			var tol = tolerance * 255 / 100;
+			var idx = (ly * w + lx) * 4;
+			var tR = pixData[idx], tG = pixData[idx + 1], tB = pixData[idx + 2], tA = pixData[idx + 3];
+
+			var mask = new Uint8Array(w * h);
+			var dirs = [0, -1, 1, 0];
+			var dirY = [-1, 0, 0, 1];
+
+			if (contiguous) {
+				/* Flood fill — same 4-connected BFS as magic eraser */
+				var stack = [[lx, ly]];
+				while (stack.length > 0) {
+					var pt = stack.pop();
+					for (var d = 0; d < 4; d++) {
+						var nx = pt[0] + dirs[d];
+						var ny = pt[1] + dirY[d];
+						if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+						var ni = ny * w + nx;
+						if (mask[ni]) continue;
+						var off = ni * 4;
+						if (Math.abs(pixData[off] - tR) <= tol &&
+							Math.abs(pixData[off + 1] - tG) <= tol &&
+							Math.abs(pixData[off + 2] - tB) <= tol &&
+							Math.abs(pixData[off + 3] - tA) <= tol) {
+							mask[ni] = 1;
+							stack.push([nx, ny]);
+						}
+					}
+				}
+			} else {
+				/* Global scan */
+				for (var i = 0; i < w * h; i++) {
+					var off = i * 4;
+					if (Math.abs(pixData[off] - tR) <= tol &&
+						Math.abs(pixData[off + 1] - tG) <= tol &&
+						Math.abs(pixData[off + 2] - tB) <= tol &&
+						Math.abs(pixData[off + 3] - tA) <= tol) {
+						mask[i] = 1;
+					}
+				}
+			}
+
+			return { mask: mask, w: w, h: h };
 		}
 
-		/* ── Document-level event capture — blocks ALL events from reaching miniPaint when wand active ── */
-		var blockedEvents = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel',
-			'mousedown', 'mousemove', 'mouseup', 'click', 'dblclick',
-			'touchstart', 'touchmove', 'touchend', 'touchcancel'];
-
-		function eventBlocker(e) {
+		/* ── Click handler — listens on document like magic eraser does ── */
+		document.addEventListener('mousedown', function(e) {
 			if (!wandActive) return;
-			/* Only block events targeting the canvas or its wrapper */
-			var target = e.target;
-			var isCanvasEvent = (target === mainCanvas ||
-				(target && target.id === 'canvas_wrapper') ||
-				(mainCanvas && mainCanvas.contains && mainCanvas.contains(target)));
-			if (!isCanvasEvent) return;
+			var mainCanvas = document.getElementById('canvas_minipaint');
+			if (e.target !== mainCanvas) return;
 
 			e.stopPropagation();
 			e.preventDefault();
 
-			/* Handle wand click on the canvas */
-			if (e.type === 'click' && target === mainCanvas) {
-				var zoom = (typeof AppConfig !== 'undefined' && AppConfig.ZOOM) ? AppConfig.ZOOM : 1;
-				var x = Math.floor(e.offsetX / zoom);
-				var y = Math.floor(e.offsetY / zoom);
-				doWandClick(x, y, e.shiftKey);
-			}
-		}
+			var zoom = AppConfig.ZOOM || 1;
+			var x = Math.floor(e.offsetX / zoom);
+			var y = Math.floor(e.offsetY / zoom);
 
-		function attachEventBlockers() {
-			blockedEvents.forEach(function(evtType) {
-				document.addEventListener(evtType, eventBlocker, true); /* capture phase */
-			});
-		}
+			var result = magicSelect(x, y);
+			if (!result) return;
 
-		function detachEventBlockers() {
-			blockedEvents.forEach(function(evtType) {
-				document.removeEventListener(evtType, eventBlocker, true);
-			});
-		}
-
-		function doWandClick(x, y, shiftKey) {
-			var dims = Layers.get_dimensions();
-			var w = dims.width, h = dims.height;
-			if (x < 0 || x >= w || y < 0 || y >= h) return;
-
-			var imageData = getCompositeData(w, h);
-			var newMask = floodFill(imageData, x, y, w, h, tolerance, contiguous);
-
-			if (shiftKey && selectionMask && imgW === w && imgH === h) {
-				for (var i = 0; i < newMask.length; i++) {
-					if (newMask[i]) selectionMask[i] = 1;
+			if (e.shiftKey && selectionMask && imgW === result.w && imgH === result.h) {
+				for (var i = 0; i < result.mask.length; i++) {
+					if (result.mask[i]) selectionMask[i] = 1;
 				}
 			} else {
-				selectionMask = newMask;
-				imgW = w;
-				imgH = h;
+				selectionMask = result.mask;
+				imgW = result.w;
+				imgH = result.h;
 			}
 
-			cachedPathD = buildBoundaryPath(selectionMask, imgW, imgH);
-			renderAnts();
-		}
-
-		/* ── Get composited image data ── */
-		function getCompositeData(w, h) {
-			var c = document.createElement('canvas');
-			c.width = w;
-			c.height = h;
-			var ctx = c.getContext('2d');
-			Layers.convert_layers_to_canvas(ctx);
-			return ctx.getImageData(0, 0, w, h);
-		}
-
-		/* ── Flood fill (builds selection mask) ── */
-		function floodFill(imageData, startX, startY, w, h, tol, isContiguous) {
-			var data = imageData.data;
-			var mask = new Uint8Array(w * h);
-			var tolScaled = tol * 255 / 100;
-
-			/* Sample target color at click point */
-			var idx = (startY * w + startX) * 4;
-			var tR = data[idx], tG = data[idx + 1], tB = data[idx + 2], tA = data[idx + 3];
-
-			function matches(i) {
-				var off = i * 4;
-				return Math.abs(data[off] - tR) <= tolScaled &&
-					   Math.abs(data[off + 1] - tG) <= tolScaled &&
-					   Math.abs(data[off + 2] - tB) <= tolScaled &&
-					   Math.abs(data[off + 3] - tA) <= tolScaled;
-			}
-
-			if (isContiguous) {
-				/* Stack-based BFS, 4-connected */
-				var visited = new Uint8Array(w * h);
-				var stack = [startX, startY];
-				visited[startY * w + startX] = 1;
-
-				while (stack.length > 0) {
-					var sy = stack.pop();
-					var sx = stack.pop();
-					var si = sy * w + sx;
-
-					if (matches(si)) {
-						mask[si] = 1;
-						/* 4-connected neighbors */
-						if (sx > 0 && !visited[si - 1]) { visited[si - 1] = 1; stack.push(sx - 1, sy); }
-						if (sx < w - 1 && !visited[si + 1]) { visited[si + 1] = 1; stack.push(sx + 1, sy); }
-						if (sy > 0 && !visited[si - w]) { visited[si - w] = 1; stack.push(sx, sy - 1); }
-						if (sy < h - 1 && !visited[si + w]) { visited[si + w] = 1; stack.push(sx, sy + 1); }
-					}
-				}
-			} else {
-				/* Non-contiguous: global scan */
-				for (var i = 0; i < w * h; i++) {
-					if (matches(i)) mask[i] = 1;
-				}
-			}
-
-			return mask;
-		}
-
-		/* ── Build SVG path string from boundary segments ── */
-		function buildBoundaryPath(mask, w, h) {
-			var d = [];
-			for (var y = 0; y < h; y++) {
-				for (var x = 0; x < w; x++) {
-					if (!mask[y * w + x]) continue;
-					if (y === 0 || !mask[(y - 1) * w + x])
-						d.push('M' + x + ' ' + y + 'h1');
-					if (y === h - 1 || !mask[(y + 1) * w + x])
-						d.push('M' + x + ' ' + (y + 1) + 'h1');
-					if (x === 0 || !mask[y * w + x - 1])
-						d.push('M' + x + ' ' + y + 'v1');
-					if (x === w - 1 || !mask[y * w + x + 1])
-						d.push('M' + (x + 1) + ' ' + y + 'v1');
-				}
-			}
-			return d.join('');
-		}
-
-		/* ── Render marching ants as SVG (CSS-animated, flicker-free) ── */
-		function renderAnts() {
-			if (!overlaySVG) return;
-			/* Clear previous paths */
-			while (overlaySVG.firstChild) overlaySVG.removeChild(overlaySVG.firstChild);
-			if (!cachedPathD) return;
-
-			syncOverlayPosition();
-
-			var black = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-			black.setAttribute('d', cachedPathD);
-			black.setAttribute('class', 'ants-black');
-			var white = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-			white.setAttribute('d', cachedPathD);
-			white.setAttribute('class', 'ants-white');
-			overlaySVG.appendChild(black);
-			overlaySVG.appendChild(white);
-		}
-
-		/* Keep overlay position in sync (throttled via rAF) */
-		var syncRafId = null;
-		function requestSyncPosition() {
-			if (syncRafId) return;
-			syncRafId = requestAnimationFrame(function() {
-				syncRafId = null;
-				if (overlaySVG && cachedPathD) syncOverlayPosition();
-			});
-		}
-		window.addEventListener('scroll', requestSyncPosition, true);
-		window.addEventListener('resize', requestSyncPosition);
-		window.addEventListener('wheel', requestSyncPosition, true);
-
-		function stopAnts() {
-			if (overlaySVG) {
-				while (overlaySVG.firstChild) overlaySVG.removeChild(overlaySVG.firstChild);
-			}
-		}
+			ensureOverlay();
+			renderOverlay();
+		}, true);
 
 		/* ── Clear selection ── */
 		function clearSelection() {
 			selectionMask = null;
-			cachedPathD = null;
-			stopAnts();
+			clearOverlay();
 		}
 
 		/* ── Activate / deactivate wand ── */
@@ -3704,50 +3623,32 @@ a:hover {
 			wandActive = true;
 			btn.classList.add('active');
 			bar.style.display = 'flex';
-			ensureOverlay();
-			overlaySVG.style.display = '';
-			syncOverlayPosition();
-			attachEventBlockers();
-			if (mainCanvas) mainCanvas.style.cursor = 'crosshair';
 		}
 
 		function deactivate() {
 			wandActive = false;
 			btn.classList.remove('active');
 			bar.style.display = 'none';
-			if (overlaySVG) overlaySVG.style.display = 'none';
-			detachEventBlockers();
-			if (mainCanvas) mainCanvas.style.cursor = '';
 			clearSelection();
 		}
 
 		/* ── Selection operations ── */
 
-		/* Delete: set alpha=0 for selected pixels on active layer */
 		function doDelete() {
 			if (!selectionMask || !AppConfig.layer) return;
 			var layer = AppConfig.layer;
 			var w = imgW, h = imgH;
-
-			/* Get layer's pixel data */
 			var srcCanvas = document.createElement('canvas');
 			srcCanvas.width = w;
 			srcCanvas.height = h;
 			var srcCtx = srcCanvas.getContext('2d');
-			var src = layer.link_canvas || layer.link;
-			if (src) srcCtx.drawImage(src, 0, 0, w, h);
+			if (layer.link) srcCtx.drawImage(layer.link, 0, 0);
 			var pixData = srcCtx.getImageData(0, 0, w, h);
 			var d = pixData.data;
-
 			for (var i = 0; i < selectionMask.length; i++) {
-				if (selectionMask[i]) {
-					d[i * 4 + 3] = 0; /* set alpha to 0 */
-				}
+				if (selectionMask[i]) d[i * 4 + 3] = 0;
 			}
-
 			srcCtx.putImageData(pixData, 0, 0);
-
-			/* Write back via toDataURL → new Image → layer.link */
 			var dataUrl = srcCanvas.toDataURL('image/png');
 			var img = new Image();
 			img.onload = function() {
@@ -3758,37 +3659,28 @@ a:hover {
 			clearSelection();
 		}
 
-		/* Fill: fill selected pixels with current color + alpha */
 		function doFill() {
 			if (!selectionMask || !AppConfig.layer) return;
 			var layer = AppConfig.layer;
 			var w = imgW, h = imgH;
-
-			/* Parse current color */
 			var hex = AppConfig.COLOR || '#000000';
 			var cR = parseInt(hex.substring(1, 3), 16) || 0;
 			var cG = parseInt(hex.substring(3, 5), 16) || 0;
 			var cB = parseInt(hex.substring(5, 7), 16) || 0;
 			var cA = (typeof AppConfig.ALPHA !== 'undefined') ? AppConfig.ALPHA : 255;
-
 			var srcCanvas = document.createElement('canvas');
 			srcCanvas.width = w;
 			srcCanvas.height = h;
 			var srcCtx = srcCanvas.getContext('2d');
-			var src = layer.link_canvas || layer.link;
-			if (src) srcCtx.drawImage(src, 0, 0, w, h);
+			if (layer.link) srcCtx.drawImage(layer.link, 0, 0);
 			var pixData = srcCtx.getImageData(0, 0, w, h);
 			var d = pixData.data;
-
 			for (var i = 0; i < selectionMask.length; i++) {
 				if (selectionMask[i]) {
-					d[i * 4] = cR;
-					d[i * 4 + 1] = cG;
-					d[i * 4 + 2] = cB;
-					d[i * 4 + 3] = cA;
+					d[i * 4] = cR; d[i * 4 + 1] = cG;
+					d[i * 4 + 2] = cB; d[i * 4 + 3] = cA;
 				}
 			}
-
 			srcCtx.putImageData(pixData, 0, 0);
 			var dataUrl = srcCanvas.toDataURL('image/png');
 			var img = new Image();
@@ -3800,14 +3692,12 @@ a:hover {
 			clearSelection();
 		}
 
-		/* Invert: flip all mask values */
 		function doInvert() {
 			if (!selectionMask) return;
 			for (var i = 0; i < selectionMask.length; i++) {
 				selectionMask[i] = selectionMask[i] ? 0 : 1;
 			}
-			cachedPathD = buildBoundaryPath(selectionMask, imgW, imgH);
-			renderAnts();
+			renderOverlay();
 		}
 
 		/* ── Button handlers ── */
@@ -3816,49 +3706,23 @@ a:hover {
 		invertBtn.addEventListener('click', function() { doInvert(); });
 		deselectBtn.addEventListener('click', function() { clearSelection(); });
 
-		/* ── Toolbar toggle ── */
 		btn.addEventListener('click', function(e) {
 			e.stopPropagation();
-			if (wandActive) {
-				deactivate();
-			} else {
-				activate();
-			}
+			if (wandActive) deactivate(); else activate();
 		});
 
 		/* ── Keyboard shortcuts ── */
 		document.addEventListener('keydown', function(e) {
 			if (!wandActive) return;
 			if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
 			if (e.key === 'Escape') {
 				e.preventDefault();
-				if (selectionMask) {
-					clearSelection();
-				} else {
-					deactivate();
-				}
+				if (selectionMask) clearSelection(); else deactivate();
 			} else if (e.key === 'Delete' || e.key === 'Backspace') {
 				e.preventDefault();
 				doDelete();
 			}
 		});
-
-		/* ── Watch for canvas dimension changes (crop/resize) ── */
-		var lastW = 0, lastH = 0;
-		function checkDimensionChange() {
-			if (typeof Layers !== 'undefined' && Layers.get_dimensions) {
-				var dims = Layers.get_dimensions();
-				if (dims.width !== lastW || dims.height !== lastH) {
-					if (lastW !== 0 && lastH !== 0 && selectionMask) {
-						clearSelection();
-					}
-					lastW = dims.width;
-					lastH = dims.height;
-				}
-			}
-		}
-		setInterval(checkDimensionChange, 1000);
 	}
 
 	/* ══════════════════════════════════════════════════════
