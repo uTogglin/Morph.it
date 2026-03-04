@@ -3242,13 +3242,14 @@ async function generateImageViaOpenRouter(
   prompt: string,
   model: string,
   size: string,
+  imageOnly: boolean,
 ): Promise<Uint8Array> {
-  if (!openrouterApiKey) throw new Error("No OpenRouter API key. Add your key in Settings → Image Tools.");
+  if (!openrouterApiKey) throw new Error("No OpenRouter API key. Add your key in Settings \u2192 Image Tools.");
 
   const body: any = {
     model,
     messages: [{ role: "user", content: prompt }],
-    modalities: ["image", "text"],
+    modalities: imageOnly ? ["image"] : ["image", "text"],
   };
   if (size && size !== "auto") body.image_size = size;
 
@@ -3271,12 +3272,23 @@ async function generateImageViaOpenRouter(
   const choice = json.choices?.[0]?.message;
   if (!choice) throw new Error("No response from model.");
 
-  // Find image_url part in content array
-  const parts: any[] = Array.isArray(choice.content) ? choice.content : [];
-  const imgPart = parts.find((p: any) => p.type === "image_url" && p.image_url?.url);
-  if (!imgPart) throw new Error("Model did not return an image. Try a different model or prompt.");
+  // Find image URL — check both content array (OpenAI-style) and images array
+  let dataUrl: string | null = null;
 
-  const dataUrl: string = imgPart.image_url.url;
+  // 1) content as array with image_url parts
+  if (Array.isArray(choice.content)) {
+    const imgPart = choice.content.find((p: any) => p.type === "image_url" && p.image_url?.url);
+    if (imgPart) dataUrl = imgPart.image_url.url;
+  }
+
+  // 2) images array on the message
+  if (!dataUrl && Array.isArray(choice.images)) {
+    const imgPart = choice.images.find((p: any) => p.type === "image_url" && p.image_url?.url);
+    if (imgPart) dataUrl = imgPart.image_url.url;
+  }
+
+  if (!dataUrl) throw new Error("Model did not return an image. Try a different model or prompt.");
+
   // Handle both data URLs and regular URLs
   let bytes: Uint8Array;
   if (dataUrl.startsWith("data:")) {
@@ -3286,7 +3298,6 @@ async function generateImageViaOpenRouter(
     bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   } else {
-    // It's a regular URL, fetch it
     const imgResp = await fetch(dataUrl, { referrerPolicy: "no-referrer" });
     if (!imgResp.ok) throw new Error("Failed to fetch generated image.");
     bytes = new Uint8Array(await imgResp.arrayBuffer());
@@ -3302,8 +3313,8 @@ window.addEventListener("message", async (e) => {
   if (!iframe?.contentWindow) return;
 
   try {
-    const { prompt, model, size } = e.data;
-    const resultBytes = await generateImageViaOpenRouter(prompt, model, size);
+    const { prompt, model, size, imageOnly } = e.data;
+    const resultBytes = await generateImageViaOpenRouter(prompt, model, size, !!imageOnly);
     const resultBuf = resultBytes.buffer.slice(
       resultBytes.byteOffset,
       resultBytes.byteOffset + resultBytes.byteLength,
