@@ -3465,38 +3465,31 @@ a:hover {
 			contiguous = contigCheck.checked;
 		});
 
-		/* ── Overlay canvas (static tint — no animation, no flicker) ── */
-		var maskCanvas = null; /* off-screen canvas holding the tint at image resolution */
-
-		function syncOverlaySize() {
-			if (!overlayCanvas) return;
-			var mainCanvas = document.getElementById('canvas_minipaint');
-			if (!mainCanvas) return;
-			overlayCanvas.width = mainCanvas.width;
-			overlayCanvas.height = mainCanvas.height;
-			overlayCanvas.style.width = mainCanvas.style.width || (mainCanvas.width + 'px');
-			overlayCanvas.style.height = mainCanvas.style.height || (mainCanvas.height + 'px');
-		}
-
+		/*
+		 * ── Overlay canvas ──
+		 * The overlay stays at IMAGE resolution (imgW × imgH).
+		 * CSS width/height stretches it to match the main canvas display size.
+		 * This way zoom is handled entirely by CSS — no canvas transform needed,
+		 * no timing race with miniPaint's render loop.
+		 */
 		function ensureOverlay() {
 			var wrapper = document.getElementById('canvas_wrapper');
-			var mainCanvas = document.getElementById('canvas_minipaint');
-			if (!wrapper || !mainCanvas) return;
+			if (!wrapper) return;
 			if (!overlayCanvas) {
 				overlayCanvas = document.createElement('canvas');
 				overlayCanvas.className = 'magicwand-overlay';
 				wrapper.appendChild(overlayCanvas);
 			}
-			syncOverlaySize();
+			if (overlayCanvas.width !== imgW || overlayCanvas.height !== imgH) {
+				overlayCanvas.width = imgW;
+				overlayCanvas.height = imgH;
+			}
 		}
 
-		/* Build the mask tint at image resolution (called once per selection change) */
-		function buildMaskCanvas() {
-			if (!selectionMask) { maskCanvas = null; return; }
-			maskCanvas = document.createElement('canvas');
-			maskCanvas.width = imgW;
-			maskCanvas.height = imgH;
-			var ctx = maskCanvas.getContext('2d');
+		function renderOverlay() {
+			if (!overlayCanvas || !selectionMask) return;
+			var ctx = overlayCanvas.getContext('2d');
+			ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 			var imgData = ctx.createImageData(imgW, imgH);
 			var d = imgData.data;
 			for (var i = 0; i < selectionMask.length; i++) {
@@ -3510,55 +3503,21 @@ a:hover {
 			ctx.putImageData(imgData, 0, 0);
 		}
 
-		/*
-		 * Compute the canvas transform from Layers.get_world_coords.
-		 * miniPaint save/restores its context transform each frame,
-		 * so we derive it: toScreen(0,0) gives the pan offset,
-		 * and the scale is ZOOM.
-		 */
-		function getCanvasTransform() {
-			var zoom = AppConfig.ZOOM || 1;
-			/* get_world_coords(0,0) returns the image coords at canvas pixel (0,0) */
-			var origin = Layers.get_world_coords(0, 0);
-			/* panX/panY = where image (0,0) appears in canvas pixels */
-			var panX = -origin.x * zoom;
-			var panY = -origin.y * zoom;
-			return { zoom: zoom, panX: panX, panY: panY };
-		}
-
-		/* Draw overlay using the derived zoom/pan so it matches the main canvas */
-		function renderOverlay() {
-			if (!overlayCanvas || !maskCanvas) return;
-			var ctx = overlayCanvas.getContext('2d');
-			ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-			var t = getCanvasTransform();
-			ctx.setTransform(t.zoom, 0, 0, t.zoom, t.panX, t.panY);
-			ctx.imageSmoothingEnabled = false;
-			ctx.drawImage(maskCanvas, 0, 0);
-			ctx.setTransform(1, 0, 0, 1, 0, 0);
-		}
-
-		/* Re-render overlay whenever miniPaint renders (zoom, pan, resize) */
-		var lastOverlayState = '';
-		(function syncOverlay() {
-			if (overlayCanvas && maskCanvas) {
-				var t = getCanvasTransform();
-				var mainCanvas = document.getElementById('canvas_minipaint');
-				var cw = mainCanvas ? mainCanvas.width : 0;
-				var ch = mainCanvas ? mainCanvas.height : 0;
-				var state = cw + ',' + ch + ',' + t.zoom + ',' + t.panX + ',' + t.panY;
-				if (state !== lastOverlayState) {
-					lastOverlayState = state;
-					syncOverlaySize();
-					renderOverlay();
+		/* Keep overlay CSS size matched to the main canvas display size */
+		(function syncOverlayCSS() {
+			if (overlayCanvas) {
+				var mc = document.getElementById('canvas_minipaint');
+				if (mc) {
+					var w = mc.clientWidth + 'px';
+					var h = mc.clientHeight + 'px';
+					if (overlayCanvas.style.width !== w) overlayCanvas.style.width = w;
+					if (overlayCanvas.style.height !== h) overlayCanvas.style.height = h;
 				}
 			}
-			requestAnimationFrame(syncOverlay);
+			requestAnimationFrame(syncOverlayCSS);
 		})();
 
 		function clearOverlay() {
-			maskCanvas = null;
-			lastOverlayState = '';
 			if (overlayCanvas) {
 				var ctx = overlayCanvas.getContext('2d');
 				ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
@@ -3661,7 +3620,6 @@ a:hover {
 			}
 
 			ensureOverlay();
-			buildMaskCanvas();
 			renderOverlay();
 		}, true);
 
@@ -3736,7 +3694,6 @@ a:hover {
 			for (var i = 0; i < selectionMask.length; i++) {
 				selectionMask[i] = selectionMask[i] ? 0 : 1;
 			}
-			buildMaskCanvas();
 			renderOverlay();
 		}
 
