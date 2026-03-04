@@ -1742,10 +1742,9 @@ a:hover {
 }
 .magicwand-overlay {
 	position: fixed;
-	pointer-events: auto;
+	pointer-events: none;
 	z-index: 9998;
 	overflow: hidden;
-	cursor: crosshair;
 }
 .magicwand-overlay path {
 	fill: none;
@@ -3490,7 +3489,7 @@ a:hover {
 			contiguous = contigCheck.checked;
 		});
 
-		/* ── SVG overlay (marching ants + event capture) — appended to body, positioned fixed ── */
+		/* ── SVG overlay (marching ants — visual only, pointer-events:none) ── */
 		var overlaySVG = null;
 		var mainCanvas = document.getElementById('canvas_minipaint');
 
@@ -3500,23 +3499,6 @@ a:hover {
 				overlaySVG.setAttribute('class', 'magicwand-overlay');
 				overlaySVG.style.display = 'none';
 				document.body.appendChild(overlaySVG);
-
-				/* Click on overlay → wand selection */
-				overlaySVG.addEventListener('click', function(e) {
-					if (!wandActive) return;
-					var coords = overlayToImageCoords(e);
-					if (!coords) return;
-					doWandClick(coords.x, coords.y, e.shiftKey);
-				});
-
-				/* Block ALL events from reaching miniPaint canvas below */
-				['pointerdown', 'pointermove', 'pointerup',
-				 'mousedown', 'mousemove', 'mouseup',
-				 'touchstart', 'touchmove', 'touchend'].forEach(function(evtType) {
-					overlaySVG.addEventListener(evtType, function(e) {
-						e.stopPropagation();
-					});
-				});
 			}
 			if (!overlaySVG.parentNode) {
 				document.body.appendChild(overlaySVG);
@@ -3535,17 +3517,44 @@ a:hover {
 			overlaySVG.setAttribute('viewBox', '0 0 ' + dims.width + ' ' + dims.height);
 		}
 
-		/* ── Coordinate translation (overlay click → image space) ── */
-		function overlayToImageCoords(e) {
-			if (!mainCanvas) return null;
-			var rect = overlaySVG.getBoundingClientRect();
-			var dims = Layers.get_dimensions();
-			var x = Math.floor((e.clientX - rect.left) / rect.width * dims.width);
-			var y = Math.floor((e.clientY - rect.top) / rect.height * dims.height);
-			return { x: x, y: y };
+		/* ── Document-level event capture — blocks ALL events from reaching miniPaint when wand active ── */
+		var blockedEvents = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel',
+			'mousedown', 'mousemove', 'mouseup', 'click', 'dblclick',
+			'touchstart', 'touchmove', 'touchend', 'touchcancel'];
+
+		function eventBlocker(e) {
+			if (!wandActive) return;
+			/* Only block events targeting the canvas or its wrapper */
+			var target = e.target;
+			var isCanvasEvent = (target === mainCanvas ||
+				(target && target.id === 'canvas_wrapper') ||
+				(mainCanvas && mainCanvas.contains && mainCanvas.contains(target)));
+			if (!isCanvasEvent) return;
+
+			e.stopPropagation();
+			e.preventDefault();
+
+			/* Handle wand click on the canvas */
+			if (e.type === 'click' && target === mainCanvas) {
+				var zoom = (typeof AppConfig !== 'undefined' && AppConfig.ZOOM) ? AppConfig.ZOOM : 1;
+				var x = Math.floor(e.offsetX / zoom);
+				var y = Math.floor(e.offsetY / zoom);
+				doWandClick(x, y, e.shiftKey);
+			}
 		}
 
-		/* ── Wand click logic (called from overlay) ── */
+		function attachEventBlockers() {
+			blockedEvents.forEach(function(evtType) {
+				document.addEventListener(evtType, eventBlocker, true); /* capture phase */
+			});
+		}
+
+		function detachEventBlockers() {
+			blockedEvents.forEach(function(evtType) {
+				document.removeEventListener(evtType, eventBlocker, true);
+			});
+		}
+
 		function doWandClick(x, y, shiftKey) {
 			var dims = Layers.get_dimensions();
 			var w = dims.width, h = dims.height;
@@ -3698,6 +3707,8 @@ a:hover {
 			ensureOverlay();
 			overlaySVG.style.display = '';
 			syncOverlayPosition();
+			attachEventBlockers();
+			if (mainCanvas) mainCanvas.style.cursor = 'crosshair';
 		}
 
 		function deactivate() {
@@ -3705,10 +3716,10 @@ a:hover {
 			btn.classList.remove('active');
 			bar.style.display = 'none';
 			if (overlaySVG) overlaySVG.style.display = 'none';
+			detachEventBlockers();
+			if (mainCanvas) mainCanvas.style.cursor = '';
 			clearSelection();
 		}
-
-		/* Event handling is done by the SVG overlay (see ensureOverlay) */
 
 		/* ── Selection operations ── */
 
