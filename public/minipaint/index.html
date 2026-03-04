@@ -3466,6 +3466,17 @@ a:hover {
 		});
 
 		/* ── Overlay canvas (static tint — no animation, no flicker) ── */
+		function syncOverlaySize() {
+			if (!overlayCanvas) return;
+			var mainCanvas = document.getElementById('canvas_minipaint');
+			if (!mainCanvas) return;
+			overlayCanvas.width = mainCanvas.width;
+			overlayCanvas.height = mainCanvas.height;
+			overlayCanvas.style.width = mainCanvas.style.width || (mainCanvas.width + 'px');
+			overlayCanvas.style.height = mainCanvas.style.height || (mainCanvas.height + 'px');
+			if (selectionMask) renderOverlay();
+		}
+
 		function ensureOverlay() {
 			var wrapper = document.getElementById('canvas_wrapper');
 			var mainCanvas = document.getElementById('canvas_minipaint');
@@ -3474,11 +3485,10 @@ a:hover {
 				overlayCanvas = document.createElement('canvas');
 				overlayCanvas.className = 'magicwand-overlay';
 				wrapper.appendChild(overlayCanvas);
+				/* Keep overlay synced when canvas resizes (zoom, window resize) */
+				new ResizeObserver(function() { syncOverlaySize(); }).observe(mainCanvas);
 			}
-			overlayCanvas.width = mainCanvas.width;
-			overlayCanvas.height = mainCanvas.height;
-			overlayCanvas.style.width = mainCanvas.style.width || (mainCanvas.width + 'px');
-			overlayCanvas.style.height = mainCanvas.style.height || (mainCanvas.height + 'px');
+			syncOverlaySize();
 		}
 
 		function renderOverlay() {
@@ -3584,9 +3594,11 @@ a:hover {
 			e.stopPropagation();
 			e.preventDefault();
 
+			/* Use getBoundingClientRect for correct mapping on any screen size */
+			var rect = mainCanvas.getBoundingClientRect();
 			var zoom = AppConfig.ZOOM || 1;
-			var x = Math.floor(e.offsetX / zoom);
-			var y = Math.floor(e.offsetY / zoom);
+			var x = Math.floor((e.clientX - rect.left) * mainCanvas.width / rect.width / zoom);
+			var y = Math.floor((e.clientY - rect.top) * mainCanvas.height / rect.height / zoom);
 
 			var result = magicSelect(x, y);
 			if (!result) return;
@@ -3620,7 +3632,7 @@ a:hover {
 		function deactivate() {
 			wandActive = false;
 			bar.style.display = 'none';
-			clearSelection();
+			/* Selection and overlay persist so other tools can use it */
 		}
 
 		/* ── Selection operations ── */
