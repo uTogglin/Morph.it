@@ -1742,9 +1742,10 @@ a:hover {
 }
 .magicwand-overlay {
 	position: fixed;
-	pointer-events: none;
+	pointer-events: auto;
 	z-index: 9998;
 	overflow: hidden;
+	cursor: crosshair;
 }
 .magicwand-overlay path {
 	fill: none;
@@ -3489,14 +3490,33 @@ a:hover {
 			contiguous = contigCheck.checked;
 		});
 
-		/* ── SVG overlay (marching ants) — appended to body, positioned fixed ── */
+		/* ── SVG overlay (marching ants + event capture) — appended to body, positioned fixed ── */
 		var overlaySVG = null;
+		var mainCanvas = document.getElementById('canvas_minipaint');
 
 		function ensureOverlay() {
 			if (!overlaySVG) {
 				overlaySVG = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 				overlaySVG.setAttribute('class', 'magicwand-overlay');
+				overlaySVG.style.display = 'none';
 				document.body.appendChild(overlaySVG);
+
+				/* Click on overlay → wand selection */
+				overlaySVG.addEventListener('click', function(e) {
+					if (!wandActive) return;
+					var coords = overlayToImageCoords(e);
+					if (!coords) return;
+					doWandClick(coords.x, coords.y, e.shiftKey);
+				});
+
+				/* Block ALL events from reaching miniPaint canvas below */
+				['pointerdown', 'pointermove', 'pointerup',
+				 'mousedown', 'mousemove', 'mouseup',
+				 'touchstart', 'touchmove', 'touchend'].forEach(function(evtType) {
+					overlaySVG.addEventListener(evtType, function(e) {
+						e.stopPropagation();
+					});
+				});
 			}
 			if (!overlaySVG.parentNode) {
 				document.body.appendChild(overlaySVG);
@@ -3505,7 +3525,6 @@ a:hover {
 
 		/* Sync overlay position & size to match the main canvas on screen */
 		function syncOverlayPosition() {
-			var mainCanvas = document.getElementById('canvas_minipaint');
 			if (!mainCanvas || !overlaySVG) return;
 			var rect = mainCanvas.getBoundingClientRect();
 			overlaySVG.style.top = Math.round(rect.top) + 'px';
@@ -3516,12 +3535,37 @@ a:hover {
 			overlaySVG.setAttribute('viewBox', '0 0 ' + dims.width + ' ' + dims.height);
 		}
 
-		/* ── Coordinate translation (screen → image space) ── */
-		function toImageCoords(e) {
-			var zoom = (typeof AppConfig !== 'undefined' && AppConfig.ZOOM) ? AppConfig.ZOOM : 1;
-			var x = Math.floor(e.offsetX / zoom);
-			var y = Math.floor(e.offsetY / zoom);
+		/* ── Coordinate translation (overlay click → image space) ── */
+		function overlayToImageCoords(e) {
+			if (!mainCanvas) return null;
+			var rect = overlaySVG.getBoundingClientRect();
+			var dims = Layers.get_dimensions();
+			var x = Math.floor((e.clientX - rect.left) / rect.width * dims.width);
+			var y = Math.floor((e.clientY - rect.top) / rect.height * dims.height);
 			return { x: x, y: y };
+		}
+
+		/* ── Wand click logic (called from overlay) ── */
+		function doWandClick(x, y, shiftKey) {
+			var dims = Layers.get_dimensions();
+			var w = dims.width, h = dims.height;
+			if (x < 0 || x >= w || y < 0 || y >= h) return;
+
+			var imageData = getCompositeData(w, h);
+			var newMask = floodFill(imageData, x, y, w, h, tolerance, contiguous);
+
+			if (shiftKey && selectionMask && imgW === w && imgH === h) {
+				for (var i = 0; i < newMask.length; i++) {
+					if (newMask[i]) selectionMask[i] = 1;
+				}
+			} else {
+				selectionMask = newMask;
+				imgW = w;
+				imgH = h;
+			}
+
+			cachedPathD = buildBoundaryPath(selectionMask, imgW, imgH);
+			renderAnts();
 		}
 
 		/* ── Get composited image data ── */
@@ -3652,57 +3696,19 @@ a:hover {
 			btn.classList.add('active');
 			bar.style.display = 'flex';
 			ensureOverlay();
+			overlaySVG.style.display = '';
+			syncOverlayPosition();
 		}
 
 		function deactivate() {
 			wandActive = false;
 			btn.classList.remove('active');
 			bar.style.display = 'none';
+			if (overlaySVG) overlaySVG.style.display = 'none';
 			clearSelection();
 		}
 
-		/* ── Canvas click handler (capture phase) ── */
-		var mainCanvas = document.getElementById('canvas_minipaint');
-		if (mainCanvas) {
-			mainCanvas.addEventListener('click', function(e) {
-				if (!wandActive) return;
-				e.stopPropagation();
-				e.preventDefault();
-
-				var coords = toImageCoords(e);
-				var dims = Layers.get_dimensions();
-				var w = dims.width;
-				var h = dims.height;
-
-				/* Bounds check */
-				if (coords.x < 0 || coords.x >= w || coords.y < 0 || coords.y >= h) return;
-
-				var imageData = getCompositeData(w, h);
-				var newMask = floodFill(imageData, coords.x, coords.y, w, h, tolerance, contiguous);
-
-				/* Shift+click: union with existing mask */
-				if (e.shiftKey && selectionMask && imgW === w && imgH === h) {
-					for (var i = 0; i < newMask.length; i++) {
-						if (newMask[i]) selectionMask[i] = 1;
-					}
-				} else {
-					selectionMask = newMask;
-					imgW = w;
-					imgH = h;
-				}
-
-				cachedPathD = buildBoundaryPath(selectionMask, imgW, imgH);
-				renderAnts();
-			}, true); /* capture phase */
-
-			/* Prevent mousedown/mouseup from reaching miniPaint tools when wand is active */
-			mainCanvas.addEventListener('mousedown', function(e) {
-				if (wandActive) { e.stopPropagation(); }
-			}, true);
-			mainCanvas.addEventListener('mouseup', function(e) {
-				if (wandActive) { e.stopPropagation(); }
-			}, true);
-		}
+		/* Event handling is done by the SVG overlay (see ensureOverlay) */
 
 		/* ── Selection operations ── */
 
