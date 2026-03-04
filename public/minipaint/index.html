@@ -1741,11 +1741,9 @@ a:hover {
 	outline: 2px solid #6C5CE7 !important;
 }
 .magicwand-overlay {
-	position: absolute;
-	top: 0;
-	left: 0;
+	position: fixed;
 	pointer-events: none;
-	z-index: 5;
+	z-index: 9998;
 }
 .magicwand-bar {
 	position: fixed;
@@ -3478,27 +3476,34 @@ a:hover {
 			contiguous = contigCheck.checked;
 		});
 
-		/* ── Overlay canvas (marching ants) ── */
+		/* ── Overlay canvas (marching ants) — appended to body, positioned fixed ── */
 		function ensureOverlay() {
-			var wrapper = document.getElementById('canvas_wrapper');
-			var mainCanvas = document.getElementById('canvas_minipaint');
-			if (!wrapper || !mainCanvas) return;
-
 			if (!overlayCanvas) {
 				overlayCanvas = document.createElement('canvas');
 				overlayCanvas.className = 'magicwand-overlay';
-				wrapper.appendChild(overlayCanvas);
+				document.body.appendChild(overlayCanvas);
 				overlayCtx = overlayCanvas.getContext('2d');
 			}
-			/* Sync size with main canvas */
-			var cw = mainCanvas.width;
-			var ch = mainCanvas.height;
-			if (overlayCanvas.width !== cw || overlayCanvas.height !== ch) {
-				overlayCanvas.width = cw;
-				overlayCanvas.height = ch;
-				overlayCanvas.style.width = mainCanvas.style.width || (cw + 'px');
-				overlayCanvas.style.height = mainCanvas.style.height || (ch + 'px');
+			/* Re-attach if miniPaint removed it from DOM */
+			if (!overlayCanvas.parentNode) {
+				document.body.appendChild(overlayCanvas);
 			}
+		}
+
+		/* Sync overlay position & size to match the main canvas on screen */
+		function syncOverlayPosition() {
+			var mainCanvas = document.getElementById('canvas_minipaint');
+			if (!mainCanvas || !overlayCanvas) return;
+			var rect = mainCanvas.getBoundingClientRect();
+			var rw = Math.round(rect.width), rh = Math.round(rect.height);
+			/* Update CSS position to sit exactly over the canvas */
+			overlayCanvas.style.top = Math.round(rect.top) + 'px';
+			overlayCanvas.style.left = Math.round(rect.left) + 'px';
+			overlayCanvas.style.width = rw + 'px';
+			overlayCanvas.style.height = rh + 'px';
+			/* Keep the drawing-buffer resolution matching the canvas */
+			if (overlayCanvas.width !== mainCanvas.width) overlayCanvas.width = mainCanvas.width;
+			if (overlayCanvas.height !== mainCanvas.height) overlayCanvas.height = mainCanvas.height;
 		}
 
 		/* ── Coordinate translation (screen → image space) ── */
@@ -3590,29 +3595,28 @@ a:hover {
 			return segs;
 		}
 
-		/* ── Marching ants animation (double-buffered) ── */
+		/* ── Marching ants animation (flicker-free) ── */
 		var offCanvas = null, offCtx = null;
+		var positionDirty = true; /* sync overlay position only when needed */
+
+		/* Mark position dirty on scroll/resize so we don't reflow every frame */
+		window.addEventListener('scroll', function() { positionDirty = true; }, true);
+		window.addEventListener('resize', function() { positionDirty = true; });
+		window.addEventListener('wheel', function() { positionDirty = true; }, true);
 
 		function drawAnts() {
 			if (!overlayCanvas || !overlayCtx || !cachedSegments || cachedSegments.length === 0) {
+				if (overlayCanvas && positionDirty) { syncOverlayPosition(); positionDirty = false; }
 				animFrame = requestAnimationFrame(drawAnts);
 				return;
 			}
 
 			var zoom = (typeof AppConfig !== 'undefined' && AppConfig.ZOOM) ? AppConfig.ZOOM : 1;
 
-			/* Sync overlay size with main canvas (only when changed) */
-			var mainCanvas = document.getElementById('canvas_minipaint');
-			if (mainCanvas) {
-				var cw = mainCanvas.width, ch = mainCanvas.height;
-				var csW = mainCanvas.style.width || (cw + 'px');
-				var csH = mainCanvas.style.height || (ch + 'px');
-				if (overlayCanvas.width !== cw || overlayCanvas.height !== ch) {
-					overlayCanvas.width = cw;
-					overlayCanvas.height = ch;
-				}
-				if (overlayCanvas.style.width !== csW) overlayCanvas.style.width = csW;
-				if (overlayCanvas.style.height !== csH) overlayCanvas.style.height = csH;
+			/* Only reflow when position is dirty (scroll/resize/zoom) */
+			if (positionDirty) {
+				syncOverlayPosition();
+				positionDirty = false;
 			}
 
 			var ow = overlayCanvas.width, oh = overlayCanvas.height;
@@ -3652,9 +3656,10 @@ a:hover {
 			offCtx.stroke();
 			offCtx.setLineDash([]);
 
-			/* Blit to visible overlay in one shot */
-			overlayCtx.clearRect(0, 0, ow, oh);
+			/* Atomic blit — 'copy' replaces content without a visible clear frame */
+			overlayCtx.globalCompositeOperation = 'copy';
 			overlayCtx.drawImage(offCanvas, 0, 0);
+			overlayCtx.globalCompositeOperation = 'source-over';
 
 			dashOffset -= 0.4;
 			if (dashOffset < -12) dashOffset = 0;
@@ -3665,6 +3670,7 @@ a:hover {
 		function startAnts() {
 			stopAnts();
 			dashOffset = 0;
+			positionDirty = true; /* force position sync on first frame */
 			animFrame = requestAnimationFrame(drawAnts);
 		}
 
@@ -3691,6 +3697,7 @@ a:hover {
 			btn.classList.add('active');
 			bar.style.display = 'flex';
 			ensureOverlay();
+			positionDirty = true;
 		}
 
 		function deactivate() {
