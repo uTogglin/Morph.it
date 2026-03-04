@@ -3202,20 +3202,20 @@ a:hover {
 
 		/* ── Models ── */
 		var models = [
-			{ id: 'google/gemini-3.1-flash-image-preview', label: 'Gemini 3.1 Flash (Nano Banana 2)', cost: '~$0.02/img', imageOnly: false },
-			{ id: 'openai/gpt-5-image-mini', label: 'GPT-5 Image Mini', cost: '~$0.07/img', imageOnly: false },
-			{ id: 'black-forest-labs/flux.2-pro', label: 'FLUX.2 Pro', cost: '~$0.03/img', imageOnly: true },
-			{ id: 'black-forest-labs/flux.2-flex', label: 'FLUX.2 Flex', cost: '~$0.06/img', imageOnly: true },
-			{ id: 'google/gemini-3-pro-image-preview', label: 'Gemini 3 Pro (Nano Banana Pro)', cost: '~$0.08/img', imageOnly: false },
-			{ id: 'openai/gpt-5-image', label: 'GPT-5 Image', cost: '~$0.19/img', imageOnly: false },
-			{ id: 'google/gemini-2.5-flash-image-preview', label: 'Gemini 2.5 Flash (Legacy)', cost: '~$0.04/img', imageOnly: false }
+			{ id: 'google/gemini-3.1-flash-image-preview', label: 'Gemini 3.1 Flash (Nano Banana 2)', imageOnly: false },
+			{ id: 'openai/gpt-5-image-mini', label: 'GPT-5 Image Mini', imageOnly: false },
+			{ id: 'black-forest-labs/flux.2-pro', label: 'FLUX.2 Pro', imageOnly: true },
+			{ id: 'black-forest-labs/flux.2-flex', label: 'FLUX.2 Flex', imageOnly: true },
+			{ id: 'google/gemini-3-pro-image-preview', label: 'Gemini 3 Pro (Nano Banana Pro)', imageOnly: false },
+			{ id: 'openai/gpt-5-image', label: 'GPT-5 Image', imageOnly: false },
+			{ id: 'google/gemini-2.5-flash-image-preview', label: 'Gemini 2.5 Flash (Legacy)', imageOnly: false }
 		];
 		var sizes = [
-			{ value: 'auto', label: 'Auto (matches canvas, cheapest)' },
+			{ value: 'auto', label: 'Auto (matches canvas)' },
 			{ value: '1024x1024', label: '1024 \u00d7 1024' },
 			{ value: '1024x1536', label: '1024 \u00d7 1536 (Portrait)' },
 			{ value: '1536x1024', label: '1536 \u00d7 1024 (Landscape)' },
-			{ value: 'hd', label: 'HD (2K \u2014 higher cost)' }
+			{ value: 'hd', label: 'HD (2K)' }
 		];
 
 		/* ── Toolbar button ── */
@@ -3234,7 +3234,7 @@ a:hover {
 
 		var modelOptions = '';
 		for (var m = 0; m < models.length; m++) {
-			modelOptions += '<option value="' + models[m].id + '" data-cost="' + models[m].cost + '" data-image-only="' + models[m].imageOnly + '">' + models[m].label + ' \u2014 ' + models[m].cost + '</option>';
+			modelOptions += '<option value="' + models[m].id + '" data-image-only="' + models[m].imageOnly + '">' + models[m].label + '</option>';
 		}
 		var sizeOptions = '';
 		for (var s = 0; s < sizes.length; s++) {
@@ -3246,7 +3246,6 @@ a:hover {
 			'<textarea class="aigen-prompt" placeholder="Describe the image you want to generate\u2026"></textarea>' +
 			'<label>Model</label>' +
 			'<select class="aigen-model">' + modelOptions + '</select>' +
-			'<div class="aigen-cost-hint" style="font-size:11px;color:#888;margin:4px 0 0;">Estimated cost: <span class="aigen-cost-value">' + models[0].cost + '</span> per 1MP image</div>' +
 			'<label>Size</label>' +
 			'<select class="aigen-size">' + sizeOptions + '</select>' +
 			'<div class="aigen-btn-row">' +
@@ -3262,14 +3261,6 @@ a:hover {
 		var sizeSelect = dialog.querySelector('.aigen-size');
 		var generateBtn = dialog.querySelector('.aigen-generate');
 		var cancelBtn = dialog.querySelector('.aigen-cancel');
-		var costValue = dialog.querySelector('.aigen-cost-value');
-
-		/* ── Update cost hint on model change ── */
-		modelSelect.addEventListener('change', function() {
-			var opt = modelSelect.options[modelSelect.selectedIndex];
-			if (costValue && opt) costValue.textContent = opt.getAttribute('data-cost') || '';
-		});
-
 		/* ── Loading overlay (reuses inpaint-overlay styles) ── */
 		var overlay = document.createElement('div');
 		overlay.className = 'inpaint-overlay';
@@ -4034,10 +4025,13 @@ a:hover {
 			}
 		});
 
-		/* ── Constrain other tools to selection (like Photoshop) ── */
-		var origUpdateLayerImage = Layers.update_layer_image.bind(Layers);
-		Layers.update_layer_image = function(canvas) {
-			if (selectionMask && canvas) {
+		/* ── Constrain other tools to selection (like Photoshop) ──
+		   Hook State.do_action so ALL tools (brush, pencil, fill, etc.)
+		   are clipped to the selection mask, not just Layers.update_layer_image. */
+		var origDoAction = State.do_action.bind(State);
+		State.do_action = function(action, opts) {
+			if (selectionMask && action && action.canvas) {
+				var canvas = action.canvas;
 				var w = canvas.width, h = canvas.height;
 				if (w === imgW && h === imgH) {
 					var layer = AppConfig.layer;
@@ -4065,7 +4059,7 @@ a:hover {
 					}
 				}
 			}
-			return origUpdateLayerImage(canvas);
+			return origDoAction(action, opts);
 		};
 	}
 
