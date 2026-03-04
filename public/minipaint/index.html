@@ -3466,6 +3466,8 @@ a:hover {
 		});
 
 		/* ── Overlay canvas (static tint — no animation, no flicker) ── */
+		var maskCanvas = null; /* off-screen canvas holding the tint at image resolution */
+
 		function syncOverlaySize() {
 			if (!overlayCanvas) return;
 			var mainCanvas = document.getElementById('canvas_minipaint');
@@ -3474,7 +3476,6 @@ a:hover {
 			overlayCanvas.height = mainCanvas.height;
 			overlayCanvas.style.width = mainCanvas.style.width || (mainCanvas.width + 'px');
 			overlayCanvas.style.height = mainCanvas.style.height || (mainCanvas.height + 'px');
-			if (selectionMask) renderOverlay();
 		}
 
 		function ensureOverlay() {
@@ -3491,14 +3492,14 @@ a:hover {
 			syncOverlaySize();
 		}
 
-		function renderOverlay() {
-			if (!overlayCanvas || !selectionMask) return;
-			var ctx = overlayCanvas.getContext('2d');
-			var w = imgW, h = imgH;
-			ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
-			/* Paint semi-transparent red over selected pixels (Quick Mask style) */
-			var imgData = ctx.createImageData(w, h);
+		/* Build the mask tint at image resolution (called once per selection change) */
+		function buildMaskCanvas() {
+			if (!selectionMask) { maskCanvas = null; return; }
+			maskCanvas = document.createElement('canvas');
+			maskCanvas.width = imgW;
+			maskCanvas.height = imgH;
+			var ctx = maskCanvas.getContext('2d');
+			var imgData = ctx.createImageData(imgW, imgH);
 			var d = imgData.data;
 			for (var i = 0; i < selectionMask.length; i++) {
 				if (selectionMask[i]) {
@@ -3511,9 +3512,47 @@ a:hover {
 			ctx.putImageData(imgData, 0, 0);
 		}
 
+		/* Draw the overlay using the same transform as the main canvas (survives zoom/pan) */
+		function renderOverlay() {
+			if (!overlayCanvas || !maskCanvas) return;
+			var mainCanvas = document.getElementById('canvas_minipaint');
+			var ctx = overlayCanvas.getContext('2d');
+			/* Reset transform to clear the whole canvas */
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+			/* Copy the main canvas transform so the overlay matches zoom/pan exactly */
+			if (mainCanvas) {
+				var t = mainCanvas.getContext('2d').getTransform();
+				ctx.setTransform(t.a, t.b, t.c, t.d, t.e, t.f);
+			}
+			ctx.imageSmoothingEnabled = false;
+			ctx.drawImage(maskCanvas, 0, 0);
+		}
+
+		/* Track main canvas transform changes and re-render overlay */
+		var lastTransformStr = '';
+		(function syncOverlayTransform() {
+			if (overlayCanvas && maskCanvas) {
+				var mainCanvas = document.getElementById('canvas_minipaint');
+				if (mainCanvas) {
+					var t = mainCanvas.getContext('2d').getTransform();
+					var s = t.a + ',' + t.d + ',' + t.e + ',' + t.f;
+					if (s !== lastTransformStr) {
+						lastTransformStr = s;
+						syncOverlaySize();
+						renderOverlay();
+					}
+				}
+			}
+			requestAnimationFrame(syncOverlayTransform);
+		})();
+
 		function clearOverlay() {
+			maskCanvas = null;
+			lastTransformStr = '';
 			if (overlayCanvas) {
 				var ctx = overlayCanvas.getContext('2d');
+				ctx.setTransform(1, 0, 0, 1, 0, 0);
 				ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 			}
 		}
@@ -3614,6 +3653,7 @@ a:hover {
 			}
 
 			ensureOverlay();
+			buildMaskCanvas();
 			renderOverlay();
 		}, true);
 
@@ -3688,6 +3728,7 @@ a:hover {
 			for (var i = 0; i < selectionMask.length; i++) {
 				selectionMask[i] = selectionMask[i] ? 0 : 1;
 			}
+			buildMaskCanvas();
 			renderOverlay();
 		}
 
@@ -3716,6 +3757,40 @@ a:hover {
 				doDelete();
 			}
 		});
+
+		/* ── Constrain other tools to selection (like Photoshop) ── */
+		var origUpdateLayerImage = Layers.update_layer_image.bind(Layers);
+		Layers.update_layer_image = function(canvas) {
+			if (selectionMask && canvas) {
+				var w = canvas.width, h = canvas.height;
+				if (w === imgW && h === imgH) {
+					var layer = AppConfig.layer;
+					if (layer && layer.link) {
+						/* Get old layer pixels */
+						var old = document.createElement('canvas');
+						old.width = w; old.height = h;
+						var oldCtx = old.getContext('2d');
+						oldCtx.drawImage(layer.link, 0, 0);
+						var oldPx = oldCtx.getImageData(0, 0, w, h).data;
+						/* Mask: keep old pixels outside selection */
+						var newCtx = canvas.getContext('2d');
+						var newData = newCtx.getImageData(0, 0, w, h);
+						var nd = newData.data;
+						for (var i = 0; i < selectionMask.length; i++) {
+							if (!selectionMask[i]) {
+								var off = i * 4;
+								nd[off] = oldPx[off];
+								nd[off + 1] = oldPx[off + 1];
+								nd[off + 2] = oldPx[off + 2];
+								nd[off + 3] = oldPx[off + 3];
+							}
+						}
+						newCtx.putImageData(newData, 0, 0);
+					}
+				}
+			}
+			return origUpdateLayerImage(canvas);
+		};
 	}
 
 	/* ══════════════════════════════════════════════════════
