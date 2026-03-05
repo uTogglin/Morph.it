@@ -1,215 +1,254 @@
-# [Convert.it](https://convert.utoggl.in/)
+<div align="center">
 
-**A truly universal file converter and toolkit that runs entirely in your browser.**
+<!-- Purple gradient banner -->
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:4c1d95,50:7c3aed,100:a78bfa&height=200&section=header&text=Convert.it&fontSize=72&fontColor=ffffff&fontAlignY=35&desc=A%20truly%20universal%20file%20converter%20and%20toolkit&descSize=18&descColor=e9d5ff&descAlignY=55&animation=fadeIn" width="100%" />
 
-Most online converters are limited, insecure, and boring. They only handle conversions within the same media type and force you to upload your files to some random server. Convert.it is different — it processes everything locally using WebAssembly and on-device AI, supports cross-medium conversions, and packs a full suite of creative tools without ever touching a server.
+<br>
+
+[![Live Site](https://img.shields.io/badge/Live_Site-convert.utoggl.in-7c3aed?style=for-the-badge&logo=googlechrome&logoColor=white)](https://convert.utoggl.in/)
+[![License](https://img.shields.io/badge/License-GPL_2.0-a78bfa?style=for-the-badge)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/uTogglin/convert?style=for-the-badge&color=6d28d9&logo=github)](https://github.com/uTogglin/convert)
+
+<br>
+
+**Everything runs locally in your browser.** No uploads, no servers, no accounts.<br>
+Powered by WebAssembly and on-device AI.
+
+<br>
+
+<img src="docs/screenshots/homepage.png" alt="Convert.it Homepage" width="90%" style="border-radius: 12px;" />
+
+</div>
+
+<br>
+
+---
+
+<br>
+
+## What is Convert.it?
+
+Most online converters are limited, insecure, and boring. They only handle conversions within the same media type and force you to upload your files to some random server.
+
+**Convert.it is different** — it processes everything locally using WebAssembly and on-device AI, supports cross-medium conversions, and packs a full suite of creative tools without ever touching a server.
 
 Need to turn an AVI into a PDF? Extract text from a scanned document? Generate speech from text? Edit a PDF? Go for it.
 
+<br>
+
 ---
+
+<br>
 
 ## Tools
 
-### Convert — Universal File Converter
-Convert between **200+ file formats** across every media type. Images, video, audio, documents, archives, fonts, 3D models, game assets, and more.
+<table>
+<tr>
+<td width="50%" valign="top">
 
-- Auto-detects input format, pick your output and hit convert
-- Batch conversion with automatic category detection and queueing
-- Simple mode for everyday use, Advanced mode for power users
-- Apply settings to all files at once
-- Archive multi-file output as ZIP automatically
+### Convert
+> **200+ file formats** across every media type
 
-### Compress — Video Compression
-Re-encode videos with quality control and target file size constraints.
+Change files between images, video, audio, documents, archives, fonts, 3D models, game assets, and more. Auto-detects input format with batch conversion and category queueing. Simple mode for everyday use, Advanced mode for power users.
 
-- **Codecs:** H.264, H.265, VP9 (WebM)
-- **Speed presets:** Fast, Balanced, Quality
-- **Size presets:** Discord (10 / 50 / 500 MB), Twitter/X (15 / 512 MB), or custom
-- **Output:** MP4 or WebM
+</td>
+<td width="50%" valign="top">
+
+### Compress
+> **Video compression** with precision control
+
+Re-encode videos with quality control and target file size constraints. Supports H.264, H.265, VP9 codecs with presets for Discord, Twitter/X, or custom targets. Output as MP4 or WebM.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 ### Image Tools
-Professional image manipulation with AI-powered background removal.
+> **AI-powered** image manipulation
 
-- **Background Removal:** On-device via RMBG-1.4 (WebGPU/WASM) or remove.bg API
-  - Correction mode preserves text and fine details
-  - Before/after comparison toggle
-- **Rescaling:** Custom dimensions with aspect ratio lock
-- **Metadata Stripping:** Remove all EXIF data from images
+Background removal via on-device RMBG-1.4 (WebGPU/WASM) or remove.bg API with correction mode for text and fine details. AI image generation and editing via OpenRouter API. Plus rescaling with aspect ratio lock and metadata stripping.
+
+</td>
+<td width="50%" valign="top">
 
 ### Video Editor
-Full-featured in-browser video editing with timeline-based control.
+> **Full-featured** in-browser editing
 
-- **Trim:** Drag timeline handles or type precise timestamps (HH:MM:SS.ms)
-- **Crop:** Visual crop tool with pixel-precise positioning
-- **Audio:**
-  - Remove audio track entirely
-  - 5-band parametric equalizer (60 Hz, 230 Hz, 910 Hz, 3.6 kHz, 14 kHz) with ±12 dB gain per band
-- **Subtitles:**
-  - Extract existing subtitles to SRT, ASS, VTT, or SSA
-  - Remove subtitles from video
-  - Mux subtitles as a selectable track
-  - Burn subtitles directly onto the video
-  - **AI subtitle generation** — Whisper-powered with 4 model sizes:
-    - Base (75 MB) — fastest
-    - Small (250 MB) — fast
-    - Medium (1 GB) — balanced
-    - Large V3 Turbo (1.5 GB) — best quality
-  - 15 languages: English, Spanish, French, German, Italian, Portuguese, Dutch, Russian, Japanese, Korean, Chinese, Arabic, Hindi, Polish, Swedish — plus auto-detect
-- **Merge:** Combine multiple videos with optional re-encode for codec compatibility
-- **Privacy mode:** Strips all metadata from output
-- **Codecs:** H.264 (MP4), VP9 (WebM), with hardware-accelerated WebCodecs where available
-- **Output:** MP4, WebM, MKV
+Trim, crop, merge, and manage audio with a 5-band parametric EQ. Extract, burn, or AI-generate subtitles with Whisper in 15 languages. Hardware-accelerated WebCodecs where available.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 ### Text & Speech
-Text-to-speech and speech-to-text powered by on-device AI.
+> **Neural TTS** and **Whisper STT**
 
-- **Text-to-Speech (Kokoro 82M — ~92 MB model)**
-  - 28 neural voices across 4 categories:
-    - **American Female (11):** Heart, Alloy, Aoede, Bella, Jessica, Kore, Nicole, Nova, River, Sarah, Sky
-    - **American Male (9):** Adam, Echo, Eric, Fenrir, Liam, Michael, Onyx, Puck, Santa
-    - **British Female (4):** Alice, Emma, Isabella, Lily
-    - **British Male (4):** Daniel, Fable, George, Lewis
-  - Speed control: 0.5x – 2.0x (0.1x steps)
-  - Intelligent sentence chunking (300 char max per chunk) for natural pacing
-  - Fullscreen read-aloud mode:
-    - Word-by-word highlighting in the main text display
-    - Sentence teleprompter with active word tracking
-    - Transport controls: skip back, play/pause, skip forward
-    - Full seek bar for precise navigation
-    - "Try Another" to return and change text
-  - Download generated audio as WAV
+28 neural voices (Kokoro 82M) across American and British accents with speed control and fullscreen read-aloud mode. Speech-to-text with 4 Whisper model sizes and word-level timestamps.
 
-- **Speech-to-Text (Whisper)**
-  - 4 model sizes:
-    - Base (~75 MB) — fastest, good for clear audio
-    - Small (~250 MB) — fast, better accuracy
-    - Medium (~1 GB) — balanced quality and speed
-    - Large V3 Turbo (~1.5 GB) — best accuracy
-  - 15 languages: English, Spanish, French, German, Italian, Portuguese, Dutch, Russian, Japanese, Korean, Chinese, Arabic, Hindi, Polish, Swedish — plus auto-detect
-  - Record directly from microphone or upload audio/video files
-  - Word-level timestamps for precise transcription
+</td>
+<td width="50%" valign="top">
 
 ### Summarize
-AI-powered document and web page summarization.
+> **AI-powered** document summarization
 
-- **Input sources:**
-  - Upload files: PDF, DOCX, TXT, MD, CSV, JSON, XML, HTML, LOG, YAML, TOML, INI, CFG, CONF
-  - Paste raw text (minimum 20 characters)
-  - Enter a URL — automatically fetches and extracts page content (with CORS proxy fallback)
-- **Models:**
-  - DistilBART 6-6 (~300 MB) — fast
-  - DistilBART 12-6 (~600 MB) — balanced (default)
-  - BART Large CNN (~1.6 GB) — best quality
-- **Target length:** 50 – 500 words (default: 150)
-- **Smart chunking:** Documents over 1,200 words are split into 1,000-word chunks and summarized in parts, then combined
-- PDF text extraction via pdfjs-dist, DOCX parsing via JSZip
+Summarize PDFs, DOCX, text, or web pages with DistilBART/BART models. Smart chunking handles long documents automatically. Adjustable target length from 50–500 words.
 
-### OCR — Text Extraction
-Extract text from images and scanned PDFs using Tesseract.js (WASM).
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-- **14 languages:** English, Spanish, French, German, Italian, Portuguese, Russian, Japanese, Korean, Chinese (Simplified), Chinese (Traditional), Arabic, Hindi, Polish
-- Language data downloaded on demand (~15 MB per language, cached after first use)
-- Multi-page PDF support with live page preview (rendered at 2x scale for OCR accuracy)
-- Single image or batch processing
-- **Fullscreen read-aloud mode:**
-  - Generates speech from extracted text using Kokoro TTS
-  - Word-by-word highlighting in the main text display
-  - Sentence teleprompter with active word tracking
-  - Transport controls and seek bar
-  - Download generated audio as WAV
-  - "Try Another" button to return and process a new file
-- Copy or download results as plain text
+### OCR
+> **Tesseract.js** text extraction
+
+Extract text from images and scanned PDFs in 14 languages. Multi-page PDF support with live preview. Includes fullscreen read-aloud mode with Kokoro TTS integration.
+
+</td>
+<td width="50%" valign="top">
 
 ### PDF Editor
-Annotate, sign, and edit PDFs directly in the browser.
+> **Annotate, sign, and edit** in-browser
 
-- **6 tools:**
-  - **Select** — move, resize, and manipulate placed objects
-  - **Text** — add editable text boxes with full styling:
-    - 20 fonts: Arial, Book Antiqua, Bookman Old Style, Calibri, Cambria, Comic Sans MS, Consolas, Courier New, Garamond, Georgia, Helvetica, Impact, Lucida Console, Lucida Sans Unicode, Palatino Linotype, Segoe UI, Tahoma, Times New Roman, Trebuchet MS, Verdana
-    - Font size: 8 – 120 px
-    - Bold, italic, underline, strikethrough
-    - Text alignment: left, center, right
-    - Bullet points with auto-formatting
-    - **"Match Surrounding Text"** — samples the PDF at click position to auto-detect font family, size, color, and bold/italic style (uses 5×5 pixel grid color sampling with brightness thresholds)
-  - **Draw** — freehand pencil brush (1 – 20 px) with color picker and opacity control (0 – 100%)
-  - **Highlight** — semi-transparent rectangle overlays (35% opacity)
-  - **Erase** — fills areas with a sampled background color (eyedropper picks from the PDF surface)
-  - **Image** — insert and scale images for stamps and signatures (auto-scales if larger than half the canvas)
-- **Page navigation** with live thumbnail sidebar (150px width, updates in real time as you edit)
-- **Zoom:** 25% – 300% in 25% steps
-- **Undo/Redo** per page (50-action stack)
-- Multi-page PDF support with per-page annotation persistence
-- Export composites annotations as PNG overlays embedded via pdf-lib, saved as "-edited.pdf"
+6 tools: select, text (20 fonts with auto-style matching), draw, highlight, erase, and image insertion. Per-page undo/redo, zoom, and live thumbnail sidebar.
+
+</td>
+</tr>
+</table>
+
+<br>
+
+<div align="center">
+<img src="docs/screenshots/converter.png" alt="Universal File Converter" width="90%" style="border-radius: 12px;" />
+<br>
+<sub><b>Universal converter</b> — 200+ formats with searchable format picker and category filters</sub>
+</div>
+
+<br>
 
 ---
+
+<br>
 
 ## Supported Formats
 
 | Category | Examples |
-|---|---|
-| Image | PNG, JPEG, WebP, GIF, SVG, TIFF, BMP, ICO, HEIF, AVIF, JP2, JXL, QOI, VTF, Aseprite, and 50+ more |
-| Video | MP4, AVI, MKV, WebM, MOV, FLV, and 100+ FFmpeg formats |
-| Audio | MP3, WAV, OGG, FLAC, AAC, MIDI, MOD, XM, S3M, IT, QOA, and more |
-| Document | PDF, DOCX, XLSX, PPTX, HTML, Markdown, EPUB, RTF, LaTeX, ODT, and 50+ via Pandoc |
-| Data | JSON, XML, YAML, CSV, SQL, SQLite, NBT (Minecraft) |
-| Archive | ZIP, 7Z, TAR, TAR.GZ, GZ, LZH |
-| 3D Model | GLB and other formats via Three.js |
-| Font | TTF, OTF, WOFF, WOFF2 |
-| Game | Doom WAD, Beat Saber replays (BSOR), Scratch 3.0 (SB3), Portal 2 (SPPD), Half-Life 2 (VTF) |
-| Other | Base64, hex, URL encoding, Python turtle graphics, PE executables |
+|:---|:---|
+| **Image** | PNG, JPEG, WebP, GIF, SVG, TIFF, BMP, ICO, HEIF, AVIF, JP2, JXL, QOI, VTF, Aseprite, and 50+ more |
+| **Video** | MP4, AVI, MKV, WebM, MOV, FLV, and 100+ FFmpeg formats |
+| **Audio** | MP3, WAV, OGG, FLAC, AAC, MIDI, MOD, XM, S3M, IT, QOA, and more |
+| **Document** | PDF, DOCX, XLSX, PPTX, HTML, Markdown, EPUB, RTF, LaTeX, ODT, and 50+ via Pandoc |
+| **Data** | JSON, XML, YAML, CSV, SQL, SQLite, NBT (Minecraft) |
+| **Archive** | ZIP, 7Z, TAR, TAR.GZ, GZ, LZH |
+| **3D Model** | GLB and other formats via Three.js |
+| **Font** | TTF, OTF, WOFF, WOFF2 |
+| **Game** | Doom WAD, Beat Saber replays (BSOR), Scratch 3.0 (SB3), Portal 2 (SPPD), Half-Life 2 (VTF) |
+| **Other** | Base64, hex, URL encoding, Python turtle graphics, PE executables |
+
+<br>
 
 ---
+
+<br>
+
+## Built-in Image Editor
+
+<div align="center">
+<img src="docs/screenshots/editor.png" alt="Mini Paint Image Editor" width="90%" style="border-radius: 12px;" />
+<br>
+<sub><b>Full image editor</b> — layers, brushes, effects, selections, text, shapes, and AI generation</sub>
+</div>
+
+<br>
+
+---
+
+<br>
 
 ## Privacy & Security
 
-- **100% client-side** — all processing runs in your browser using WebAssembly
-- **Your files never leave your device** — unless you explicitly opt into remove.bg API or CORS proxy
-- **Privacy mode** — strips EXIF/GPS metadata, randomizes filenames, and hides referrer headers
-- **No accounts, no tracking, no uploads**
+<table>
+<tr>
+<td>
+
+**100% client-side** — all processing runs in your browser using WebAssembly. Your files never leave your device unless you explicitly opt into remove.bg API, OpenRouter API (AI image generation), or CORS proxy. Privacy mode strips EXIF/GPS metadata, randomizes filenames, and hides referrer headers. No accounts, no tracking, no uploads.
+
+</td>
+</tr>
+</table>
+
+<br>
 
 ---
+
+<br>
 
 ## Personalization
 
 - Dark and light themes
 - 8 preset accent colors + 3 custom color slots with full color picker
-- Configurable defaults for every tool (voices, models, languages, codecs, brush sizes, and more)
+- Configurable defaults for every tool
 - Auto-download toggle or collect files in the output tray
 
+<br>
+
 ---
+
+<br>
 
 ## Tech Stack
 
-- **TypeScript** + **Vite** — fast builds, modern tooling
-- **FFmpeg WASM** — video/audio transcoding
-- **ImageMagick WASM** — 100+ image formats
-- **Pandoc** — 50+ document formats
-- **Tesseract.js** — OCR text extraction
-- **Kokoro TTS** — neural text-to-speech (82M parameters)
-- **Whisper** (Transformers.js) — speech-to-text and subtitle generation
-- **DistilBART / BART** (Transformers.js) — text summarization
-- **RMBG-1.4** (Transformers.js) — AI background removal
-- **pdfjs-dist** + **Fabric.js** + **pdf-lib** — PDF rendering, annotation, and export
-- **Three.js** — 3D model conversion
-- **7z-WASM**, **JSZip**, **pako** — archive handling
-- **libopenmpt** — music tracker format playback
+<div align="center">
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-7c3aed?style=flat-square&logo=typescript&logoColor=white)](#)
+[![Vite](https://img.shields.io/badge/Vite-7c3aed?style=flat-square&logo=vite&logoColor=white)](#)
+[![FFmpeg](https://img.shields.io/badge/FFmpeg_WASM-6d28d9?style=flat-square&logo=ffmpeg&logoColor=white)](#)
+[![WebAssembly](https://img.shields.io/badge/WebAssembly-6d28d9?style=flat-square&logo=webassembly&logoColor=white)](#)
+
+</div>
+
+| Component | Technology |
+|:---|:---|
+| **Build** | TypeScript + Vite |
+| **Video/Audio** | FFmpeg WASM |
+| **Images** | ImageMagick WASM |
+| **Documents** | Pandoc |
+| **OCR** | Tesseract.js |
+| **Text-to-Speech** | Kokoro TTS (82M params) |
+| **Speech-to-Text** | Whisper via Transformers.js |
+| **Summarization** | DistilBART / BART via Transformers.js |
+| **Background Removal** | RMBG-1.4 via Transformers.js |
+| **PDF** | pdfjs-dist + Fabric.js + pdf-lib |
+| **3D Models** | Three.js |
+| **Archives** | 7z-WASM, JSZip, pako |
+| **Music Trackers** | libopenmpt |
+
+<br>
 
 ---
 
+<br>
+
 ## Usage
 
-1. Go to [convert.utoggl.in](https://convert.utoggl.in/)
+1. Go to **[convert.utoggl.in](https://convert.utoggl.in/)**
 2. Pick a tool from the home screen or drop files anywhere
 3. Configure your options and hit the action button
 4. Download your result — or keep working
 
----
-
-## License
-
-GPL-2.0
+<br>
 
 ---
 
-This project is a fork of [**Convert**](https://github.com/p2r3/convert) by [p2r3](https://github.com/p2r3) — the original truly universal file converter.
+<br>
+
+<div align="center">
+
+**GPL-2.0** &nbsp;|&nbsp; Fork of [**Convert**](https://github.com/p2r3/convert) by [p2r3](https://github.com/p2r3) &nbsp;|&nbsp; Image editor powered by [**miniPaint**](https://github.com/nicktrigger/miniPaint) by [nicktrigger](https://github.com/nicktrigger)
+
+<br>
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:4c1d95,50:7c3aed,100:a78bfa&height=120&section=footer" width="100%" />
+
+</div>
