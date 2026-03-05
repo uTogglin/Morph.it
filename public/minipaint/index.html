@@ -4333,56 +4333,60 @@ a:hover {
 
 	/* Layer via Copy: copies selected pixels to a new layer (Photoshop Ctrl+J) */
 	function layerViaCopy() {
+		/* 1. Magic wand pixel-mask selection */
 		var mask = window.getSelectionMask ? window.getSelectionMask() : null;
-		if (!mask || !AppConfig.layer) {
-			/* No selection → fall back to full layer duplicate */
-			mpAction('layer/duplicate.duplicate');
+		if (mask && AppConfig.layer) {
+			var sz = window.getSelectionSize();
+			var w = sz.w, h = sz.h;
+			var layer = AppConfig.layer;
+			var src = layer.link_canvas || layer.link;
+			var srcCanvas = document.createElement('canvas');
+			srcCanvas.width = w;
+			srcCanvas.height = h;
+			var srcCtx = srcCanvas.getContext('2d');
+			if (src) srcCtx.drawImage(src, 0, 0);
+			var pixData = srcCtx.getImageData(0, 0, w, h);
+			var d = pixData.data;
+			for (var i = 0; i < mask.length; i++) {
+				if (!mask[i]) {
+					d[i * 4] = 0;
+					d[i * 4 + 1] = 0;
+					d[i * 4 + 2] = 0;
+					d[i * 4 + 3] = 0;
+				}
+			}
+			srcCtx.putImageData(pixData, 0, 0);
+			var img = new Image();
+			img.onload = function() {
+				var doInsert = function() {
+					Layers.insert({
+						name: layer.name + ' copy',
+						type: 'image',
+						data: img,
+						width: w,
+						height: h,
+						width_original: w,
+						height_original: h
+					});
+					AppConfig.need_render = true;
+				};
+				if (window.withoutSelectionConstraint) {
+					window.withoutSelectionConstraint(doInsert);
+				} else {
+					doInsert();
+				}
+			};
+			img.src = srcCanvas.toDataURL();
 			return;
 		}
-		var sz = window.getSelectionSize();
-		var w = sz.w, h = sz.h;
-		var layer = AppConfig.layer;
-		var src = layer.link_canvas || layer.link;
-		var srcCanvas = document.createElement('canvas');
-		srcCanvas.width = w;
-		srcCanvas.height = h;
-		var srcCtx = srcCanvas.getContext('2d');
-		if (src) srcCtx.drawImage(src, 0, 0);
-		var pixData = srcCtx.getImageData(0, 0, w, h);
-		var d = pixData.data;
-		/* Zero out pixels outside the selection */
-		for (var i = 0; i < mask.length; i++) {
-			if (!mask[i]) {
-				d[i * 4] = 0;
-				d[i * 4 + 1] = 0;
-				d[i * 4 + 2] = 0;
-				d[i * 4 + 3] = 0;
-			}
-		}
-		srcCtx.putImageData(pixData, 0, 0);
-		var img = new Image();
-		img.onload = function() {
-			/* Temporarily disable the selection-constraint hook so it
-			   doesn't fill non-selected pixels back in from the original layer */
-			var doInsert = function() {
-				Layers.insert({
-					name: layer.name + ' copy',
-					type: 'image',
-					data: img,
-					width: w,
-					height: h,
-					width_original: w,
-					height_original: h
-				});
-				AppConfig.need_render = true;
-			};
-			if (window.withoutSelectionConstraint) {
-				window.withoutSelectionConstraint(doInsert);
-			} else {
-				doInsert();
-			}
-		};
-		img.src = srcCanvas.toDataURL();
+
+		/* 2. Built-in rectangular selection (miniPaint's "New from Selection") */
+		var countBefore = AppConfig.layers ? AppConfig.layers.length : 0;
+		mpAction('layer/new.new_selection');
+		if (AppConfig.layers && AppConfig.layers.length > countBefore) return;
+
+		/* 3. No selection → full layer duplicate */
+		mpAction('layer/duplicate.duplicate');
 	}
 
 	function initKeybinds() {
