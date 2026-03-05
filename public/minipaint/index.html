@@ -3806,6 +3806,12 @@ a:hover {
 		/* Expose selection state for Layer via Copy (Ctrl+Alt+J) */
 		window.getSelectionMask = function() { return selectionMask; };
 		window.getSelectionSize = function() { return { w: imgW, h: imgH }; };
+		/* Run a function with the selection constraint hook temporarily disabled */
+		window.withoutSelectionConstraint = function(fn) {
+			var saved = selectionMask;
+			selectionMask = null;
+			try { fn(); } finally { selectionMask = saved; }
+		};
 		var overlayCanvas = null;
 
 		/* ── Hijack the built-in magic eraser sidebar button ── */
@@ -4336,11 +4342,12 @@ a:hover {
 		var sz = window.getSelectionSize();
 		var w = sz.w, h = sz.h;
 		var layer = AppConfig.layer;
+		var src = layer.link_canvas || layer.link;
 		var srcCanvas = document.createElement('canvas');
 		srcCanvas.width = w;
 		srcCanvas.height = h;
 		var srcCtx = srcCanvas.getContext('2d');
-		if (layer.link) srcCtx.drawImage(layer.link, 0, 0);
+		if (src) srcCtx.drawImage(src, 0, 0);
 		var pixData = srcCtx.getImageData(0, 0, w, h);
 		var d = pixData.data;
 		/* Zero out pixels outside the selection */
@@ -4355,16 +4362,25 @@ a:hover {
 		srcCtx.putImageData(pixData, 0, 0);
 		var img = new Image();
 		img.onload = function() {
-			Layers.insert({
-				name: layer.name + ' copy',
-				type: 'image',
-				data: img,
-				width: w,
-				height: h,
-				width_original: w,
-				height_original: h
-			});
-			AppConfig.need_render = true;
+			/* Temporarily disable the selection-constraint hook so it
+			   doesn't fill non-selected pixels back in from the original layer */
+			var doInsert = function() {
+				Layers.insert({
+					name: layer.name + ' copy',
+					type: 'image',
+					data: img,
+					width: w,
+					height: h,
+					width_original: w,
+					height_original: h
+				});
+				AppConfig.need_render = true;
+			};
+			if (window.withoutSelectionConstraint) {
+				window.withoutSelectionConstraint(doInsert);
+			} else {
+				doInsert();
+			}
 		};
 		img.src = srcCanvas.toDataURL();
 	}
