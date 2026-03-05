@@ -245,7 +245,7 @@ Extract text from images and scanned PDFs in 14 languages. Multi-page PDF suppor
 
 <div align="center">
 
-**GPL-2.0** &nbsp;|&nbsp; Fork of [**Convert**](https://github.com/p2r3/convert) by [p2r3](https://github.com/p2r3) &nbsp;|&nbsp; Image editor powered by [**miniPaint**](https://github.com/nicktrigger/miniPaint) by [nicktrigger](https://github.com/nicktrigger)
+**GPL-2.0** &nbsp;|&nbsp; Fork of [**Convert**](https://github.com/p2r3/convert) by [p2r3](https://github.com/p2r3) &nbsp;|&nbsp; Image editor powered by [**miniPaint**](https://github.com/viliusle/miniPaint) by [viliusle](https://github.com/viliusle)
 
 <br>
 
