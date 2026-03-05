@@ -3102,6 +3102,432 @@ function showMiniPaintEditor() {
   ui.imgFrame?.classList.remove("hidden");
 }
 
+// ── miniPaint Keyboard Shortcuts (Photoshop-style, Ctrl+Alt+Key) ─────────────
+
+/** Dispatch a miniPaint module action via its internal API.
+ *  target format: "edit/undo.undo" → modules["edit/undo"]["undo"]() */
+function mpAction(target: string, param?: any) {
+  if (!miniPaintReady) return;
+  const win = ui.imgFrame?.contentWindow as any;
+  if (!win?.Base_gui?.modules) return;
+  const dotIdx = target.lastIndexOf(".");
+  const mod = target.slice(0, dotIdx);
+  const fn = target.slice(dotIdx + 1);
+  if (win.Base_gui.modules[mod]?.[fn]) {
+    win.Base_gui.modules[mod][fn](param ?? null);
+  }
+}
+
+/** Activate a miniPaint drawing tool by clicking its sidebar button */
+function mpTool(toolName: string) {
+  if (!miniPaintReady) return;
+  const win = ui.imgFrame?.contentWindow as any;
+  if (!win?.Base_gui?.GUI_tools) return;
+  win.Base_gui.GUI_tools.activate_tool(toolName);
+}
+
+/** Handle Photoshop-style keyboard shortcuts for miniPaint */
+function handleMiniPaintKeybind(e: KeyboardEvent) {
+  if (activeTool !== "image" || !miniPaintReady) return;
+  const win = ui.imgFrame?.contentWindow as any;
+  if (!win) return;
+
+  const key = e.key.toLowerCase();
+  const ctrl = e.ctrlKey || e.metaKey;
+  const alt = e.altKey;
+  const shift = e.shiftKey;
+
+  // ── Ctrl+Alt+Shift combos (check BEFORE Ctrl+Alt) ──
+  if (ctrl && alt && shift) {
+    const ctrlAltShiftMap: Record<string, () => void> = {
+      "e": () => mpAction("layer/merge.merge"),                 // Merge Down
+      "s": () => mpAction("file/save.export"),                  // Export/Save As
+      "f": () => mpAction("image/flip.vertical"),               // Flip Vertical
+      "r": () => mpAction("image/rotate.rotate"),               // Rotate
+      "i": () => mpAction("image/resize.resize"),               // Image Size/Resize
+      "c": () => mpAction("image/size.size"),                   // Canvas Size
+      "n": () => mpAction("layer/new.new"),                     // New Layer
+      "l": () => mpAction("image/color_corrections.color_corrections"), // Levels/Corrections
+    };
+
+    if (ctrlAltShiftMap[key]) {
+      e.preventDefault();
+      e.stopPropagation();
+      ctrlAltShiftMap[key]();
+      return;
+    }
+  }
+
+  // ── Ctrl+Alt combos (safe from browser conflicts) ──
+  if (ctrl && alt && !shift) {
+    const ctrlAltMap: Record<string, () => void> = {
+      // Edit operations
+      "z": () => mpAction("edit/undo.undo"),                    // Undo
+      "y": () => mpAction("edit/redo.redo"),                    // Redo
+      "c": () => mpAction("edit/copy.copy_to_clipboard"),       // Copy
+      "v": () => mpAction("edit/paste.paste"),                  // Paste
+      "a": () => mpAction("edit/selection.select_all"),         // Select All
+      "d": () => mpAction("edit/selection.delete"),             // Deselect
+
+      // File operations
+      "s": () => mpAction("file/save.save"),                    // Save
+      "e": () => mpAction("file/save.export"),                  // Export
+      "n": () => mpAction("file/new.new"),                      // New
+      "o": () => mpAction("file/open.open_file"),               // Open
+
+      // Tools (Photoshop single-key equivalents)
+      "b": () => mpTool("brush"),                               // Brush (B)
+      "p": () => mpTool("pencil"),                              // Pencil (N/P)
+      "g": () => mpTool("gradient"),                            // Gradient (G)
+      "t": () => mpTool("text"),                                // Text (T)
+      "m": () => mpTool("selection"),                           // Marquee/Selection (M)
+      "l": () => mpTool("line"),                                // Line (L)
+      "u": () => mpTool("rectangle"),                           // Rectangle/Shape (U)
+      "i": () => mpTool("pick_color"),                          // Eyedropper (I)
+      "k": () => mpTool("fill"),                                // Paint Bucket (K)
+      "r": () => mpTool("blur"),                                // Blur (R)
+      "w": () => mpTool("clone"),                               // Clone Stamp (S→W to avoid conflict)
+
+      // Layer operations
+      "j": () => mpAction("layer/duplicate.duplicate"),         // Duplicate Layer
+      "f": () => mpAction("layer/flatten.flatten"),             // Flatten Image
+      "x": () => mpAction("layer/delete.delete"),               // Delete Layer
+
+      // Image operations
+      "h": () => mpAction("image/flip.horizontal"),             // Flip Horizontal
+      "q": () => mpAction("image/auto_adjust.auto_adjust"),     // Auto Adjust
+
+      // View operations
+      "0": () => mpAction("view/zoom.auto"),                    // Fit to Window
+      "1": () => mpAction("view/zoom.original"),                // Actual Pixels (100%)
+    };
+
+    if (ctrlAltMap[key]) {
+      e.preventDefault();
+      e.stopPropagation();
+      ctrlAltMap[key]();
+      return;
+    }
+  }
+
+  // ── Ctrl+Alt+/ to open keybinds panel ──
+  if (ctrl && alt && key === "/") {
+    e.preventDefault(); e.stopPropagation();
+    const iframeDoc = ui.imgFrame?.contentDocument;
+    if (iframeDoc) toggleKeybindsPanel(iframeDoc);
+    return;
+  }
+
+  // ── Zoom with Ctrl+Alt +/- ──
+  if (ctrl && alt && (key === "=" || key === "+")) {
+    e.preventDefault(); e.stopPropagation();
+    mpAction("view/zoom.in");
+    return;
+  }
+  if (ctrl && alt && key === "-") {
+    e.preventDefault(); e.stopPropagation();
+    mpAction("view/zoom.out");
+    return;
+  }
+
+  // ── Single-key tool shortcuts (only when no input/textarea focused) ──
+  if (!ctrl && !alt && !shift) {
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    const singleKeyMap: Record<string, () => void> = {
+      "b": () => mpTool("brush"),
+      "e": () => mpTool("media"),         // Eraser → media tool
+      "g": () => mpTool("gradient"),
+      "t": () => mpTool("text"),
+      "m": () => mpTool("selection"),
+      "l": () => mpTool("line"),
+      "u": () => mpTool("rectangle"),
+      "i": () => mpTool("pick_color"),
+      "k": () => mpTool("fill"),
+      "r": () => mpTool("blur"),
+      "s": () => mpTool("clone"),
+      "c": () => mpTool("crop"),
+      "v": () => mpTool("move"),
+      "z": () => mpTool("zoom"),
+      "o": () => mpTool("ellipse"),
+      "a": () => mpTool("arrow"),
+      "x": () => mpTool("sharpen"),
+      "delete": () => mpAction("layer/clear.clear"),
+      "[": () => mpAction("layer/move.down"),
+      "]": () => mpAction("layer/move.up"),
+    };
+
+    if (singleKeyMap[key]) {
+      e.preventDefault();
+      e.stopPropagation();
+      singleKeyMap[key]();
+      return;
+    }
+  }
+}
+
+/** Attach keyboard shortcut listener to a document (parent or iframe) */
+function attachMiniPaintKeybinds(doc: Document) {
+  doc.addEventListener("keydown", handleMiniPaintKeybind, true);
+}
+
+// Attach to parent document immediately
+attachMiniPaintKeybinds(document);
+
+// Attach to iframe document each time miniPaint loads & inject keybinds button
+if (ui.imgFrame) {
+  ui.imgFrame.addEventListener("load", () => {
+    // Wait briefly for miniPaint to initialize, then attach
+    const tryAttach = () => {
+      if (ui.imgFrame?.contentDocument) {
+        attachMiniPaintKeybinds(ui.imgFrame.contentDocument);
+      }
+    };
+    tryAttach();
+    setTimeout(() => {
+      tryAttach();
+      injectKeybindsButton();
+    }, 300);
+  });
+}
+
+/** Inject "Keybinds" menu item into miniPaint's top menu bar, next to Help */
+function injectKeybindsButton() {
+  const doc = ui.imgFrame?.contentDocument;
+  if (!doc) return;
+  if (doc.getElementById("keybinds-menu-item")) return;
+
+  const menuBar = doc.querySelector(".main_menu > ul.menu_bar");
+  if (!menuBar) return;
+
+  const li = doc.createElement("li");
+  li.id = "keybinds-menu-item";
+  const a = doc.createElement("a");
+  a.href = "#";
+  a.textContent = "Keybinds";
+  a.setAttribute("role", "menuitem");
+  a.addEventListener("click", (e) => { e.preventDefault(); toggleKeybindsPanel(doc); });
+  li.appendChild(a);
+  menuBar.appendChild(li);
+}
+
+/** Build and toggle the keybinds overlay panel inside miniPaint iframe */
+function toggleKeybindsPanel(doc: Document) {
+  let panel = doc.getElementById("keybinds-panel");
+  if (panel) {
+    panel.style.display = panel.style.display === "none" ? "flex" : "none";
+    return;
+  }
+
+  // Create overlay
+  panel = doc.createElement("div");
+  panel.id = "keybinds-panel";
+  Object.assign(panel.style, {
+    position: "fixed", top: "0", left: "0", right: "0", bottom: "0",
+    background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    zIndex: "10000", fontFamily: `"Segoe UI", -apple-system, sans-serif`,
+  });
+
+  const card = doc.createElement("div");
+  Object.assign(card.style, {
+    background: "#252525", border: "1px solid #1a1a1a", borderRadius: "6px",
+    boxShadow: "0 12px 48px rgba(0,0,0,0.6)", width: "740px", maxWidth: "92vw",
+    maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden",
+  });
+
+  // Header
+  const header = doc.createElement("div");
+  Object.assign(header.style, {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "14px 20px", borderBottom: "1px solid #1a1a1a", background: "#1c1c1c",
+    flexShrink: "0",
+  });
+  const title = doc.createElement("h2");
+  title.textContent = "Keyboard Shortcuts";
+  Object.assign(title.style, {
+    margin: "0", fontSize: "14px", fontWeight: "600", color: "#e0e0e0",
+    letterSpacing: "0.3px",
+  });
+  const closeBtn = doc.createElement("button");
+  closeBtn.innerHTML = "&times;";
+  Object.assign(closeBtn.style, {
+    background: "none", border: "none", color: "#707070", fontSize: "22px",
+    cursor: "pointer", padding: "0 4px", lineHeight: "1",
+  });
+  closeBtn.addEventListener("mouseenter", () => closeBtn.style.color = "#e0e0e0");
+  closeBtn.addEventListener("mouseleave", () => closeBtn.style.color = "#707070");
+  closeBtn.addEventListener("click", () => panel!.style.display = "none");
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  // Tab bar
+  const tabBar = doc.createElement("div");
+  Object.assign(tabBar.style, {
+    display: "flex", gap: "0", borderBottom: "1px solid #1a1a1a",
+    background: "#1c1c1c", padding: "0 16px", flexShrink: "0",
+  });
+
+  const tabs = ["Single Key", "Ctrl+Alt", "Ctrl+Alt+Shift"];
+  const tabContents: HTMLDivElement[] = [];
+  const tabButtons: HTMLButtonElement[] = [];
+
+  const switchTab = (idx: number) => {
+    tabButtons.forEach((b, i) => {
+      b.style.color = i === idx ? "#e0e0e0" : "#707070";
+      b.style.borderBottom = i === idx ? "2px solid #6C5CE7" : "2px solid transparent";
+    });
+    tabContents.forEach((c, i) => c.style.display = i === idx ? "block" : "none");
+  };
+
+  tabs.forEach((label, i) => {
+    const tabBtn = doc.createElement("button");
+    tabBtn.textContent = label;
+    Object.assign(tabBtn.style, {
+      background: "none", border: "none", borderBottom: "2px solid transparent",
+      color: "#707070", fontSize: "12px", padding: "8px 16px", cursor: "pointer",
+      transition: "color .15s", fontFamily: "inherit",
+    });
+    tabBtn.addEventListener("mouseenter", () => { if (tabBtn.style.color !== "rgb(224, 224, 224)") tabBtn.style.color = "#b0b0b0"; });
+    tabBtn.addEventListener("mouseleave", () => { if (tabBtn.style.color !== "rgb(224, 224, 224)") tabBtn.style.color = "#707070"; });
+    tabBtn.addEventListener("click", () => switchTab(i));
+    tabButtons.push(tabBtn);
+    tabBar.appendChild(tabBtn);
+  });
+
+  // Content area
+  const contentWrap = doc.createElement("div");
+  Object.assign(contentWrap.style, {
+    overflowY: "auto", padding: "16px 20px", flex: "1",
+    scrollbarWidth: "thin", scrollbarColor: "#444 #252525",
+  });
+
+  // Helper to create a keybind table
+  const makeTable = (rows: [string, string][]) => {
+    const container = doc.createElement("div");
+    Object.assign(container.style, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0" });
+    rows.forEach(([key, action], i) => {
+      const row = doc.createElement("div");
+      Object.assign(row.style, {
+        display: "contents",
+      });
+      const keyCell = doc.createElement("div");
+      Object.assign(keyCell.style, {
+        padding: "6px 12px", borderBottom: "1px solid #1a1a1a",
+        background: i % 2 === 0 ? "#2a2a2a" : "#252525",
+      });
+      const kbd = doc.createElement("kbd");
+      kbd.textContent = key;
+      Object.assign(kbd.style, {
+        display: "inline-block", background: "#1a1a1a", color: "#c8c8c8",
+        border: "1px solid #333", borderRadius: "3px", padding: "2px 8px",
+        fontSize: "11px", fontFamily: `"SF Mono", "Consolas", monospace`,
+        boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        minWidth: "20px", textAlign: "center",
+      });
+      keyCell.appendChild(kbd);
+
+      const actionCell = doc.createElement("div");
+      actionCell.textContent = action;
+      Object.assign(actionCell.style, {
+        padding: "6px 12px", borderBottom: "1px solid #1a1a1a", color: "#b0b0b0",
+        fontSize: "12px", display: "flex", alignItems: "center",
+        background: i % 2 === 0 ? "#2a2a2a" : "#252525",
+      });
+
+      container.appendChild(keyCell);
+      container.appendChild(actionCell);
+    });
+    return container;
+  };
+
+  // Tab 0: Single key shortcuts
+  const singleKeyData: [string, string][] = [
+    ["B", "Brush"], ["E", "Eraser"], ["G", "Gradient"], ["T", "Text"],
+    ["M", "Selection (Marquee)"], ["L", "Line"], ["U", "Rectangle / Shape"],
+    ["I", "Eyedropper"], ["K", "Paint Bucket"], ["R", "Blur"],
+    ["S", "Clone Stamp"], ["C", "Crop"], ["V", "Move"], ["Z", "Zoom"],
+    ["O", "Ellipse"], ["A", "Arrow"], ["X", "Sharpen"],
+    ["Delete", "Clear Layer"], ["[", "Move Layer Down"], ["]", "Move Layer Up"],
+  ];
+
+  // Tab 1: Ctrl+Alt
+  const ctrlAltData: [string, string][] = [
+    ["Ctrl+Alt+Z", "Undo"], ["Ctrl+Alt+Y", "Redo"],
+    ["Ctrl+Alt+C", "Copy"], ["Ctrl+Alt+V", "Paste"],
+    ["Ctrl+Alt+A", "Select All"], ["Ctrl+Alt+D", "Deselect"],
+    ["Ctrl+Alt+S", "Save"], ["Ctrl+Alt+E", "Export"],
+    ["Ctrl+Alt+N", "New File"], ["Ctrl+Alt+O", "Open File"],
+    ["Ctrl+Alt+B", "Brush"], ["Ctrl+Alt+P", "Pencil"],
+    ["Ctrl+Alt+G", "Gradient"], ["Ctrl+Alt+T", "Text"],
+    ["Ctrl+Alt+M", "Selection"], ["Ctrl+Alt+L", "Line"],
+    ["Ctrl+Alt+U", "Rectangle"], ["Ctrl+Alt+I", "Eyedropper"],
+    ["Ctrl+Alt+K", "Paint Bucket"], ["Ctrl+Alt+R", "Blur"],
+    ["Ctrl+Alt+W", "Clone Stamp"], ["Ctrl+Alt+J", "Duplicate Layer"],
+    ["Ctrl+Alt+F", "Flatten Image"], ["Ctrl+Alt+X", "Delete Layer"],
+    ["Ctrl+Alt+H", "Flip Horizontal"], ["Ctrl+Alt+Q", "Auto Adjust"],
+    ["Ctrl+Alt+0", "Fit to Window"], ["Ctrl+Alt+1", "Actual Pixels (100%)"],
+    ["Ctrl+Alt++", "Zoom In"], ["Ctrl+Alt+-", "Zoom Out"],
+    ["Ctrl+Alt+/", "Show Keyboard Shortcuts"],
+  ];
+
+  // Tab 2: Ctrl+Alt+Shift
+  const ctrlAltShiftData: [string, string][] = [
+    ["Ctrl+Alt+Shift+E", "Merge Down"],
+    ["Ctrl+Alt+Shift+S", "Export / Save As"],
+    ["Ctrl+Alt+Shift+F", "Flip Vertical"],
+    ["Ctrl+Alt+Shift+R", "Rotate"],
+    ["Ctrl+Alt+Shift+I", "Image Resize"],
+    ["Ctrl+Alt+Shift+C", "Canvas Size"],
+    ["Ctrl+Alt+Shift+N", "New Layer"],
+    ["Ctrl+Alt+Shift+L", "Color Corrections / Levels"],
+  ];
+
+  const tab0 = doc.createElement("div");
+  tab0.appendChild(makeTable(singleKeyData));
+  const tab1 = doc.createElement("div");
+  tab1.style.display = "none";
+  tab1.appendChild(makeTable(ctrlAltData));
+  const tab2 = doc.createElement("div");
+  tab2.style.display = "none";
+  tab2.appendChild(makeTable(ctrlAltShiftData));
+
+  tabContents.push(tab0, tab1, tab2);
+
+  contentWrap.appendChild(tab0);
+  contentWrap.appendChild(tab1);
+  contentWrap.appendChild(tab2);
+
+  // Footer hint
+  const footer = doc.createElement("div");
+  Object.assign(footer.style, {
+    padding: "10px 20px", borderTop: "1px solid #1a1a1a", background: "#1c1c1c",
+    color: "#555", fontSize: "11px", textAlign: "center", flexShrink: "0",
+  });
+  footer.textContent = "Ctrl+Alt combos avoid browser shortcut conflicts \u2022 Single keys only work when no text field is focused";
+
+  card.appendChild(header);
+  card.appendChild(tabBar);
+  card.appendChild(contentWrap);
+  card.appendChild(footer);
+  panel.appendChild(card);
+
+  // Click backdrop to close
+  panel.addEventListener("click", (e) => { if (e.target === panel) panel!.style.display = "none"; });
+  // Escape to close
+  doc.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && panel!.style.display !== "none") {
+      panel!.style.display = "none";
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
+
+  doc.body.appendChild(panel);
+  switchTab(0);
+}
+
 /** Reset image tools state — show drop zone, reload iframe */
 function imgResetState() {
   if (document.fullscreenElement) document.exitFullscreen();
