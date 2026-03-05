@@ -2962,7 +2962,7 @@ function waitForMiniPaint(): Promise<void> {
     const check = () => {
       try {
         const win = frame.contentWindow as any;
-        if (win && win.Layers && win.FileOpen) {
+        if (win && win.Layers && win.FileOpen && win.miniPaintGUI) {
           miniPaintReady = true;
           resolve();
           return;
@@ -3109,21 +3109,23 @@ function showMiniPaintEditor() {
 function mpAction(target: string, param?: any) {
   if (!miniPaintReady) return;
   const win = ui.imgFrame?.contentWindow as any;
-  if (!win?.Base_gui?.modules) return;
+  const gui = win?.miniPaintGUI;
+  if (!gui?.modules) return;
   const dotIdx = target.lastIndexOf(".");
   const mod = target.slice(0, dotIdx);
   const fn = target.slice(dotIdx + 1);
-  if (win.Base_gui.modules[mod]?.[fn]) {
-    win.Base_gui.modules[mod][fn](param ?? null);
+  if (gui.modules[mod]?.[fn]) {
+    gui.modules[mod][fn](param ?? null);
   }
 }
 
-/** Activate a miniPaint drawing tool by clicking its sidebar button */
+/** Activate a miniPaint drawing tool */
 function mpTool(toolName: string) {
   if (!miniPaintReady) return;
   const win = ui.imgFrame?.contentWindow as any;
-  if (!win?.Base_gui?.GUI_tools) return;
-  win.Base_gui.GUI_tools.activate_tool(toolName);
+  const gui = win?.miniPaintGUI;
+  if (!gui?.GUI_tools) return;
+  gui.GUI_tools.activate_tool(toolName);
 }
 
 /** Handle Photoshop-style keyboard shortcuts for miniPaint */

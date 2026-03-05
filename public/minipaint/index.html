@@ -5,6 +5,40 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=0" />
 	<title>miniPaint - Image Editor</title>
 	<link rel="icon" sizes="192x192" href="images/favicon.png">
+	<script>
+	// Intercept miniPaint init to expose GUI instance for parent page keybinds
+	(function() {
+		var origAddEventListener = window.addEventListener;
+		var captured = false;
+		window.addEventListener = function(type, fn, opts) {
+			if (type === 'load' && !captured) {
+				captured = true;
+				var wrappedFn = function(e) {
+					fn.call(this, e);
+					// After bundle init runs, find the GUI singleton with .modules
+					try {
+						var search = [window.State, window.Layers, window.POP, window.FileOpen, window.FileSave];
+						for (var i = 0; i < search.length; i++) {
+							if (!search[i]) continue;
+							var allKeys = Object.keys(search[i]).concat(Object.getOwnPropertyNames(Object.getPrototypeOf(search[i]) || {}));
+							for (var j = 0; j < allKeys.length; j++) {
+								try {
+									var val = search[i][allKeys[j]];
+									if (val && typeof val === 'object' && val.modules && val.GUI_tools) {
+										window.miniPaintGUI = val;
+										return;
+									}
+								} catch(ex) {}
+							}
+						}
+					} catch(ex) {}
+				};
+				return origAddEventListener.call(this, type, wrappedFn, opts);
+			}
+			return origAddEventListener.call(this, type, fn, opts);
+		};
+	})();
+	</script>
 	<script src="dist/bundle.js"></script>
 </head>
 <body>
