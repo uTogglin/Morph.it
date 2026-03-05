@@ -5,40 +5,6 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=0" />
 	<title>miniPaint - Image Editor</title>
 	<link rel="icon" sizes="192x192" href="images/favicon.png">
-	<script>
-	// Intercept miniPaint init to expose GUI instance for parent page keybinds
-	(function() {
-		var origAddEventListener = window.addEventListener;
-		var captured = false;
-		window.addEventListener = function(type, fn, opts) {
-			if (type === 'load' && !captured) {
-				captured = true;
-				var wrappedFn = function(e) {
-					fn.call(this, e);
-					// After bundle init runs, find the GUI singleton with .modules
-					try {
-						var search = [window.State, window.Layers, window.POP, window.FileOpen, window.FileSave];
-						for (var i = 0; i < search.length; i++) {
-							if (!search[i]) continue;
-							var allKeys = Object.keys(search[i]).concat(Object.getOwnPropertyNames(Object.getPrototypeOf(search[i]) || {}));
-							for (var j = 0; j < allKeys.length; j++) {
-								try {
-									var val = search[i][allKeys[j]];
-									if (val && typeof val === 'object' && val.modules && val.GUI_tools) {
-										window.miniPaintGUI = val;
-										return;
-									}
-								} catch(ex) {}
-							}
-						}
-					} catch(ex) {}
-				};
-				return origAddEventListener.call(this, type, wrappedFn, opts);
-			}
-			return origAddEventListener.call(this, type, fn, opts);
-		};
-	})();
-	</script>
 	<script src="dist/bundle.js"></script>
 </head>
 <body>
@@ -4329,6 +4295,280 @@ a:hover {
 		});
 	}
 
+	/* ══════════════════════════════════════════════════════
+	   KEYBOARD SHORTCUTS (Photoshop-style)
+	   Ctrl+Alt+Key avoids browser conflicts.
+	   Single letter keys for quick tool switching.
+	   ══════════════════════════════════════════════════════ */
+
+	function getGUI() {
+		try { return Layers.Base_gui; } catch(e) { return null; }
+	}
+
+	function mpAction(target) {
+		var gui = getGUI();
+		if (!gui || !gui.modules) return;
+		var dot = target.lastIndexOf('.');
+		var mod = target.substring(0, dot);
+		var fn = target.substring(dot + 1);
+		if (gui.modules[mod] && typeof gui.modules[mod][fn] === 'function') {
+			gui.modules[mod][fn](null);
+		}
+	}
+
+	function mpTool(name) {
+		var gui = getGUI();
+		if (gui && gui.GUI_tools) gui.GUI_tools.activate_tool(name);
+	}
+
+	function initKeybinds() {
+		document.addEventListener('keydown', function(e) {
+			// Don't intercept when a popup/dialog is open
+			if (typeof POP !== 'undefined' && POP.get_active_instances && POP.get_active_instances() > 0) return;
+			// Don't intercept when keybinds panel is open
+			var kbPanel = document.getElementById('keybinds-panel');
+			if (kbPanel && kbPanel.style.display !== 'none') {
+				if (e.key === 'Escape') { kbPanel.style.display = 'none'; e.preventDefault(); }
+				return;
+			}
+
+			var key = e.key.toLowerCase();
+			var ctrl = e.ctrlKey || e.metaKey;
+			var alt = e.altKey;
+			var shift = e.shiftKey;
+
+			/* ── Ctrl+Alt+Shift combos (check first) ── */
+			if (ctrl && alt && shift) {
+				var cas = {
+					'e': 'layer/merge.merge',
+					's': 'file/save.export',
+					'f': 'image/flip.vertical',
+					'r': 'image/rotate.rotate',
+					'i': 'image/resize.resize',
+					'c': 'image/size.size',
+					'n': 'layer/new.new',
+					'l': 'image/color_corrections.color_corrections'
+				};
+				if (cas[key]) { e.preventDefault(); e.stopPropagation(); mpAction(cas[key]); return; }
+			}
+
+			/* ── Ctrl+Alt combos ── */
+			if (ctrl && alt && !shift) {
+				var ca = {
+					'z': 'edit/undo.undo',
+					'y': 'edit/redo.redo',
+					'c': 'edit/copy.copy_to_clipboard',
+					'v': 'edit/paste.paste',
+					'a': 'edit/selection.select_all',
+					'd': 'edit/selection.delete',
+					's': 'file/save.save',
+					'e': 'file/save.export',
+					'n': 'file/new.new',
+					'o': 'file/open.open_file',
+					'j': 'layer/duplicate.duplicate',
+					'f': 'layer/flatten.flatten',
+					'x': 'layer/delete.delete',
+					'h': 'image/flip.horizontal',
+					'q': 'image/auto_adjust.auto_adjust',
+					'0': 'view/zoom.auto',
+					'1': 'view/zoom.original'
+				};
+				if (ca[key]) { e.preventDefault(); e.stopPropagation(); mpAction(ca[key]); return; }
+
+				/* Tool switches via Ctrl+Alt */
+				var caTools = {
+					'b': 'brush', 'p': 'pencil', 'g': 'gradient', 't': 'text',
+					'm': 'selection', 'l': 'line', 'u': 'rectangle', 'i': 'pick_color',
+					'k': 'fill', 'r': 'blur', 'w': 'clone'
+				};
+				if (caTools[key]) { e.preventDefault(); e.stopPropagation(); mpTool(caTools[key]); return; }
+
+				/* Zoom +/- */
+				if (key === '=' || key === '+') { e.preventDefault(); e.stopPropagation(); mpAction('view/zoom.in'); return; }
+				if (key === '-') { e.preventDefault(); e.stopPropagation(); mpAction('view/zoom.out'); return; }
+
+				/* Show keybinds panel */
+				if (key === '/') { e.preventDefault(); e.stopPropagation(); toggleKeybindsPanel(); return; }
+			}
+
+			/* ── Single-key tool shortcuts ── */
+			if (!ctrl && !alt && !shift) {
+				var tag = (e.target || {}).tagName;
+				if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+				var sk = {
+					'b': 'brush', 'e': 'media', 'g': 'gradient', 't': 'text',
+					'm': 'selection', 'l': 'line', 'u': 'rectangle', 'i': 'pick_color',
+					'k': 'fill', 'r': 'blur', 's': 'clone', 'c': 'crop',
+					'v': 'move', 'z': 'zoom', 'o': 'ellipse', 'a': 'arrow', 'x': 'sharpen'
+				};
+				if (sk[key]) { e.preventDefault(); e.stopPropagation(); mpTool(sk[key]); return; }
+
+				var skActions = {
+					'delete': 'layer/clear.clear',
+					'[': 'layer/move.down',
+					']': 'layer/move.up'
+				};
+				if (skActions[key]) { e.preventDefault(); e.stopPropagation(); mpAction(skActions[key]); return; }
+			}
+		}, true);
+	}
+
+	/* ── Keybinds menu item in top bar ── */
+	function initKeybindsMenuItem() {
+		var menuBar = document.querySelector('.main_menu > ul.menu_bar');
+		if (!menuBar) return;
+		var li = document.createElement('li');
+		li.id = 'keybinds-menu-item';
+		var a = document.createElement('a');
+		a.href = 'javascript:void(0)';
+		a.setAttribute('role', 'menuitem');
+		a.setAttribute('tabindex', '-1');
+		a.innerHTML = '<span class="name">Keybinds</span>';
+		a.addEventListener('click', function(ev) { ev.preventDefault(); ev.stopPropagation(); toggleKeybindsPanel(); });
+		li.appendChild(a);
+		menuBar.appendChild(li);
+	}
+
+	/* ── Keybinds panel overlay ── */
+	function toggleKeybindsPanel() {
+		var panel = document.getElementById('keybinds-panel');
+		if (panel) { panel.style.display = panel.style.display === 'none' ? 'flex' : 'none'; return; }
+		buildKeybindsPanel();
+	}
+
+	function buildKeybindsPanel() {
+		var panel = document.createElement('div');
+		panel.id = 'keybinds-panel';
+		panel.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:10000;font-family:"Segoe UI",-apple-system,sans-serif;';
+
+		var card = document.createElement('div');
+		card.style.cssText = 'background:#252525;border:1px solid #1a1a1a;border-radius:6px;box-shadow:0 12px 48px rgba(0,0,0,.6);width:740px;max-width:92vw;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;';
+
+		/* Header */
+		var header = document.createElement('div');
+		header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #1a1a1a;background:#1c1c1c;flex-shrink:0;';
+		var title = document.createElement('h2');
+		title.textContent = 'Keyboard Shortcuts';
+		title.style.cssText = 'margin:0;font-size:14px;font-weight:600;color:#e0e0e0;letter-spacing:.3px;';
+		var closeBtn = document.createElement('button');
+		closeBtn.innerHTML = '&times;';
+		closeBtn.style.cssText = 'background:none;border:none;color:#707070;font-size:22px;cursor:pointer;padding:0 4px;line-height:1;';
+		closeBtn.onmouseenter = function() { this.style.color = '#e0e0e0'; };
+		closeBtn.onmouseleave = function() { this.style.color = '#707070'; };
+		closeBtn.onclick = function() { panel.style.display = 'none'; };
+		header.appendChild(title);
+		header.appendChild(closeBtn);
+
+		/* Tabs */
+		var tabBar = document.createElement('div');
+		tabBar.style.cssText = 'display:flex;gap:0;border-bottom:1px solid #1a1a1a;background:#1c1c1c;padding:0 16px;flex-shrink:0;';
+		var tabLabels = ['Single Key', 'Ctrl+Alt', 'Ctrl+Alt+Shift'];
+		var tabBtns = [], tabPanes = [];
+
+		function switchTab(idx) {
+			for (var i = 0; i < tabBtns.length; i++) {
+				tabBtns[i].style.color = i === idx ? '#e0e0e0' : '#707070';
+				tabBtns[i].style.borderBottom = i === idx ? '2px solid #6C5CE7' : '2px solid transparent';
+				tabPanes[i].style.display = i === idx ? 'block' : 'none';
+			}
+		}
+
+		for (var ti = 0; ti < tabLabels.length; ti++) {
+			(function(idx) {
+				var tb = document.createElement('button');
+				tb.textContent = tabLabels[idx];
+				tb.style.cssText = 'background:none;border:none;border-bottom:2px solid transparent;color:#707070;font-size:12px;padding:8px 16px;cursor:pointer;font-family:inherit;';
+				tb.onclick = function() { switchTab(idx); };
+				tabBtns.push(tb);
+				tabBar.appendChild(tb);
+			})(ti);
+		}
+
+		/* Content */
+		var content = document.createElement('div');
+		content.style.cssText = 'overflow-y:auto;padding:16px 20px;flex:1;scrollbar-width:thin;scrollbar-color:#444 #252525;';
+
+		function makeTable(rows) {
+			var grid = document.createElement('div');
+			grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:0;';
+			for (var ri = 0; ri < rows.length; ri++) {
+				var bg = ri % 2 === 0 ? '#2a2a2a' : '#252525';
+				var kc = document.createElement('div');
+				kc.style.cssText = 'padding:6px 12px;border-bottom:1px solid #1a1a1a;background:' + bg + ';';
+				var kbd = document.createElement('kbd');
+				kbd.textContent = rows[ri][0];
+				kbd.style.cssText = 'display:inline-block;background:#1a1a1a;color:#c8c8c8;border:1px solid #333;border-radius:3px;padding:2px 8px;font-size:11px;font-family:"SF Mono",Consolas,monospace;box-shadow:0 1px 2px rgba(0,0,0,.3);min-width:20px;text-align:center;';
+				kc.appendChild(kbd);
+				var ac = document.createElement('div');
+				ac.textContent = rows[ri][1];
+				ac.style.cssText = 'padding:6px 12px;border-bottom:1px solid #1a1a1a;color:#b0b0b0;font-size:12px;display:flex;align-items:center;background:' + bg + ';';
+				grid.appendChild(kc);
+				grid.appendChild(ac);
+			}
+			return grid;
+		}
+
+		var singleKeys = [
+			['B','Brush'],['E','Eraser'],['G','Gradient'],['T','Text'],
+			['M','Selection (Marquee)'],['L','Line'],['U','Rectangle / Shape'],
+			['I','Eyedropper'],['K','Paint Bucket'],['R','Blur'],
+			['S','Clone Stamp'],['C','Crop'],['V','Move'],['Z','Zoom'],
+			['O','Ellipse'],['A','Arrow'],['X','Sharpen'],
+			['Delete','Clear Layer'],['[','Move Layer Down'],[']','Move Layer Up']
+		];
+		var ctrlAlt = [
+			['Ctrl+Alt+Z','Undo'],['Ctrl+Alt+Y','Redo'],
+			['Ctrl+Alt+C','Copy'],['Ctrl+Alt+V','Paste'],
+			['Ctrl+Alt+A','Select All'],['Ctrl+Alt+D','Deselect'],
+			['Ctrl+Alt+S','Save'],['Ctrl+Alt+E','Export'],
+			['Ctrl+Alt+N','New File'],['Ctrl+Alt+O','Open File'],
+			['Ctrl+Alt+B','Brush'],['Ctrl+Alt+P','Pencil'],
+			['Ctrl+Alt+G','Gradient'],['Ctrl+Alt+T','Text'],
+			['Ctrl+Alt+M','Selection'],['Ctrl+Alt+L','Line'],
+			['Ctrl+Alt+U','Rectangle'],['Ctrl+Alt+I','Eyedropper'],
+			['Ctrl+Alt+K','Paint Bucket'],['Ctrl+Alt+R','Blur'],
+			['Ctrl+Alt+W','Clone Stamp'],['Ctrl+Alt+J','Duplicate Layer'],
+			['Ctrl+Alt+F','Flatten Image'],['Ctrl+Alt+X','Delete Layer'],
+			['Ctrl+Alt+H','Flip Horizontal'],['Ctrl+Alt+Q','Auto Adjust'],
+			['Ctrl+Alt+0','Fit to Window'],['Ctrl+Alt+1','Actual Pixels (100%)'],
+			['Ctrl+Alt++','Zoom In'],['Ctrl+Alt+-','Zoom Out'],
+			['Ctrl+Alt+/','Show Keyboard Shortcuts']
+		];
+		var ctrlAltShift = [
+			['Ctrl+Alt+Shift+E','Merge Down'],
+			['Ctrl+Alt+Shift+S','Export / Save As'],
+			['Ctrl+Alt+Shift+F','Flip Vertical'],
+			['Ctrl+Alt+Shift+R','Rotate'],
+			['Ctrl+Alt+Shift+I','Image Resize'],
+			['Ctrl+Alt+Shift+C','Canvas Size'],
+			['Ctrl+Alt+Shift+N','New Layer'],
+			['Ctrl+Alt+Shift+L','Color Corrections / Levels']
+		];
+
+		var pane0 = document.createElement('div'); pane0.appendChild(makeTable(singleKeys));
+		var pane1 = document.createElement('div'); pane1.style.display = 'none'; pane1.appendChild(makeTable(ctrlAlt));
+		var pane2 = document.createElement('div'); pane2.style.display = 'none'; pane2.appendChild(makeTable(ctrlAltShift));
+		tabPanes.push(pane0, pane1, pane2);
+		content.appendChild(pane0);
+		content.appendChild(pane1);
+		content.appendChild(pane2);
+
+		/* Footer */
+		var footer = document.createElement('div');
+		footer.style.cssText = 'padding:10px 20px;border-top:1px solid #1a1a1a;background:#1c1c1c;color:#555;font-size:11px;text-align:center;flex-shrink:0;';
+		footer.textContent = 'Ctrl+Alt combos avoid browser shortcut conflicts \u2022 Single keys only work when no text field is focused';
+
+		card.appendChild(header);
+		card.appendChild(tabBar);
+		card.appendChild(content);
+		card.appendChild(footer);
+		panel.appendChild(card);
+
+		panel.addEventListener('click', function(ev) { if (ev.target === panel) panel.style.display = 'none'; });
+		document.body.appendChild(panel);
+		switchTab(0);
+	}
+
 	/* ── INIT ── */
 	function initCustomUI() {
 		if (typeof AppConfig === 'undefined' || !document.querySelector('.sidebar_left')) {
@@ -4348,6 +4588,8 @@ a:hover {
 		initInpaintTool();
 		initMagicWandTool();
 		initSubmenuButtons();
+		initKeybinds();
+		initKeybindsMenuItem();
 	}
 
 	if (document.readyState === 'loading') {
