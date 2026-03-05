@@ -3802,6 +3802,10 @@ a:hover {
 		var tolerance = 15;
 		var contiguous = true;
 		var imgW = 0, imgH = 0;
+
+		/* Expose selection state for Layer via Copy (Ctrl+Alt+J) */
+		window.getSelectionMask = function() { return selectionMask; };
+		window.getSelectionSize = function() { return { w: imgW, h: imgH }; };
 		var overlayCanvas = null;
 
 		/* ── Hijack the built-in magic eraser sidebar button ── */
@@ -4321,6 +4325,50 @@ a:hover {
 		if (gui && gui.GUI_tools) gui.GUI_tools.activate_tool(name);
 	}
 
+	/* Layer via Copy: copies selected pixels to a new layer (Photoshop Ctrl+J) */
+	function layerViaCopy() {
+		var mask = window.getSelectionMask ? window.getSelectionMask() : null;
+		if (!mask || !AppConfig.layer) {
+			/* No selection → fall back to full layer duplicate */
+			mpAction('layer/duplicate.duplicate');
+			return;
+		}
+		var sz = window.getSelectionSize();
+		var w = sz.w, h = sz.h;
+		var layer = AppConfig.layer;
+		var srcCanvas = document.createElement('canvas');
+		srcCanvas.width = w;
+		srcCanvas.height = h;
+		var srcCtx = srcCanvas.getContext('2d');
+		if (layer.link) srcCtx.drawImage(layer.link, 0, 0);
+		var pixData = srcCtx.getImageData(0, 0, w, h);
+		var d = pixData.data;
+		/* Zero out pixels outside the selection */
+		for (var i = 0; i < mask.length; i++) {
+			if (!mask[i]) {
+				d[i * 4] = 0;
+				d[i * 4 + 1] = 0;
+				d[i * 4 + 2] = 0;
+				d[i * 4 + 3] = 0;
+			}
+		}
+		srcCtx.putImageData(pixData, 0, 0);
+		var img = new Image();
+		img.onload = function() {
+			Layers.insert({
+				name: layer.name + ' copy',
+				type: 'image',
+				data: img,
+				width: w,
+				height: h,
+				width_original: w,
+				height_original: h
+			});
+			AppConfig.need_render = true;
+		};
+		img.src = srcCanvas.toDataURL();
+	}
+
 	function initKeybinds() {
 		document.addEventListener('keydown', function(e) {
 			// Don't intercept when a popup/dialog is open
@@ -4354,6 +4402,9 @@ a:hover {
 
 			/* ── Ctrl+Alt combos ── */
 			if (ctrl && alt && !shift) {
+				/* Layer via Copy (Ctrl+Alt+J) — selection-aware */
+				if (key === 'j') { e.preventDefault(); e.stopPropagation(); layerViaCopy(); return; }
+
 				var ca = {
 					'z': 'edit/undo.undo',
 					'y': 'edit/redo.redo',
@@ -4365,7 +4416,6 @@ a:hover {
 					'e': 'file/save.export',
 					'n': 'file/new.new',
 					'o': 'file/open.open_file',
-					'j': 'layer/duplicate.duplicate',
 					'f': 'layer/flatten.flatten',
 					'x': 'layer/delete.delete',
 					'h': 'image/flip.horizontal',
@@ -4527,7 +4577,7 @@ a:hover {
 			['Ctrl+Alt+M','Selection'],['Ctrl+Alt+L','Line'],
 			['Ctrl+Alt+U','Rectangle'],['Ctrl+Alt+I','Eyedropper'],
 			['Ctrl+Alt+K','Paint Bucket'],['Ctrl+Alt+R','Blur'],
-			['Ctrl+Alt+W','Clone Stamp'],['Ctrl+Alt+J','Duplicate Layer'],
+			['Ctrl+Alt+W','Clone Stamp'],['Ctrl+Alt+J','Layer via Copy'],
 			['Ctrl+Alt+F','Flatten Image'],['Ctrl+Alt+X','Delete Layer'],
 			['Ctrl+Alt+H','Flip Horizontal'],['Ctrl+Alt+Q','Auto Adjust'],
 			['Ctrl+Alt+0','Fit to Window'],['Ctrl+Alt+1','Actual Pixels (100%)'],
