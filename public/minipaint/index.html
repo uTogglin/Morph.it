@@ -1832,6 +1832,32 @@ a:hover {
 .aigen-dialog .aigen-cancel:hover {
 	background: #555;
 }
+.aigen-edit-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 10px 0 2px;
+	cursor: pointer;
+	font-size: 12px;
+	color: #ccc;
+	user-select: none;
+}
+.aigen-edit-toggle input[type="checkbox"] {
+	accent-color: #6C5CE7;
+	width: 15px;
+	height: 15px;
+	cursor: pointer;
+	margin: 0;
+}
+.aigen-edit-toggle:hover {
+	color: #fff;
+}
+.aigen-edit-hint {
+	font-size: 11px;
+	color: #888;
+	margin: 2px 0 0;
+	font-style: italic;
+}
 
 /* ── Magic Wand Tool ── */
 .magicwand-overlay {
@@ -3243,6 +3269,8 @@ a:hover {
 
 		dialog.innerHTML =
 			'<h3>\u2728 AI Image Generation</h3>' +
+			'<label class="aigen-edit-toggle"><input type="checkbox" class="aigen-edit-check"> Edit current image</label>' +
+			'<div class="aigen-edit-hint" style="display:none">Send the full canvas to AI for editing</div>' +
 			'<textarea class="aigen-prompt" placeholder="Describe the image you want to generate\u2026"></textarea>' +
 			'<label>Model</label>' +
 			'<select class="aigen-model">' + modelOptions + '</select>' +
@@ -3261,12 +3289,39 @@ a:hover {
 		var sizeSelect = dialog.querySelector('.aigen-size');
 		var generateBtn = dialog.querySelector('.aigen-generate');
 		var cancelBtn = dialog.querySelector('.aigen-cancel');
+		var editCheck = dialog.querySelector('.aigen-edit-check');
+		var editHint = dialog.querySelector('.aigen-edit-hint');
+
+		/* ── Toggle edit mode: hide image-only models, change placeholder ── */
+		editCheck.addEventListener('change', function() {
+			var isEdit = editCheck.checked;
+			editHint.style.display = isEdit ? 'block' : 'none';
+			promptInput.placeholder = isEdit
+				? 'Describe the changes you want\u2026 e.g. "add clouds to the sky", "remove the person on the left"'
+				: 'Describe the image you want to generate\u2026';
+
+			/* Hide image-only models (they can\u2019t accept input images) */
+			var opts = modelSelect.options;
+			var firstVisible = -1;
+			for (var i = 0; i < opts.length; i++) {
+				var hide = isEdit && opts[i].getAttribute('data-image-only') === 'true';
+				opts[i].disabled = hide;
+				opts[i].style.display = hide ? 'none' : '';
+				if (!hide && firstVisible < 0) firstVisible = i;
+			}
+			/* If the currently selected model is hidden, switch to the first visible */
+			if (isEdit && modelSelect.options[modelSelect.selectedIndex].disabled && firstVisible >= 0) {
+				modelSelect.selectedIndex = firstVisible;
+			}
+		});
+
 		/* ── Loading overlay (reuses inpaint-overlay styles) ── */
 		var overlay = document.createElement('div');
 		overlay.className = 'inpaint-overlay';
 		overlay.style.display = 'none';
-		overlay.innerHTML = '<div class="spinner"></div><div>Generating image\u2026</div>';
+		overlay.innerHTML = '<div class="spinner"></div><div class="aigen-overlay-text">Generating image\u2026</div>';
 		document.body.appendChild(overlay);
+		var overlayText = overlay.querySelector('.aigen-overlay-text');
 
 		/* ── Open dialog ── */
 		function openDialog() {
@@ -3286,6 +3341,8 @@ a:hover {
 			if (busy) return;
 			busy = true;
 			closeDialog();
+			var isEdit = editCheck.checked;
+			overlayText.textContent = isEdit ? 'Editing image\u2026' : 'Generating image\u2026';
 			overlay.style.display = 'flex';
 
 			var opt = modelSelect.options[modelSelect.selectedIndex];
@@ -3294,15 +3351,45 @@ a:hover {
 			/* Send canvas dimensions so parent can request a right-sized image */
 			var dims = Layers.get_dimensions();
 
-			parent.postMessage({
-				type: 'aigen-request',
-				prompt: prompt,
-				model: modelSelect.value,
-				size: sizeSelect.value,
-				imageOnly: imageOnly,
-				canvasWidth: dims.width,
-				canvasHeight: dims.height
-			}, '*');
+			function sendRequest(inputImage) {
+				var msg = {
+					type: 'aigen-request',
+					prompt: prompt,
+					model: modelSelect.value,
+					size: sizeSelect.value,
+					imageOnly: imageOnly,
+					canvasWidth: dims.width,
+					canvasHeight: dims.height
+				};
+				var transfers = [];
+				if (inputImage) {
+					msg.inputImage = inputImage;
+					transfers.push(inputImage);
+				}
+				parent.postMessage(msg, '*', transfers);
+			}
+
+			if (isEdit) {
+				/* Capture the full canvas composite */
+				try {
+					var compCanvas = document.createElement('canvas');
+					compCanvas.width = dims.width;
+					compCanvas.height = dims.height;
+					var compCtx = compCanvas.getContext('2d');
+					Layers.convert_layers_to_canvas(compCtx);
+					compCanvas.toBlob(function(blob) {
+						if (!blob) { finish('Failed to export canvas.'); return; }
+						var reader = new FileReader();
+						reader.onload = function() { sendRequest(reader.result); };
+						reader.onerror = function() { finish('Failed to read canvas data.'); };
+						reader.readAsArrayBuffer(blob);
+					}, 'image/png');
+				} catch (err) {
+					finish('Error capturing canvas: ' + (err.message || err));
+				}
+			} else {
+				sendRequest(null);
+			}
 		}
 
 		function finish(errMsg) {
@@ -3333,7 +3420,7 @@ a:hover {
 					}
 
 					Layers.insert({
-						name: 'AI Generated',
+						name: e.data.wasEdit ? 'AI Edited' : 'AI Generated',
 						type: 'image',
 						data: img,
 						width: w,

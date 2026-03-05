@@ -3245,6 +3245,7 @@ async function generateImageViaOpenRouter(
   imageOnly: boolean,
   canvasWidth: number,
   canvasHeight: number,
+  inputImage?: ArrayBuffer,
 ): Promise<Uint8Array> {
   if (!openrouterApiKey) throw new Error("No OpenRouter API key. Add your key in Settings \u2192 Image Tools.");
 
@@ -3268,9 +3269,26 @@ async function generateImageViaOpenRouter(
     resTier = "2K";
   }
 
+  // Build message content — multimodal if editing an existing image
+  let userContent: any = prompt;
+  if (inputImage) {
+    const bytes = new Uint8Array(inputImage);
+    let b64 = "";
+    // Convert to base64 in chunks to avoid call stack overflow
+    const chunk = 8192;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      b64 += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+    }
+    b64 = btoa(b64);
+    userContent = [
+      { type: "image_url", image_url: { url: `data:image/png;base64,${b64}` } },
+      { type: "text", text: prompt },
+    ];
+  }
+
   const body: any = {
     model,
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content: userContent }],
     modalities: imageOnly ? ["image"] : ["image", "text"],
   };
 
@@ -3341,8 +3359,8 @@ window.addEventListener("message", async (e) => {
   if (!iframe?.contentWindow) return;
 
   try {
-    const { prompt, model, size, imageOnly, canvasWidth, canvasHeight } = e.data;
-    const resultBytes = await generateImageViaOpenRouter(prompt, model, size, !!imageOnly, canvasWidth || 0, canvasHeight || 0);
+    const { prompt, model, size, imageOnly, canvasWidth, canvasHeight, inputImage } = e.data;
+    const resultBytes = await generateImageViaOpenRouter(prompt, model, size, !!imageOnly, canvasWidth || 0, canvasHeight || 0, inputImage || undefined);
     const resultBuf = resultBytes.buffer.slice(
       resultBytes.byteOffset,
       resultBytes.byteOffset + resultBytes.byteLength,
@@ -3350,6 +3368,7 @@ window.addEventListener("message", async (e) => {
     iframe.contentWindow.postMessage({
       type: "aigen-result",
       image: resultBuf,
+      wasEdit: !!inputImage,
     }, "*", [resultBuf]);
   } catch (err: any) {
     iframe.contentWindow!.postMessage({
