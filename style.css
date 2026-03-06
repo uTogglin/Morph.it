@@ -4011,13 +4011,12 @@ body.ocr-tts-active .ocr-tts-overlay {
 /* ── Upload drop zone ── */
 #pde-editor.hidden { display: none; }
 
+#pdf-editor-page .tool-page-header { display: none; }
+#pdf-editor-page { padding-top: 0; }
+
 .pde-upload-card {
   position: relative;
   z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: calc(100vh - 180px);
 }
 .pde-drop-zone {
   display: flex;
@@ -4025,9 +4024,7 @@ body.ocr-tts-active .ocr-tts-overlay {
   align-items: center;
   justify-content: center;
   gap: 20px;
-  width: 100%;
-  max-width: 420px;
-  padding: 56px 40px;
+  min-height: calc(100vh - 120px);
   border: 2px dashed var(--input-border);
   border-radius: var(--radius);
   cursor: pointer;
