@@ -411,8 +411,8 @@ textarea:focus-visible {
   body { padding-top: 72px; }
   #top-bar { top: 10px; left: 12px; right: 12px; padding: 10px 16px; }
   #home-page { padding: 0 16px; }
-  .home-hero { min-height: calc(100vh - 72px); padding: 24px 0; }
-  .home-grid { grid-template-columns: repeat(2, 1fr); }
+  .home-hero { min-height: auto; padding: 24px 0; }
+  .home-grid { grid-template-columns: 1fr; }
   .home-title {
     font-size: 2rem;
     letter-spacing: -0.8px;
@@ -3802,6 +3802,11 @@ body[data-tool="image"] #convert-button { display: none !important; }
   .speech-word-display { font-size: 0.95rem; padding: 14px; }
   .speech-card { padding: 16px; }
 
+}
+
+@media only screen and (max-width: 540px) {
+  .home-grid { grid-template-columns: 1fr; }
+  .home-hero { min-height: auto; }
 }
 
 /* =========================================
