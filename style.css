@@ -4009,9 +4009,15 @@ body.ocr-tts-active .ocr-tts-overlay {
    ========================================= */
 
 /* ── Upload drop zone ── */
+#pde-editor.hidden { display: none; }
+
 .pde-upload-card {
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 180px);
 }
 .pde-drop-zone {
   display: flex;
@@ -4019,7 +4025,9 @@ body.ocr-tts-active .ocr-tts-overlay {
   align-items: center;
   justify-content: center;
   gap: 20px;
-  min-height: calc(100vh - 200px);
+  width: 100%;
+  max-width: 420px;
+  padding: 56px 40px;
   border: 2px dashed var(--input-border);
   border-radius: var(--radius);
   cursor: pointer;
@@ -4030,13 +4038,16 @@ body.ocr-tts-active .ocr-tts-overlay {
 .pde-drop-zone:hover,
 .pde-drop-zone.drag-over {
   border-color: var(--accent);
+  border-style: solid;
   background: color-mix(in srgb, var(--accent) 3%, var(--surface-color));
-  box-shadow: 0 8px 32px color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow:
+    0 16px 48px color-mix(in srgb, var(--accent) 10%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 .pde-drop-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   display: flex;
   align-items: center;
@@ -4048,7 +4059,7 @@ body.ocr-tts-active .ocr-tts-overlay {
 .pde-drop-zone.drag-over .pde-drop-icon {
   background: var(--accent);
   color: white;
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .pde-drop-title {
   font-size: 1rem;
