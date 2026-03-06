@@ -4010,6 +4010,8 @@ body.ocr-tts-active .ocr-tts-overlay {
 
 /* ── Upload drop zone ── */
 #pde-editor.hidden { display: none; }
+#pde-upload.hidden { display: none; }
+#pde-upload:has(~ #pde-editor:not(.hidden)) { display: none; }
 
 #pdf-editor-page .tool-page-header { display: none; }
 #pdf-editor-page { padding-top: 0; }
