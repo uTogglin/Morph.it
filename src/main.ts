@@ -3056,7 +3056,6 @@ async function loadImageIntoMiniPaint(file: File): Promise<void> {
     const img = new Image();
     const objUrl = URL.createObjectURL(file);
     img.onload = () => {
-      URL.revokeObjectURL(objUrl);
       const layer = {
         name: file.name,
         type: "image",
@@ -3067,6 +3066,7 @@ async function loadImageIntoMiniPaint(file: File): Promise<void> {
         height_original: img.naturalHeight || img.height,
       };
       win.Layers.insert(layer);
+      URL.revokeObjectURL(objUrl);
       resolve();
     };
     img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(); };
