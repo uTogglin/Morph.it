@@ -113,19 +113,19 @@ body {
 [data-theme="light"] .home-orb { opacity: 0.1; }
 .home-orb-1 {
   width: 500px; height: 500px;
-  background: #6C5CE7;
+  background: var(--accent);
   top: -15%; left: -10%;
   animation-delay: 0s;
 }
 .home-orb-2 {
   width: 400px; height: 400px;
-  background: #a855f7;
+  background: color-mix(in srgb, var(--accent) 70%, #c084fc);
   bottom: -10%; right: -5%;
   animation-delay: -7s;
 }
 .home-orb-3 {
   width: 300px; height: 300px;
-  background: #7c3aed;
+  background: color-mix(in srgb, var(--accent) 80%, black);
   top: 40%; left: 50%;
   animation-delay: -14s;
 }
@@ -155,14 +155,14 @@ body {
 }
 .home-title-gradient {
   display: block;
-  background: linear-gradient(135deg, #6C5CE7 0%, #a855f7 50%, #c084fc 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 70%, #c084fc) 50%, color-mix(in srgb, var(--accent) 40%, #c084fc) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   padding-bottom: 6px;
 }
 [data-theme="light"] .home-title-gradient {
-  background: linear-gradient(135deg, #5b4bd4 0%, #7c3aed 50%, #9333ea 100%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 85%, black) 0%, var(--accent) 50%, color-mix(in srgb, var(--accent) 75%, #9333ea) 100%);
   -webkit-background-clip: text;
   background-clip: text;
 }
@@ -1780,9 +1780,20 @@ body[data-tool="image"] #archive-panel { display: none !important; }
 body[data-tool="image"] #output-tray { display: none !important; }
 body[data-tool="image"] #convert-button { display: none !important; }
 
-/* ── Image page header (hidden — miniPaint has its own menu) ── */
+/* ── Image page header ── */
 .img-page-header {
-  display: none;
+  text-align: center;
+  margin-bottom: 20px;
+}
+.img-page-header h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+.img-page-header p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0;
 }
 
 /* ── Editor container: drop zone + miniPaint iframe + action bar ── */
@@ -1797,8 +1808,7 @@ body[data-tool="image"] #convert-button { display: none !important; }
 /* Drop zone (empty state) */
 #img-drop-zone {
   width: 100%;
-  max-width: 900px;
-  height: 400px;
+  min-height: calc(100vh - 180px);
   border: 2px dashed var(--dashed-border);
   border-radius: var(--radius);
   background: var(--surface-color);
@@ -1806,19 +1816,49 @@ body[data-tool="image"] #convert-button { display: none !important; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 14px;
   cursor: pointer;
   transition: all var(--transition);
   user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+#img-drop-zone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+  transition: opacity var(--transition);
+  opacity: 1;
 }
 #img-drop-zone:hover {
   border-color: var(--accent);
-  background: var(--accent-dim);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-color));
+}
+#img-drop-zone:hover::before {
+  opacity: 0;
+}
+#img-drop-zone:hover .img-drop-icon {
+  color: var(--accent);
+  opacity: 0.7;
+  transform: scale(1.05);
 }
 #img-drop-zone.hidden { display: none; }
-.img-drop-icon { color: var(--text-muted); opacity: 0.4; }
-.img-drop-text { font-size: 1.1rem; font-weight: 600; color: var(--text-main); }
-.img-drop-sub { font-size: 0.84rem; color: var(--text-muted); }
+.img-drop-icon {
+  color: var(--text-muted);
+  opacity: 0.3;
+  transition: all 0.25s ease;
+}
+.img-drop-text { font-size: 1.2rem; font-weight: 700; color: var(--text-main); }
+.img-drop-sub { font-size: 0.88rem; color: var(--text-muted); }
+.img-drop-formats {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+  margin-top: 8px;
+  letter-spacing: 0.02em;
+}
 
 /* miniPaint iframe */
 #minipaint-frame {
@@ -2740,7 +2780,7 @@ body[data-tool="image"] #convert-button { display: none !important; }
 }
 
 #speech-layout {
-  max-width: 620px;
+  max-width: 860px;
   margin: 0 auto;
 }
 
@@ -2794,7 +2834,7 @@ body[data-tool="image"] #convert-button { display: none !important; }
 /* ── Textarea ── */
 .speech-textarea {
   width: 100%;
-  min-height: 150px;
+  min-height: 240px;
   padding: 14px 16px;
   background: var(--input-bg);
   border: 1px solid transparent;
@@ -3294,7 +3334,7 @@ body[data-tool="image"] #convert-button { display: none !important; }
    9b. SUMMARIZE TOOL
    ========================================= */
 #sum-layout {
-  max-width: 620px;
+  max-width: 860px;
   margin: 0 auto;
 }
 
