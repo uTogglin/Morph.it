@@ -3257,12 +3257,12 @@ window.addEventListener("message", async (e) => {
     iframe.contentWindow.postMessage({
       type: "inpaint-result",
       image: resultBuf,
-    }, location.origin, [resultBuf]);
+    }, "*", [resultBuf]);
   } catch (err: any) {
     iframe.contentWindow!.postMessage({
       type: "inpaint-error",
       error: err?.message || String(err),
-    }, location.origin);
+    }, "*");
   }
 });
 
@@ -3288,12 +3288,12 @@ window.addEventListener("message", async (e) => {
     iframe.contentWindow.postMessage({
       type: "removebg-result",
       image: resultBuf,
-    }, location.origin, [resultBuf]);
+    }, "*", [resultBuf]);
   } catch (err: any) {
     iframe.contentWindow!.postMessage({
       type: "removebg-error",
       error: err?.message || String(err),
-    }, location.origin);
+    }, "*");
   }
 });
 
@@ -3430,12 +3430,12 @@ window.addEventListener("message", async (e) => {
       type: "aigen-result",
       image: resultBuf,
       wasEdit: !!inputImage,
-    }, location.origin, [resultBuf]);
+    }, "*", [resultBuf]);
   } catch (err: any) {
     iframe.contentWindow!.postMessage({
       type: "aigen-error",
       error: err?.message || String(err),
-    }, location.origin);
+    }, "*");
   }
 });
 
@@ -3458,7 +3458,7 @@ document.addEventListener("fullscreenchange", () => {
   // Notify iframe of fullscreen state change
   const iframe = ui.imgFrame;
   if (iframe?.contentWindow) {
-    iframe.contentWindow.postMessage({ type: "fullscreen-changed", isFullscreen: isFs }, location.origin);
+    iframe.contentWindow.postMessage({ type: "fullscreen-changed", isFullscreen: isFs }, "*");
   }
 });
 
