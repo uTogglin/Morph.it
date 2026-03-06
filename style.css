@@ -491,11 +491,43 @@ body[data-tool="pdf-editor"] #output-tray { display: none !important; }
 body[data-tool="pdf-editor"] #convert-button { display: none !important; }
 
 /* =========================================
-   TOOL PAGES (Compress & Image) — header only
+   TOOL PAGES — shared layout
    ========================================= */
-.tool-page { margin: 0 24px 24px; }
+.tool-page {
+  position: relative;
+  margin: 0 24px 24px;
+  padding-top: 8px;
+  overflow: hidden;
+}
 .tool-page.hidden { display: none; }
-.tool-page-header { text-align: center; margin-bottom: 24px; }
+
+/* ── Background orbs (matching home page) ── */
+.tool-page::before,
+.tool-page::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 0;
+  animation: orbFloat 20s ease-in-out infinite;
+}
+.tool-page::before {
+  width: 420px; height: 420px;
+  background: var(--accent);
+  top: -12%; left: -8%;
+}
+.tool-page::after {
+  width: 350px; height: 350px;
+  background: color-mix(in srgb, var(--accent) 70%, #c084fc);
+  bottom: -10%; right: -6%;
+  animation-delay: -7s;
+}
+[data-theme="light"] .tool-page::before,
+[data-theme="light"] .tool-page::after { opacity: 0.07; }
+
+.tool-page-header { text-align: center; margin-bottom: 24px; position: relative; z-index: 1; }
 .tool-page-header h2 { font-size: 1.4rem; font-weight: 700; margin: 0 0 6px; }
 .tool-page-header p { font-size: 0.9rem; color: var(--text-muted); margin: 0; }
 .tool-page-settings-link {
@@ -1780,24 +1812,12 @@ body[data-tool="image"] #archive-panel { display: none !important; }
 body[data-tool="image"] #output-tray { display: none !important; }
 body[data-tool="image"] #convert-button { display: none !important; }
 
-/* ── Image page header ── */
-.img-page-header {
-  text-align: center;
-  margin-bottom: 20px;
-}
-.img-page-header h2 {
-  font-size: 1.4rem;
-  font-weight: 700;
-  margin: 0 0 4px;
-}
-.img-page-header p {
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  margin: 0;
-}
+/* img-page-header removed — image page now uses shared .tool-page-header */
 
 /* ── Editor container: drop zone + miniPaint iframe + action bar ── */
 #img-editor-container {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2046,23 +2066,12 @@ body[data-tool="image"] #convert-button { display: none !important; }
    ========================================= */
 
 /* ── Video page header ── */
-.vid-page-header {
-  text-align: center;
-  margin-bottom: 20px;
-}
-.vid-page-header h2 {
-  font-size: 1.4rem;
-  font-weight: 700;
-  margin: 0 0 4px;
-}
-.vid-page-header p {
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  margin: 0;
-}
+/* vid-page-header removed — video page now uses shared .tool-page-header */
 
 /* ── Layout: canvas column + settings side by side, centered ── */
 #vid-layout {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 20px;
   justify-content: center;
@@ -2752,34 +2761,11 @@ body[data-tool="image"] #convert-button { display: none !important; }
    9c. TEXT & SPEECH PAGE
    ========================================= */
 
-.speech-page-header {
-  text-align: center;
-  margin-bottom: 28px;
-}
-.speech-header-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: var(--accent-dim);
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 14px;
-}
-.speech-page-header h2 {
-  font-size: 1.4rem;
-  font-weight: 700;
-  margin: 0 0 6px;
-  letter-spacing: -0.01em;
-}
-.speech-page-header p {
-  color: var(--text-muted);
-  margin: 0;
-  font-size: 0.88rem;
-}
+/* speech-page-header / speech-header-icon removed — all pages now use shared .tool-page-header */
 
 #speech-layout {
+  position: relative;
+  z-index: 1;
   max-width: 860px;
   margin: 0 auto;
 }
@@ -3334,6 +3320,8 @@ body[data-tool="image"] #convert-button { display: none !important; }
    9b. SUMMARIZE TOOL
    ========================================= */
 #sum-layout {
+  position: relative;
+  z-index: 1;
   max-width: 860px;
   margin: 0 auto;
 }
@@ -3502,9 +3490,11 @@ body[data-tool="image"] #convert-button { display: none !important; }
    OCR TOOL
    ========================================= */
 #ocr-layout {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 80px);
+  height: calc(100vh - 130px);
   min-height: 500px;
 }
 
@@ -3869,6 +3859,8 @@ body.ocr-tts-active .ocr-tts-overlay {
 
 /* ── Upload drop zone ── */
 .pde-upload-card {
+  position: relative;
+  z-index: 1;
   background: var(--surface-color);
   border: 1px solid var(--input-border);
   border-radius: var(--radius-sm);
@@ -3879,8 +3871,8 @@ body.ocr-tts-active .ocr-tts-overlay {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 36px 20px;
+  gap: 12px;
+  min-height: calc(100vh - 200px);
   border: 2px dashed var(--input-border);
   border-radius: var(--radius-sm);
   margin: 10px;
@@ -3897,6 +3889,11 @@ body.ocr-tts-active .ocr-tts-overlay {
 .pde-drop-zone span {
   font-size: 0.85rem;
   font-weight: 500;
+}
+
+#pde-editor {
+  position: relative;
+  z-index: 1;
 }
 
 /* ── Toolbar ── */
@@ -4484,8 +4481,8 @@ body.ocr-tts-active .ocr-tts-overlay {
   flex-direction: column;
   overflow: hidden;
 }
-#pdf-editor-page:fullscreen .speech-page-header,
-#pdf-editor-page:-webkit-full-screen .speech-page-header,
+#pdf-editor-page:fullscreen .tool-page-header,
+#pdf-editor-page:-webkit-full-screen .tool-page-header,
 #pdf-editor-page:fullscreen #pde-upload,
 #pdf-editor-page:-webkit-full-screen #pde-upload {
   display: none;
