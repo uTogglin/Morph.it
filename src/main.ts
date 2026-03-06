@@ -1352,10 +1352,11 @@ async function buildOptionList () {
           restoreQueueFromArchive();
         }
 
-        const targetParent = event.target.parentElement;
+        const btn = event.currentTarget as HTMLButtonElement;
+        const targetParent = btn.parentElement;
         const previous = targetParent?.getElementsByClassName("selected")?.[0];
         if (previous) previous.className = "";
-        event.target.className = "selected";
+        btn.className = "selected";
         const inputSelected = ui.inputList.querySelector(".selected");
         // In same-category batch mode with mixed exact formats, only output selection is needed
         const outputSelected = ui.outputList.querySelector(".selected");
