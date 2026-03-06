@@ -4010,15 +4010,19 @@ body.ocr-tts-active .ocr-tts-overlay {
 
 /* ── Upload drop zone ── */
 #pde-editor.hidden { display: none; }
-#pde-upload.hidden { display: none; }
-#pde-upload:has(~ #pde-editor:not(.hidden)) { display: none; }
+#pde-upload.hidden { display: none !important; }
 
 #pdf-editor-page .tool-page-header { display: none; }
-#pdf-editor-page { padding-top: 0; }
+#pdf-editor-page {
+  position: relative;
+  padding-top: 0;
+  min-height: calc(100vh - 100px);
+}
 
 .pde-upload-card {
-  position: relative;
-  z-index: 1;
+  position: absolute;
+  inset: 0;
+  z-index: 10;
 }
 .pde-drop-zone {
   display: flex;
@@ -4026,7 +4030,8 @@ body.ocr-tts-active .ocr-tts-overlay {
   align-items: center;
   justify-content: center;
   gap: 20px;
-  min-height: calc(100vh - 120px);
+  width: 100%;
+  height: 100%;
   border: 2px dashed var(--input-border);
   border-radius: var(--radius);
   cursor: pointer;
