@@ -69,10 +69,10 @@ class FFmpegHandler implements FormatHandler {
         ]);
       }
     } catch (e) {
-      if (!e || (
-        typeof e === "string"
-        && e.includes("out of bounds")
-        && attempts > 1
+      if (attempts > 1 && (
+        !e
+        || (typeof e === "string" && e.includes("out of bounds"))
+        || (e instanceof Error && e.message === "FFmpeg timeout")
       )) {
         await this.reloadFFmpeg();
         return await this.execSafe(args, timeout, attempts - 1);
