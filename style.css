@@ -92,7 +92,6 @@ body {
   align-items: center;
   min-height: calc(100vh - 61px);
   padding: 72px 24px 64px;
-  overflow: hidden;
 }
 #home-page.hidden { display: none; }
 
@@ -160,6 +159,7 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  padding-bottom: 6px;
 }
 [data-theme="light"] .home-title-gradient {
   background: linear-gradient(135deg, #5b4bd4 0%, #7c3aed 50%, #9333ea 100%);
