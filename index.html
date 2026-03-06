@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
   <title>Convert to it!</title>
@@ -59,23 +62,31 @@
       <div class="home-orb home-orb-3"></div>
     </div>
     <div class="home-hero">
+      <div class="home-badges">
+        <div class="home-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          100% Private — nothing leaves your device
+        </div>
+      </div>
       <h2 class="home-title">
         <span class="home-title-line">Every file tool you need,</span>
         <span class="home-title-gradient">right in your browser.</span>
       </h2>
-      <p class="home-subtitle">Convert, compress, edit, and transform files across 200+ formats. No uploads, no sign-ups — everything runs locally.</p>
-      <div class="home-badges">
-        <div class="home-badge">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          100% Private
+      <p class="home-subtitle">Convert, compress, edit, and transform files across 200+ formats.<br>No uploads, no sign-ups — everything runs locally in WebAssembly.</p>
+      <div class="home-stats">
+        <div class="home-stat">
+          <span class="home-stat-number">200+</span>
+          <span class="home-stat-label">Formats</span>
         </div>
-        <div class="home-badge">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
-          200+ Formats
+        <div class="home-stat-divider"></div>
+        <div class="home-stat">
+          <span class="home-stat-number">8</span>
+          <span class="home-stat-label">Tools</span>
         </div>
-        <div class="home-badge">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          No Uploads
+        <div class="home-stat-divider"></div>
+        <div class="home-stat">
+          <span class="home-stat-number">0</span>
+          <span class="home-stat-label">Uploads</span>
         </div>
       </div>
     </div>
@@ -309,7 +320,7 @@
         <div class="sm-group">
           <span class="sm-label">Accent color</span>
           <div id="accent-colors">
-            <button class="color-dot active" data-color="#6C5CE7" style="background:#6C5CE7" title="Purple"></button>
+            <button class="color-dot active" data-color="#7C3AED" style="background:#7C3AED" title="Purple"></button>
             <button class="color-dot" data-color="#0984E3" style="background:#0984E3" title="Blue"></button>
             <button class="color-dot" data-color="#00B894" style="background:#00B894" title="Green"></button>
             <button class="color-dot" data-color="#E17055" style="background:#E17055" title="Coral"></button>
@@ -325,7 +336,7 @@
             <button class="color-dot custom-slot" id="custom-slot-3" data-slot="3" title="Custom slot 3"></button>
           </div>
           <div id="custom-color-row">
-            <input type="color" id="custom-accent" value="#6C5CE7">
+            <input type="color" id="custom-accent" value="#7C3AED">
             <button id="save-custom-color" title="Save current color to a slot">Save</button>
           </div>
         </div>

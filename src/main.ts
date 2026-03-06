@@ -1531,9 +1531,9 @@ restoreCustomSlots();
 updateNextSlotIndicator();
 
 try {
-  const savedAccent = localStorage.getItem("convert-accent") || "#6C5CE7";
+  const savedAccent = localStorage.getItem("convert-accent") || "#7C3AED";
   applyAccent(savedAccent);
-} catch { applyAccent("#6C5CE7"); }
+} catch { applyAccent("#7C3AED"); }
 
 ui.accentColors.forEach(dot => {
   dot.addEventListener("click", () => {
