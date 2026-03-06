@@ -735,24 +735,42 @@
     <div class="tool-page-header">
       <h2>Compress Video</h2>
     </div>
-    <div class="compress-quick-bar">
-      <div class="compress-pill">
-        <span class="compress-pill-label">Codec</span>
-        <span class="compress-pill-value" id="cq-codec">H.264</span>
-      </div>
-      <div class="compress-pill">
-        <span class="compress-pill-label">Speed</span>
-        <span class="compress-pill-value" id="cq-speed">Balanced</span>
-      </div>
-      <div class="compress-pill">
-        <span class="compress-pill-label">Target</span>
-        <span class="compress-pill-value" id="cq-target">Auto</span>
-      </div>
-      <button class="compress-settings-btn tool-page-settings-link" data-open-panel="compress" title="Compression settings">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
-        Settings
-      </button>
+
+    <!-- Drop zone (empty state) -->
+    <div id="compress-drop-zone">
+      <svg class="compress-drop-icon" width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="23 7 16 12 23 17 23 7"></polygon>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+      </svg>
+      <span class="compress-drop-text">Drop video here</span>
+      <span class="compress-drop-sub">or click to browse</span>
+      <span class="compress-drop-formats">MP4, WebM, AVI, MOV, MKV, FLV, WMV, GIF and more</span>
     </div>
+
+    <!-- Workspace (visible after files loaded) -->
+    <div id="compress-workspace" class="hidden">
+      <div class="compress-quick-bar">
+        <div class="compress-pill">
+          <span class="compress-pill-label">Codec</span>
+          <span class="compress-pill-value" id="cq-codec">H.264</span>
+        </div>
+        <div class="compress-pill">
+          <span class="compress-pill-label">Speed</span>
+          <span class="compress-pill-value" id="cq-speed">Balanced</span>
+        </div>
+        <div class="compress-pill">
+          <span class="compress-pill-label">Target</span>
+          <span class="compress-pill-value" id="cq-target">Auto</span>
+        </div>
+        <button class="compress-settings-btn tool-page-settings-link" data-open-panel="compress" title="Compression settings">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          Settings
+        </button>
+      </div>
+      <div id="compress-file-list"></div>
+    </div>
+
+    <input id="compress-file-input" type="file" multiple accept="video/*,image/gif,.mp4,.webm,.avi,.mov,.mkv,.flv,.wmv,.ogv,.m4v,.3gp,.ts,.mts,.hevc,.h265" style="display:none">
   </section>
 
   <!-- Image tools page -->

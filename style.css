@@ -496,6 +496,8 @@ textarea:focus-visible {
   display: none !important;
 }
 
+body[data-tool="compress"] #file-area,
+body[data-tool="compress"] #archive-panel,
 body[data-tool="compress"] #format-containers,
 body[data-tool="image"] #format-containers,
 body[data-tool="video"] #format-containers,
@@ -968,6 +970,58 @@ body[data-tool="pdf-editor"] #convert-button { display: none !important; }
   outline: none;
 }
 
+/* ── Compress drop zone ── */
+#compress-drop-zone {
+  width: 100%;
+  min-height: calc(100vh - 180px);
+  border: 2px dashed var(--dashed-border);
+  border-radius: var(--radius);
+  background: var(--surface-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: all var(--transition);
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+#compress-drop-zone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+  transition: opacity var(--transition);
+  opacity: 1;
+}
+#compress-drop-zone:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-color));
+}
+#compress-drop-zone:hover::before { opacity: 0; }
+#compress-drop-zone:hover .compress-drop-icon {
+  color: var(--accent);
+  opacity: 0.7;
+  transform: scale(1.05);
+}
+#compress-drop-zone.hidden { display: none; }
+.compress-drop-icon { color: var(--text-muted); opacity: 0.3; transition: all 0.25s ease; }
+.compress-drop-text { font-size: 1.2rem; font-weight: 700; color: var(--text-main); }
+.compress-drop-sub { font-size: 0.88rem; color: var(--text-muted); }
+.compress-drop-formats {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+  margin-top: 8px;
+  letter-spacing: 0.02em;
+}
+
+/* ── Compress workspace ── */
+#compress-workspace.hidden { display: none; }
+
 /* ── Compress quick-settings bar ── */
 .compress-quick-bar {
   position: relative;
@@ -1018,6 +1072,119 @@ body[data-tool="pdf-editor"] #convert-button { display: none !important; }
   color: white;
   border-color: var(--accent);
 }
+
+/* ── Compress file list ── */
+#compress-file-list {
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  background: var(--surface-color);
+  padding: 20px 24px;
+}
+.compress-file-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.compress-file-header span {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-main);
+}
+.compress-file-header-actions {
+  display: flex;
+  gap: 8px;
+}
+.compress-file-header-actions button {
+  padding: 6px 16px;
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: inherit;
+  border: none;
+}
+.compress-add-btn {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+.compress-add-btn:hover { background: var(--accent); color: white; }
+.compress-clear-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--input-border) !important;
+}
+.compress-clear-btn:hover { color: var(--text-main); border-color: var(--text-muted) !important; }
+
+.compress-file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.compress-file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-color);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  position: relative;
+  transition: all var(--transition);
+}
+.compress-file-item:hover { border-color: var(--accent); }
+.compress-file-ext {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.compress-file-info {
+  flex: 1;
+  min-width: 0;
+}
+.compress-file-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compress-file-size {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.compress-file-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-color);
+  border: 1px solid var(--input-border);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all var(--transition);
+}
+.compress-file-item:hover .compress-file-remove { opacity: 1; }
+.compress-file-remove:hover { background: var(--accent); color: white; border-color: var(--accent); }
 
 /* Compress target input */
 #compress-target-mb {

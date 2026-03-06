@@ -453,6 +453,11 @@ const ui = {
   smSumModel: document.querySelector("#sm-sum-model") as HTMLSelectElement,
   smSumWordLimit: document.querySelector("#sm-sum-word-limit") as HTMLInputElement,
   smSumCorsProxy: document.querySelector("#sm-sum-cors-proxy") as HTMLButtonElement,
+  // Compress tool UI
+  compressDropZone: document.querySelector("#compress-drop-zone") as HTMLDivElement,
+  compressWorkspace: document.querySelector("#compress-workspace") as HTMLDivElement,
+  compressFileList: document.querySelector("#compress-file-list") as HTMLDivElement,
+  compressFileInput: document.querySelector("#compress-file-input") as HTMLInputElement,
 };
 
 // ── Home page / tool navigation ──────────────────────────────────────────────
@@ -471,6 +476,7 @@ const pdfEditorPage = document.querySelector("#pdf-editor-page") as HTMLElement;
 
 function showHomePage() {
   // Clean up tool state when navigating away
+  if (activeTool === "compress") compressResetState();
   if (activeTool === "image") imgResetState();
   if (activeTool === "video") vidResetState();
   if (activeTool === "ocr") ocrTool.stopTts();
@@ -491,6 +497,7 @@ function showHomePage() {
 
 function showToolView(tool: "convert" | "compress" | "image" | "video" | "speech" | "summarize" | "ocr" | "pdf-editor") {
   // Clean up tool state when switching away
+  if (activeTool === "compress" && tool !== "compress") compressResetState();
   if (activeTool === "image" && tool !== "image") imgResetState();
   if (activeTool === "video" && tool !== "video") vidResetState();
   if (activeTool === "ocr" && tool !== "ocr") ocrTool.stopTts();
@@ -516,6 +523,9 @@ function showToolView(tool: "convert" | "compress" | "image" | "video" | "speech
       compressEnabled = true;
       try { localStorage.setItem("convert-compress", "true"); } catch {}
     }
+    // Show drop zone, hide workspace (fresh state)
+    ui.compressDropZone?.classList.remove("hidden");
+    ui.compressWorkspace?.classList.add("hidden");
   } else if (tool === "image") {
     imagePage.classList.remove("hidden");
     syncImageSettingsUI();
@@ -1093,8 +1103,8 @@ function presentQueueGroup(index: number) {
 // the window as a drag-and-drop event, and to the clipboard paste event.
 ui.fileInput.addEventListener("change", fileSelectHandler);
 window.addEventListener("drop", (e) => {
-  // On image/video/speech page, let those tools handle drops
-  if (activeTool === "image" || activeTool === "video" || activeTool === "speech" || activeTool === "summarize" || activeTool === "ocr" || activeTool === "pdf-editor") return;
+  // On dedicated tool pages, let those tools handle drops
+  if (activeTool === "compress" || activeTool === "image" || activeTool === "video" || activeTool === "speech" || activeTool === "summarize" || activeTool === "ocr" || activeTool === "pdf-editor") return;
   fileSelectHandler(e);
 });
 window.addEventListener("dragover", e => e.preventDefault());
@@ -2642,6 +2652,8 @@ function redirectToToolWithFiles(tool: "image" | "compress" | "video") {
   } else if (tool === "video") {
     vidResetState();
     if (newFiles.length > 0) vidLoadFiles(newFiles);
+  } else if (tool === "compress") {
+    compressLoadFiles(newFiles);
   } else {
     selectedFiles = newFiles;
     allUploadedFiles = newFiles;
@@ -2961,6 +2973,148 @@ ui.imgInpaintFeatherToggle?.addEventListener("click", () => {
   try { localStorage.setItem("convert-inpaint-feather", String(inpaintFeather)); } catch {}
   syncImageSettingsUI();
   syncModalSettingsUI();
+});
+
+// ── Compress tool ────────────────────────────────────────────────────────────
+
+const COMPRESS_EXTS = new Set(["mp4", "webm", "avi", "mov", "mkv", "flv", "wmv", "ogv", "m4v", "3gp", "ts", "mts", "hevc", "h265", "gif"]);
+
+/** Load files into the compress tool workspace */
+function compressLoadFiles(files: File[]) {
+  const valid = files.filter(f => {
+    const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+    return f.type.startsWith("video/") || f.type === "image/gif" || COMPRESS_EXTS.has(ext);
+  });
+  if (valid.length === 0) return;
+
+  // Append to existing or start fresh
+  const existing = new Set(selectedFiles.map(f => `${f.name}|${f.size}`));
+  const merged = [...selectedFiles, ...valid.filter(f => !existing.has(`${f.name}|${f.size}`))];
+  selectedFiles = merged;
+  allUploadedFiles = merged;
+  conversionQueue = [];
+  currentQueueIndex = 0;
+  isSameCategoryBatch = true;
+
+  // Switch to workspace view
+  ui.compressDropZone?.classList.add("hidden");
+  ui.compressWorkspace?.classList.remove("hidden");
+  compressRenderFiles();
+  updateProcessButton();
+}
+
+/** Render the compress file list */
+function compressRenderFiles() {
+  if (!ui.compressFileList) return;
+  ui.compressFileList.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "compress-file-header";
+  const countLabel = document.createElement("span");
+  countLabel.textContent = selectedFiles.length === 1
+    ? "1 file selected"
+    : `${selectedFiles.length} files selected`;
+  const actions = document.createElement("div");
+  actions.className = "compress-file-header-actions";
+  const addBtn = document.createElement("button");
+  addBtn.className = "compress-add-btn";
+  addBtn.textContent = "+ Add more";
+  addBtn.onclick = (e) => { e.stopPropagation(); ui.compressFileInput?.click(); };
+  const clearBtn = document.createElement("button");
+  clearBtn.className = "compress-clear-btn";
+  clearBtn.textContent = "Clear";
+  clearBtn.onclick = (e) => { e.stopPropagation(); compressResetState(); };
+  actions.appendChild(addBtn);
+  actions.appendChild(clearBtn);
+  header.appendChild(countLabel);
+  header.appendChild(actions);
+  ui.compressFileList.appendChild(header);
+
+  const grid = document.createElement("div");
+  grid.className = "compress-file-grid";
+  for (const file of selectedFiles) {
+    const item = document.createElement("div");
+    item.className = "compress-file-item";
+
+    const ext = document.createElement("div");
+    ext.className = "compress-file-ext";
+    ext.textContent = file.name.split(".").pop()?.toUpperCase() ?? "?";
+
+    const info = document.createElement("div");
+    info.className = "compress-file-info";
+    const name = document.createElement("div");
+    name.className = "compress-file-name";
+    name.textContent = file.name;
+    name.title = file.name;
+    const size = document.createElement("div");
+    size.className = "compress-file-size";
+    size.textContent = formatFileSize(file.size);
+    info.appendChild(name);
+    info.appendChild(size);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "compress-file-remove";
+    removeBtn.textContent = "\u00D7";
+    removeBtn.title = "Remove";
+    removeBtn.onclick = (e) => {
+      e.stopPropagation();
+      const idx = selectedFiles.indexOf(file);
+      if (idx !== -1) selectedFiles.splice(idx, 1);
+      const allIdx = allUploadedFiles.indexOf(file);
+      if (allIdx !== -1) allUploadedFiles.splice(allIdx, 1);
+      if (selectedFiles.length === 0) {
+        compressResetState();
+      } else {
+        compressRenderFiles();
+        updateProcessButton();
+      }
+    };
+
+    item.appendChild(removeBtn);
+    item.appendChild(ext);
+    item.appendChild(info);
+    grid.appendChild(item);
+  }
+  ui.compressFileList.appendChild(grid);
+}
+
+/** Reset compress tool state — show drop zone, clear files */
+function compressResetState() {
+  selectedFiles = [];
+  allUploadedFiles = [];
+  conversionQueue = [];
+  currentQueueIndex = 0;
+  ui.compressDropZone?.classList.remove("hidden");
+  ui.compressWorkspace?.classList.add("hidden");
+  if (ui.compressFileList) ui.compressFileList.innerHTML = "";
+  updateProcessButton();
+}
+
+// Compress drop zone: click → trigger file input
+ui.compressDropZone?.addEventListener("click", () => ui.compressFileInput?.click());
+
+// Compress drop zone: drag-and-drop
+ui.compressDropZone?.addEventListener("dragover", (e) => e.preventDefault());
+ui.compressDropZone?.addEventListener("drop", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.dataTransfer?.files) compressLoadFiles(Array.from(e.dataTransfer.files));
+});
+
+// Compress file input change handler
+ui.compressFileInput?.addEventListener("change", () => {
+  const files = ui.compressFileInput.files;
+  if (files && files.length > 0) {
+    compressLoadFiles(Array.from(files));
+    ui.compressFileInput.value = "";
+  }
+});
+
+// Also handle window drops on compress page
+window.addEventListener("drop", (e) => {
+  if (activeTool !== "compress") return;
+  e.preventDefault();
+  if (e.dataTransfer?.files) compressLoadFiles(Array.from(e.dataTransfer.files));
 });
 
 const IMAGE_TOOL_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif", "avif", "ico", "heif", "heic"]);
