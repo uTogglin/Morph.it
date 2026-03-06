@@ -89,8 +89,19 @@
           <span class="home-stat-label">Uploads</span>
         </div>
       </div>
+      <div class="home-cta-row">
+        <button class="home-cta-btn" onclick="document.querySelector('.home-tools-section').scrollIntoView({behavior:'smooth'})">
+          Get Started
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
     </div>
-    <div class="home-grid">
+    <div class="home-tools-section">
+      <div class="home-section-header">
+        <span class="home-section-tag">Tools</span>
+        <h3 class="home-section-title">Everything you need, in one place</h3>
+      </div>
+      <div class="home-grid">
       <button class="home-card home-card-featured" data-tool="convert">
         <div class="home-card-icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -234,6 +245,16 @@
         </span>
       </button>
     </div>
+    </div>
+    <footer class="home-footer">
+      <div class="home-footer-inner">
+        <span class="home-footer-logo">Convert<span class="accent">.</span>it</span>
+        <span class="home-footer-sep">·</span>
+        <span class="home-footer-text">100% private — runs entirely in your browser</span>
+        <span class="home-footer-sep">·</span>
+        <a class="home-footer-link" href="https://github.com/uTogglin/convert.it" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </footer>
   </section>
 
   <!-- Settings modal -->
