@@ -3007,7 +3007,7 @@ const IMAGE_TOOL_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "ti
 
 /** Wait for miniPaint iframe to fully load and expose its API (30s timeout) */
 function waitForMiniPaint(): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     if (miniPaintReady) { resolve(); return; }
     const frame = ui.imgFrame;
     if (!frame) { resolve(); return; }
@@ -3022,7 +3022,8 @@ function waitForMiniPaint(): Promise<void> {
         }
       } catch {}
       if (Date.now() > deadline) {
-        reject(new Error("miniPaint iframe failed to load within 30 seconds."));
+        console.warn("miniPaint iframe failed to load within 30 seconds.");
+        resolve();
         return;
       }
       setTimeout(check, 100);
