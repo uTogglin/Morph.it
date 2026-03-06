@@ -105,7 +105,7 @@ class PriorityQueue<T extends object> {
 
       if (
         right < this._size &&
-        object!.toString().localeCompare(this._queue[right]!.toString())
+        object!.toString().localeCompare(this._queue[right]!.toString()) > 0
       ) {
         object = this._queue[(child = right)];
       }
@@ -148,7 +148,7 @@ class PriorityQueue<T extends object> {
     const s = --this._size;
     const result = <T>this._queue[0];
     const x = <T>this._queue[s];
-    this._queue.splice(s, 1);
+    this._queue[s] = undefined as unknown as T;
     if (s !== 0) {
       this.sink(0, x);
     }

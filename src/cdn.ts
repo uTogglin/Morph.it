@@ -148,6 +148,7 @@ export async function cdnScript(key: AssetKey): Promise<void> {
       await new Promise<void>((resolve, reject) => {
         const script = document.createElement("script");
         script.src = urls[i];
+        script.crossOrigin = "anonymous";
         script.onload = () => resolve();
         script.onerror = () => {
           script.remove();

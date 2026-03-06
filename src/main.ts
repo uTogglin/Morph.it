@@ -26,20 +26,33 @@ function _fmtArg(a: unknown): string {
   return String(a);
 }
 
+let _errorCount = 0;
 function _appendAppLog(level: AppLogEntry["level"], args: unknown[]) {
   const msg = args.map(_fmtArg).join(" ");
   const now = new Date();
   const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
     .map(n => n.toString().padStart(2, "0")).join(":");
-  appLogBuffer.push({ level, msg, time });
+  const entry: AppLogEntry = { level, msg, time };
+  appLogBuffer.push(entry);
+  if (level === "error") _errorCount++;
   const badge = document.getElementById("log-badge");
   if (badge) {
-    const count = appLogBuffer.filter(e => e.level === "error").length;
-    badge.textContent = String(count);
-    badge.classList.toggle("hidden", count === 0);
+    badge.textContent = String(_errorCount);
+    badge.classList.toggle("hidden", _errorCount === 0);
   }
   const list = document.getElementById("app-log-list");
-  if (list) _renderAppLogInto(list);
+  if (list) {
+    // Prepend new entry instead of full rebuild
+    const empty = list.querySelector(".app-log-empty");
+    if (empty) empty.remove();
+    const row = document.createElement("div");
+    row.className = `app-log-row app-log-${entry.level}`;
+    const timeEl = document.createElement("span"); timeEl.className = "app-log-time"; timeEl.textContent = entry.time;
+    const lbl = document.createElement("span"); lbl.className = "app-log-level"; lbl.textContent = entry.level.toUpperCase();
+    const msgEl = document.createElement("span"); msgEl.className = "app-log-msg"; msgEl.textContent = entry.msg;
+    row.append(timeEl, lbl, msgEl);
+    list.prepend(row);
+  }
 }
 
 function _renderAppLogInto(list: HTMLElement) {
@@ -67,6 +80,16 @@ const _origConsoleWarn  = console.warn.bind(console);
 console.error = (...args: unknown[]) => { _origConsoleError(...args); _appendAppLog("error", args); };
 console.warn  = (...args: unknown[]) => { _origConsoleWarn(...args);  _appendAppLog("warn",  args); };
 // ──────────────────────────────────────────────────────────────────────────────
+
+/** Escape a string for safe interpolation into HTML */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 /** Files currently selected for conversion */
 let selectedFiles: File[] = [];
@@ -951,7 +974,11 @@ const renderFilePreviews = (files: File[]) => {
   if (activeFolderName) {
     const indicator = document.createElement("div");
     indicator.className = "folder-indicator";
-    indicator.innerHTML = `&#128193; <strong>${activeFolderName}</strong> &mdash; ${allUploadedFiles.length} file${allUploadedFiles.length !== 1 ? "s" : ""}`;
+    const icon = document.createTextNode("\uD83D\uDCC1 ");
+    const strong = document.createElement("strong");
+    strong.textContent = activeFolderName;
+    const suffix = document.createTextNode(` \u2014 ${allUploadedFiles.length} file${allUploadedFiles.length !== 1 ? "s" : ""}`);
+    indicator.append(icon, strong, suffix);
     header.insertBefore(indicator, header.firstChild);
   }
 };
@@ -1260,6 +1287,10 @@ async function buildOptionList () {
   ui.inputList.innerHTML = "";
   ui.outputList.innerHTML = "";
 
+  // Track already-added formats for O(1) dedup in simple mode
+  const seenInputs = new Set<string>();
+  const seenOutputs = new Set<string>();
+
   for (const handler of handlers) {
     if (!window.supportedFormatCache.has(handler.name)) {
       console.warn(`Cache miss for formats of handler "${handler.name}".`);
@@ -1285,15 +1316,12 @@ async function buildOptionList () {
       // In simple mode, display each input/output format only once
       let addToInputs = true, addToOutputs = true;
       if (simpleMode) {
-        addToInputs = !Array.from(ui.inputList.children).some(c => {
-          const currFormat = allOptions[parseInt(c.getAttribute("format-index") || "")]?.format;
-          return currFormat?.mime === format.mime && currFormat?.format === format.format;
-        });
-        addToOutputs = !Array.from(ui.outputList.children).some(c => {
-          const currFormat = allOptions[parseInt(c.getAttribute("format-index") || "")]?.format;
-          return currFormat?.mime === format.mime && currFormat?.format === format.format;
-        });
+        const key = `${format.mime}|${format.format}`;
+        addToInputs = !seenInputs.has(key);
+        addToOutputs = !seenOutputs.has(key);
         if ((!format.from || !addToInputs) && (!format.to || !addToOutputs)) continue;
+        if (format.from && addToInputs) seenInputs.add(key);
+        if (format.to && addToOutputs) seenOutputs.add(key);
       }
 
       const newOption = document.createElement("button");
@@ -1314,7 +1342,7 @@ async function buildOptionList () {
       }
 
       const clickHandler = (event: Event) => {
-        if (!(event.target instanceof HTMLButtonElement)) return;
+        if (!(event.currentTarget instanceof HTMLButtonElement)) return;
 
         // Restore queue grouping if archive mode had suspended it
         if (archiveSuspendedQueue) {
@@ -1878,7 +1906,7 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
 
   ui.popupBox.innerHTML = `<h2>Finding conversion route...</h2>
     <p id="convert-search-status" class="search-status"></p>
-    <p>Trying <b>${pathString}</b>...</p>
+    <p>Trying <b>${escapeHtml(pathString)}</b>...</p>
     <button onclick="window.traversionGraph.abortSearch()">Cancel</button>`;
 
   for (let i = 0; i < path.length - 1; i ++) {
@@ -1887,24 +1915,25 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
       let supportedFormats = window.supportedFormatCache.get(handler.name);
       if (!handler.ready) {
         await handler.init();
-        if (!handler.ready) throw `Handler "${handler.name}" not ready after init.`;
+        if (!handler.ready) throw new Error(`Handler "${handler.name}" not ready after init.`);
         if (handler.supportedFormats) {
           window.supportedFormatCache.set(handler.name, handler.supportedFormats);
           supportedFormats = handler.supportedFormats;
         }
       }
-      if (!supportedFormats) throw `Handler "${handler.name}" doesn't support any formats.`;
+      if (!supportedFormats) throw new Error(`Handler "${handler.name}" doesn't support any formats.`);
       const inputFormat = supportedFormats.find(c =>
         c.from
         && c.mime === path[i].format.mime
         && c.format === path[i].format.format
-      )!;
+      );
+      if (!inputFormat) throw new Error(`No matching input format for ${path[i].format.format} in handler "${handler.name}".`);
       files = (await Promise.all([
         handler.doConvert(files, inputFormat, path[i + 1].format),
         // Ensure that we wait long enough for the UI to update
         new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
       ]))[0];
-      if (files.some(c => !c.bytes.length)) throw "Output is empty.";
+      if (files.some(c => !c.bytes.length)) throw new Error("Output is empty.");
     } catch (e) {
 
       console.log(path.map(c => c.format.format));
@@ -1972,9 +2001,9 @@ window.tryConvertByTraversing = async function (
     const pathEl = document.getElementById("convert-search-path");
     if (!pathEl) return;
     if (state === "searching") {
-      pathEl.innerHTML = `Exploring <b>${path.map(p => p.format.format).join(" \u2192 ")}</b>\u2026`;
+      pathEl.innerHTML = `Exploring <b>${escapeHtml(path.map(p => p.format.format).join(" \u2192 "))}</b>\u2026`;
     } else if (state === "found") {
-      pathEl.innerHTML = `Found route: <b>${path.map(p => p.format.format).join(" \u2192 ")}</b>`;
+      pathEl.innerHTML = `Found route: <b>${escapeHtml(path.map(p => p.format.format).join(" \u2192 "))}</b>`;
     }
   };
   window.traversionGraph.addPathEventListener(searchListener);
@@ -2188,6 +2217,13 @@ async function ensureMagick() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await initializeImageMagick(wasmBytes as any);
     })();
+    try {
+      await magickReady;
+    } catch (e) {
+      magickReady = null;
+      throw e;
+    }
+    return;
   }
   await magickReady;
 }
@@ -2458,27 +2494,42 @@ async function runInpainting(imageBytes: Uint8Array, ext: string, maskImageData:
     : runMiganInpainting(imageBytes, ext, maskImageData);
 }
 
-/** Simple box-blur approximation of Gaussian blur on ImageData alpha channel */
+/** Separable box-blur approximation of Gaussian blur on ImageData alpha channel */
 function applyGaussianBlur(data: ImageData, w: number, h: number, radius: number) {
   const pixels = data.data;
   const alphas = new Float32Array(w * h);
+  const temp = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) alphas[i] = pixels[i * 4 + 3];
 
   for (let pass = 0; pass < 3; pass++) {
-    const temp = new Float32Array(alphas);
+    // Horizontal pass
     for (let y = 0; y < h; y++) {
+      let sum = 0, count = 0;
+      // Initialize window for x=0
+      for (let dx = 0; dx <= radius; dx++) {
+        if (dx < w) { sum += alphas[y * w + dx]; count++; }
+      }
       for (let x = 0; x < w; x++) {
-        let sum = 0, count = 0;
-        for (let dy = -radius; dy <= radius; dy++) {
-          for (let dx = -radius; dx <= radius; dx++) {
-            const nx = x + dx, ny = y + dy;
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-              sum += temp[ny * w + nx];
-              count++;
-            }
-          }
-        }
+        temp[y * w + x] = sum / count;
+        // Slide window: add right edge, remove left edge
+        const addX = x + radius + 1;
+        const remX = x - radius;
+        if (addX < w) { sum += alphas[y * w + addX]; count++; }
+        if (remX >= 0) { sum -= alphas[y * w + remX]; count--; }
+      }
+    }
+    // Vertical pass
+    for (let x = 0; x < w; x++) {
+      let sum = 0, count = 0;
+      for (let dy = 0; dy <= radius; dy++) {
+        if (dy < h) { sum += temp[dy * w + x]; count++; }
+      }
+      for (let y = 0; y < h; y++) {
         alphas[y * w + x] = sum / count;
+        const addY = y + radius + 1;
+        const remY = y - radius;
+        if (addY < h) { sum += temp[addY * w + x]; count++; }
+        if (remY >= 0) { sum -= temp[remY * w + x]; count--; }
       }
     }
   }
@@ -2953,12 +3004,13 @@ const IMAGE_TOOL_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "ti
 
 // ── miniPaint Bridge ─────────────────────────────────────────────────────────
 
-/** Wait for miniPaint iframe to fully load and expose its API */
+/** Wait for miniPaint iframe to fully load and expose its API (30s timeout) */
 function waitForMiniPaint(): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (miniPaintReady) { resolve(); return; }
     const frame = ui.imgFrame;
     if (!frame) { resolve(); return; }
+    const deadline = Date.now() + 30_000;
     const check = () => {
       try {
         const win = frame.contentWindow as any;
@@ -2968,6 +3020,10 @@ function waitForMiniPaint(): Promise<void> {
           return;
         }
       } catch {}
+      if (Date.now() > deadline) {
+        reject(new Error("miniPaint iframe failed to load within 30 seconds."));
+        return;
+      }
       setTimeout(check, 100);
     };
     frame.addEventListener("load", () => setTimeout(check, 200), { once: true });
@@ -2996,7 +3052,9 @@ async function loadImageIntoMiniPaint(file: File): Promise<void> {
 
   return new Promise((resolve) => {
     const img = new Image();
+    const objUrl = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(objUrl);
       const layer = {
         name: file.name,
         type: "image",
@@ -3009,8 +3067,8 @@ async function loadImageIntoMiniPaint(file: File): Promise<void> {
       win.Layers.insert(layer);
       resolve();
     };
-    img.onerror = () => resolve();
-    img.src = URL.createObjectURL(file);
+    img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(); };
+    img.src = objUrl;
   });
 }
 
@@ -3037,8 +3095,9 @@ async function loadBytesIntoMiniPaint(bytes: Uint8Array, name: string): Promise<
       URL.revokeObjectURL(img.src);
       resolve();
     };
-    img.onerror = () => resolve();
-    img.src = URL.createObjectURL(blob);
+    const objUrl = URL.createObjectURL(blob);
+    img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(); };
+    img.src = objUrl;
   });
 }
 
@@ -3172,7 +3231,7 @@ ui.imgFileInput?.addEventListener("change", () => {
 window.addEventListener("message", async (e) => {
   if (e.data?.type !== "inpaint-request") return;
   const iframe = ui.imgFrame;
-  if (!iframe?.contentWindow) return;
+  if (!iframe?.contentWindow || e.source !== iframe.contentWindow) return;
 
   try {
     const { image, mask, width, height, model } = e.data;
@@ -3196,12 +3255,12 @@ window.addEventListener("message", async (e) => {
     iframe.contentWindow.postMessage({
       type: "inpaint-result",
       image: resultBuf,
-    }, "*", [resultBuf]);
+    }, location.origin, [resultBuf]);
   } catch (err: any) {
     iframe.contentWindow!.postMessage({
       type: "inpaint-error",
       error: err?.message || String(err),
-    }, "*");
+    }, location.origin);
   }
 });
 
@@ -3210,7 +3269,7 @@ window.addEventListener("message", async (e) => {
 window.addEventListener("message", async (e) => {
   if (e.data?.type !== "removebg-request") return;
   const iframe = ui.imgFrame;
-  if (!iframe?.contentWindow) return;
+  if (!iframe?.contentWindow || e.source !== iframe.contentWindow) return;
 
   try {
     const imageBytes = new Uint8Array(e.data.image as ArrayBuffer);
@@ -3227,12 +3286,12 @@ window.addEventListener("message", async (e) => {
     iframe.contentWindow.postMessage({
       type: "removebg-result",
       image: resultBuf,
-    }, "*", [resultBuf]);
+    }, location.origin, [resultBuf]);
   } catch (err: any) {
     iframe.contentWindow!.postMessage({
       type: "removebg-error",
       error: err?.message || String(err),
-    }, "*");
+    }, location.origin);
   }
 });
 
@@ -3356,7 +3415,7 @@ async function generateImageViaOpenRouter(
 window.addEventListener("message", async (e) => {
   if (e.data?.type !== "aigen-request") return;
   const iframe = ui.imgFrame;
-  if (!iframe?.contentWindow) return;
+  if (!iframe?.contentWindow || e.source !== iframe.contentWindow) return;
 
   try {
     const { prompt, model, size, imageOnly, canvasWidth, canvasHeight, inputImage } = e.data;
@@ -3369,18 +3428,20 @@ window.addEventListener("message", async (e) => {
       type: "aigen-result",
       image: resultBuf,
       wasEdit: !!inputImage,
-    }, "*", [resultBuf]);
+    }, location.origin, [resultBuf]);
   } catch (err: any) {
     iframe.contentWindow!.postMessage({
       type: "aigen-error",
       error: err?.message || String(err),
-    }, "*");
+    }, location.origin);
   }
 });
 
 // Bridge: iframe fullscreen button → parent Fullscreen API toggle
 window.addEventListener("message", (e) => {
   if (e.data?.type !== "fullscreen-toggle") return;
+  const iframe = ui.imgFrame;
+  if (!iframe?.contentWindow || e.source !== iframe.contentWindow) return;
   const container = ui.imgEditorContainer;
   if (!container) return;
   if (document.fullscreenElement) {
@@ -3395,7 +3456,7 @@ document.addEventListener("fullscreenchange", () => {
   // Notify iframe of fullscreen state change
   const iframe = ui.imgFrame;
   if (iframe?.contentWindow) {
-    iframe.contentWindow.postMessage({ type: "fullscreen-changed", isFullscreen: isFs }, "*");
+    iframe.contentWindow.postMessage({ type: "fullscreen-changed", isFullscreen: isFs }, location.origin);
   }
 });
 
@@ -3947,7 +4008,7 @@ ui.vidExtractSubs?.addEventListener("click", async () => {
     console.error("Subtitle extraction error:", e);
     window.showPopup(
       `<h2>Extraction failed</h2>` +
-      `<p>${e instanceof Error ? e.message : String(e)}</p>` +
+      `<p>${escapeHtml(e instanceof Error ? e.message : String(e))}</p>` +
       `<button onclick="window.hidePopup()">OK</button>`
     );
   } finally {
@@ -3995,7 +4056,7 @@ ui.vidGenerateSubs?.addEventListener("click", async () => {
     console.error("Subtitle generation error:", e);
     window.showPopup(
       `<h2>Generation failed</h2>` +
-      `<p>${e instanceof Error ? e.message : String(e)}</p>` +
+      `<p>${escapeHtml(e instanceof Error ? e.message : String(e))}</p>` +
       `<button onclick="window.hidePopup()">OK</button>`
     );
   } finally {
@@ -4360,9 +4421,16 @@ function vidUpdateMergeList() {
   if (vidFile) {
     const item = document.createElement("div");
     item.className = "vid-merge-item primary";
-    item.innerHTML = `<span class="vid-merge-item-index">#1</span>` +
-      `<span class="vid-merge-item-name">${vidFile.name}</span>` +
-      `<span class="vid-merge-item-badge">Primary</span>`;
+    const idxSpan = document.createElement("span");
+    idxSpan.className = "vid-merge-item-index";
+    idxSpan.textContent = "#1";
+    const nmSpan = document.createElement("span");
+    nmSpan.className = "vid-merge-item-name";
+    nmSpan.textContent = vidFile.name;
+    const bdgSpan = document.createElement("span");
+    bdgSpan.className = "vid-merge-item-badge";
+    bdgSpan.textContent = "Primary";
+    item.append(idxSpan, nmSpan, bdgSpan);
     ui.vidMergeList.appendChild(item);
   }
 
@@ -4844,7 +4912,7 @@ ui.vidDownloadBtn?.addEventListener("click", async () => {
     console.error("Video processing error:", e);
     window.showPopup(
       `<h2>Processing failed</h2>` +
-      `<p>${e instanceof Error ? e.message : String(e)}</p>` +
+      `<p>${escapeHtml(e instanceof Error ? e.message : String(e))}</p>` +
       `<button onclick="window.hidePopup()">OK</button>`
     );
   } finally {

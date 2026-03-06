@@ -76,17 +76,30 @@ class canvasToBlobHandler implements FormatHandler {
 
         const blob = new Blob([inputFile.bytes as BlobPart], { type: inputFormat.mime });
         // For SVG, convert to data URL to avoid "Tainted canvases may not be exported" error
-        const url =
-          inputFormat.mime === "image/svg+xml"
-            ? `data:${inputFormat.mime};base64,${btoa(inputFile.bytes.reduce((str, byte) => str + String.fromCharCode(byte), ''))}`
-            : URL.createObjectURL(blob);
+        const isSvg = inputFormat.mime === "image/svg+xml";
+        let url: string;
+        if (isSvg) {
+          // Build binary string in chunks to avoid O(n²) string concatenation
+          const chunks: string[] = [];
+          const bytes = inputFile.bytes;
+          for (let i = 0; i < bytes.length; i += 8192) {
+            chunks.push(String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length))));
+          }
+          url = `data:${inputFormat.mime};base64,${btoa(chunks.join(''))}`;
+        } else {
+          url = URL.createObjectURL(blob);
+        }
 
         const image = new Image();
-        await new Promise((resolve, reject) => {
-          image.addEventListener("load", resolve);
-          image.addEventListener("error", reject);
-          image.src = url;
-        });
+        try {
+          await new Promise((resolve, reject) => {
+            image.addEventListener("load", resolve);
+            image.addEventListener("error", reject);
+            image.src = url;
+          });
+        } finally {
+          if (!isSvg) URL.revokeObjectURL(url);
+        }
 
         this.#canvas.width = image.naturalWidth;
         this.#canvas.height = image.naturalHeight;
@@ -115,7 +128,7 @@ class canvasToBlobHandler implements FormatHandler {
         });
       }
 
-      const name = inputFile.name.split(".")[0] + "." + outputFormat.extension;
+      const name = (inputFile.name.replace(/\.[^.]+$/, "") || inputFile.name) + "." + outputFormat.extension;
 
       outputFiles.push({ bytes, name });
 

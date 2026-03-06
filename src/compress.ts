@@ -4,6 +4,11 @@ import type { LogEvent } from "@ffmpeg/ffmpeg";
 import { compressVideoWebCodecs, compressVideoVP9, isWebCodecsAvailable } from "./webcodecs-compress.ts";
 import { cdnUrl, cdnFetch } from "./cdn.ts";
 
+/** Escape a string for safe interpolation into HTML */
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 /** Returns ["-map_metadata", "-1"] when privacy mode is active, else [] */
 function privacyArgs(): string[] {
   try { return localStorage.getItem("convert-privacy") === "true" ? ["-map_metadata", "-1"] : []; } catch { return []; }
@@ -93,7 +98,7 @@ async function ffExecWithProgress(args: string[], _totalDuration: number, _label
   const onLog = (e: LogEvent) => {
     const match = e.message.match(/time=\s*(\d+):(\d+):(\d+)\.(\d+)/);
     if (match) {
-      const current = parseInt(match[1]) * 3600 + parseInt(match[2]) * 60 + parseInt(match[3]) + parseInt(match[4]) / 100;
+      const current = parseInt(match[1]) * 3600 + parseInt(match[2]) * 60 + parseInt(match[3]) + parseFloat("0." + match[4]);
       if (current > 0) progressMoved = true;
       if (_totalDuration > 0) {
         const pct = Math.min(Math.round((current / _totalDuration) * 100), 99);
@@ -193,7 +198,7 @@ function getMediaType(name: string): "image" | "video" | "audio" | "unknown" {
 function parseDuration(ffmpegLog: string): number {
   const match = ffmpegLog.match(/Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/);
   if (!match) return 0;
-  return parseInt(match[1]) * 3600 + parseInt(match[2]) * 60 + parseInt(match[3]) + parseInt(match[4]) / 100;
+  return parseInt(match[1]) * 3600 + parseInt(match[2]) * 60 + parseInt(match[3]) + parseFloat("0." + match[4]);
 }
 
 // ── Image compression ──
@@ -430,7 +435,7 @@ async function compressVideo(
     console.info(`WebCodecs unavailable for "${file.name}", falling back to ffmpeg.wasm`);
     await showCompressPopup(
       `<h2>Falling back to software encoding...</h2>` +
-      `<p>${file.name}</p>` +
+      `<p>${escapeHtml(file.name)}</p>` +
       `<p style="color:var(--text-muted);font-size:0.85rem">WebCodecs couldn't hit target size. Using ffmpeg for tighter control.</p>` +
       `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
         `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
@@ -491,7 +496,7 @@ async function compressVideo(
         console.warn(`H.265 encoding failed for "${file.name}", falling back to H.264:`, e);
         await showCompressPopup(
           `<h2>H.265 failed, falling back to H.264...</h2>` +
-          `<p>${file.name}</p>` +
+          `<p>${escapeHtml(file.name)}</p>` +
           `<p style="color:var(--text-muted);font-size:0.85rem">H.265 is not supported in this browser build. Re-encoding with H.264 instead.</p>` +
           `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
             `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
@@ -552,7 +557,7 @@ async function compressVideo(
       console.warn(`H.265 compression failed for "${file.name}", falling back to H.264:`, e);
       await showCompressPopup(
         `<h2>H.265 failed, falling back to H.264...</h2>` +
-        `<p>${file.name}</p>` +
+        `<p>${escapeHtml(file.name)}</p>` +
         `<p style="color:var(--text-muted);font-size:0.85rem">H.265 is not supported in this browser build. Compressing with H.264 instead.</p>` +
         `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
           `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
@@ -584,7 +589,7 @@ async function compressVideo(
     if (targetBytes > 0 && isWebCodecsAvailable()) {
       await showCompressPopup(
         `<h2>Trying VP9 codec (last resort)...</h2>` +
-        `<p>${file.name}</p>` +
+        `<p>${escapeHtml(file.name)}</p>` +
         `<p style="color:var(--text-muted);font-size:0.85rem">Original codec couldn't hit target. Trying VP9 — output will be WebM.</p>` +
         `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
           `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
@@ -720,8 +725,8 @@ export async function applyFileCompression(
     const sizeMB = (f.bytes.length / 1024 / 1024).toFixed(1);
 
     const heading = isReencode
-      ? `<h2>Re-encoding video...</h2><p>${f.name} (${sizeMB} MB)</p>`
-      : `<h2>Compressing ${type}...</h2><p>${f.name} (${sizeMB} MB → ${targetMB} MB)</p>`;
+      ? `<h2>Re-encoding video...</h2><p>${escapeHtml(f.name)} (${sizeMB} MB)</p>`
+      : `<h2>Compressing ${type}...</h2><p>${escapeHtml(f.name)} (${sizeMB} MB → ${targetMB} MB)</p>`;
 
     await showCompressPopup(
       heading +

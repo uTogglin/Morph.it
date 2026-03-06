@@ -271,6 +271,7 @@ export function initSummarizeTool() {
   });
   fileInput.addEventListener("change", () => {
     if (fileInput.files?.[0]) handleFile(fileInput.files[0]);
+    fileInput.value = "";
   });
 
   function handleFile(file: File) {

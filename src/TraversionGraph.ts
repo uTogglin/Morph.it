@@ -146,10 +146,28 @@ export class TraversionGraph {
      * Initializes the traversion graph based on the supported formats and handlers. This should be called after all handlers have been registered and their supported formats have been cached in window.supportedFormatCache. The graph is built by creating nodes for each unique file format and edges for each possible conversion between formats based on the handlers' capabilities.
      * @param strictCategories If true, the algorithm will apply category change costs more strictly, even when formats share categories. This can lead to more accurate pathfinding at the cost of potentially longer paths and increased search time. If false, category change costs will only be applied when formats do not share any categories, allowing for more flexible pathfinding that may yield shorter paths but with less nuanced cost calculations.
      */
+    /** Cached map of handler name → handler object for O(1) lookup */
+    private handlerMap: Map<string, FormatHandler> = new Map();
+    /** Cached map of handler-specific category change pairs */
+    private handlerPairsCache: Map<string, string> | null = null;
+
+    private getHandlerPairs(): Map<string, string> {
+        if (!this.handlerPairsCache) {
+            this.handlerPairsCache = new Map<string, string>(
+                this.categoryChangeCosts.filter(c => c.handler)
+                .map(c => [`${c.from}->${c.to}`, c.handler] as [string, string])
+            );
+        }
+        return this.handlerPairsCache;
+    }
+
     public init(supportedFormatCache: Map<string, FileFormat[]>, handlers: FormatHandler[], strictCategories: boolean = false) {
         this.handlers = handlers;
         this.nodes.length = 0;
         this.edges.length = 0;
+        this.handlerMap.clear();
+        this.handlerPairsCache = null;
+        for (const h of handlers) this.handlerMap.set(h.name, h);
 
         console.log("Initializing traversion graph...");
         const startTime = performance.now();
@@ -205,8 +223,7 @@ export class TraversionGraph {
     ) {
         let cost = DEPTH_COST; // Base cost for each conversion step
 
-        const handlerPairs = new Map<string, string>(this.categoryChangeCosts.filter(c => c.handler)
-        .map(c => [`${c.from}->${c.to}`, c.handler] as [string, string]));
+        const handlerPairs = this.getHandlerPairs();
         // Calculate category change cost
         const fromCategory = from.format.category || from.format.mime.split("/")[0];
         const toCategory = to.format.category || to.format.mime.split("/")[0];
@@ -247,7 +264,7 @@ export class TraversionGraph {
         cost += HANDLER_PRIORITY_COST * handlerIndex;
 
         // Add cost based on format priority
-        const handlerObj = this.handlers.find(h => h.name === handler)
+        const handlerObj = this.handlerMap.get(handler);
         cost += FORMAT_PRIORITY_COST * (handlerObj?.supportedFormats?.findIndex(f => f.mime === to.format.mime) ?? 0);
 
         // Add cost multiplier for lossy conversions
@@ -323,8 +340,9 @@ export class TraversionGraph {
         );
         // O(1) visited set for simple mode (A* / standard Dijkstra)
         let visitedSet = new Set<number>();
-        // Ordered array for multi-path mode visitedBorder position lookups
-        let visitedArr: number[] = [];
+        // Map from node index → position in visit order for multi-path mode
+        let visitedMap = new Map<number, number>();
+        let visitedCount = 0;
         const fromIdentifier = from.format.mime + `(${from.format.format})`;
         const toIdentifier = to.format.mime + `(${to.format.format})`;
         let fromIndex = this.nodes.findIndex(node => node.identifier === fromIdentifier);
@@ -363,8 +381,8 @@ export class TraversionGraph {
                 if (visitedSet.has(current.index)) continue;
             } else {
                 // Multi-path mode: allow re-visiting if node was queued before it was first visited
-                const indexInVisited = visitedArr.indexOf(current.index);
-                if (indexInVisited >= 0 && indexInVisited < current.visitedBorder) {
+                const visitPos = visitedMap.get(current.index);
+                if (visitPos !== undefined && visitPos < current.visitedBorder) {
                     this.dispatchEvent("skipped", current.path);
                     continue;
                 }
@@ -381,7 +399,7 @@ export class TraversionGraph {
                     pathsFound++;
                 }
                 else {
-                    console.log(`Unvalid path at iteration ${logString}`);
+                    console.log(`Invalid path at iteration ${logString}`);
                     this.dispatchEvent("skipped", current.path);
                 }
                 continue;
@@ -391,7 +409,7 @@ export class TraversionGraph {
             if (simpleMode) {
                 visitedSet.add(current.index);
             } else {
-                visitedArr.push(current.index);
+                visitedMap.set(current.index, visitedCount++);
             }
             this.dispatchEvent("searching", current.path);
 
@@ -402,12 +420,12 @@ export class TraversionGraph {
                     // A*: never enqueue already-visited nodes — keeps queue small
                     if (visitedSet.has(edge.to.index)) return;
                 } else {
-                    // Multi-path: legacy visitedBorder check
-                    const indexInVisited = visitedArr.indexOf(edge.to.index);
-                    if (indexInVisited >= 0 && indexInVisited < current.visitedBorder) return;
+                    // Multi-path: visited border check
+                    const visitPos = visitedMap.get(edge.to.index);
+                    if (visitPos !== undefined && visitPos < current.visitedBorder) return;
                 }
 
-                const handler = this.handlers.find(h => h.name === edge.handler);
+                const handler = this.handlerMap.get(edge.handler);
                 if (!handler) return; // If the handler for this edge is not found, skip it
 
                 let path = current.path.concat({handler: handler, format: edge.to.format});
@@ -418,7 +436,7 @@ export class TraversionGraph {
                     cost: gcost + hcost,
                     gcost,
                     path: path,
-                    visitedBorder: simpleMode ? 0 : visitedArr.length
+                    visitedBorder: simpleMode ? 0 : visitedCount
                 });
             });
             if (iterations % LOG_FREQUENCY === 0) {
@@ -449,11 +467,14 @@ export class TraversionGraph {
             if (isDeadEnd) return Infinity;
         }
         let cost = 0;
-        const categoriesInPath = path.map(p => p.format.category || p.format.mime.split("/")[0]);
+        const categoriesInPath = path.map(p => {
+            const cat = p.format.category || p.format.mime.split("/")[0];
+            return Array.isArray(cat) ? cat : [cat];
+        });
         this.categoryAdaptiveCosts.forEach(c => {
             let pathPtr = categoriesInPath.length - 1, categoryPtr = c.categories.length - 1;
             while (true) {
-                if (categoriesInPath[pathPtr] === c.categories[categoryPtr]) {
+                if (categoriesInPath[pathPtr].includes(c.categories[categoryPtr])) {
                     categoryPtr--;
                     pathPtr--;
 
@@ -463,7 +484,7 @@ export class TraversionGraph {
                     }
                     if (pathPtr < 0) break;
                 }
-                else if (categoryPtr + 1 < c.categories.length && categoriesInPath[pathPtr] === c.categories[categoryPtr + 1]) {
+                else if (categoryPtr + 1 < c.categories.length && categoriesInPath[pathPtr].includes(c.categories[categoryPtr + 1])) {
                     pathPtr--;
                     if (pathPtr < 0) break;
                 }

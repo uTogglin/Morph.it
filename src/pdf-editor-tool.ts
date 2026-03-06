@@ -15,6 +15,7 @@ export function initPdfEditorTool() {
   const imgInput = document.getElementById("pde-img-input") as HTMLInputElement;
 
   const bgCanvas = document.getElementById("pde-bg-canvas") as HTMLCanvasElement;
+  let _bgImageData: ImageData | null = null;
   const fabricCanvasEl = document.getElementById("pde-fabric-canvas") as HTMLCanvasElement;
 
   const prevBtn = document.getElementById("pde-prev") as HTMLButtonElement;
@@ -1186,7 +1187,11 @@ export function initPdfEditorTool() {
     // and picking the darkest one (most likely the text, not background)
     let color = "#000000";
     try {
-      const ctx = bgCanvas.getContext("2d")!;
+      if (!_bgImageData) {
+        const ctx = bgCanvas.getContext("2d")!;
+        _bgImageData = ctx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
+      }
+      const imgData = _bgImageData;
       const glyphH = pdfPts * scale;
       let darkest = 255;
       let darkR = 0, darkG = 0, darkB = 0;
@@ -1196,11 +1201,11 @@ export function initPdfEditorTool() {
           const sx = Math.round(bestCx + glyphH * dx);
           const sy = Math.round(bestCy + glyphH * dy);
           if (sx < 0 || sy < 0 || sx >= bgCanvas.width || sy >= bgCanvas.height) continue;
-          const px = ctx.getImageData(sx, sy, 1, 1).data;
-          const brightness = px[0] * 0.299 + px[1] * 0.587 + px[2] * 0.114;
+          const off = (sy * bgCanvas.width + sx) * 4;
+          const brightness = imgData.data[off] * 0.299 + imgData.data[off + 1] * 0.587 + imgData.data[off + 2] * 0.114;
           if (brightness < darkest) {
             darkest = brightness;
-            darkR = px[0]; darkG = px[1]; darkB = px[2];
+            darkR = imgData.data[off]; darkG = imgData.data[off + 1]; darkB = imgData.data[off + 2];
           }
         }
       }
@@ -1273,10 +1278,14 @@ export function initPdfEditorTool() {
 
         const fontSize = pdfPts * scale;
 
-        // Sample text color
+        // Sample text color from a single full-canvas ImageData read
         let color = "#000000";
         try {
-          const ctx = bgCanvas.getContext("2d")!;
+          if (!_bgImageData) {
+            const ctx = bgCanvas.getContext("2d")!;
+            _bgImageData = ctx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
+          }
+          const imgData = _bgImageData;
           let darkest = 255;
           let darkR = 0, darkG = 0, darkB = 0;
           for (let dy = -0.6; dy <= -0.1; dy += 0.12) {
@@ -1284,11 +1293,11 @@ export function initPdfEditorTool() {
               const sx = Math.round(cx + glyphH * dx);
               const sy = Math.round(cy + glyphH * dy);
               if (sx < 0 || sy < 0 || sx >= bgCanvas.width || sy >= bgCanvas.height) continue;
-              const px = ctx.getImageData(sx, sy, 1, 1).data;
-              const brightness = px[0] * 0.299 + px[1] * 0.587 + px[2] * 0.114;
+              const off = (sy * bgCanvas.width + sx) * 4;
+              const brightness = imgData.data[off] * 0.299 + imgData.data[off + 1] * 0.587 + imgData.data[off + 2] * 0.114;
               if (brightness < darkest) {
                 darkest = brightness;
-                darkR = px[0]; darkG = px[1]; darkB = px[2];
+                darkR = imgData.data[off]; darkG = imgData.data[off + 1]; darkB = imgData.data[off + 2];
               }
             }
           }
@@ -1799,6 +1808,7 @@ export function initPdfEditorTool() {
 
   /* ── Render PDF page ── */
   async function renderPage() {
+    _bgImageData = null;
     if (!pdfDoc || !fabricCanvas) return;
 
     const entry = currentEntry();
