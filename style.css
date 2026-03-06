@@ -8,6 +8,8 @@
   --radius: 12px;
   --radius-sm: 8px;
   --transition: 0.2s ease;
+  --transition-fast: 0.15s ease;
+  --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --highlight-color: var(--accent);
 
   /* Legacy aliases so archive panel, file preview etc. keep working */
@@ -63,6 +65,32 @@ body {
   background: var(--bg-color);
   color: var(--text-main);
   min-height: 100vh;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Focus states for keyboard navigation ── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--accent-dim);
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Theme transition — temporarily applied during light/dark toggle */
@@ -527,9 +555,9 @@ body[data-tool="pdf-editor"] #convert-button { display: none !important; }
 [data-theme="light"] .tool-page::before,
 [data-theme="light"] .tool-page::after { opacity: 0.07; }
 
-.tool-page-header { text-align: center; margin-bottom: 24px; position: relative; z-index: 1; }
-.tool-page-header h2 { font-size: 1.4rem; font-weight: 700; margin: 0 0 6px; }
-.tool-page-header p { font-size: 0.9rem; color: var(--text-muted); margin: 0; }
+.tool-page-header { text-align: center; margin-bottom: 28px; position: relative; z-index: 1; }
+.tool-page-header h2 { font-size: 1.5rem; font-weight: 800; margin: 0 0 8px; letter-spacing: -0.02em; }
+.tool-page-header p { font-size: 0.9rem; color: var(--text-muted); margin: 0; line-height: 1.6; }
 .tool-page-settings-link {
   background: none; border: none; color: var(--accent); cursor: pointer;
   font: inherit; font-size: inherit; padding: 0; text-decoration: underline;
@@ -910,12 +938,13 @@ body[data-tool="pdf-editor"] #convert-button { display: none !important; }
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
-  background: var(--surface-color);
+  background: color-mix(in srgb, var(--surface-color) 85%, transparent);
   border-bottom: 1px solid var(--input-border);
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 #logo {
   font-size: 1.4rem;
@@ -944,9 +973,9 @@ body[data-tool="pdf-editor"] #convert-button { display: none !important; }
   justify-content: center;
 }
 #top-bar-right button:hover {
-  background: var(--accent);
-  color: white;
   border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
 }
 
 /* (old settings drawer removed — now using #settings-modal) */
@@ -1164,7 +1193,8 @@ body[data-tool="pdf-editor"] #convert-button { display: none !important; }
 }
 #file-area:hover {
   border-color: var(--accent);
-  background: var(--accent-dim);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-color));
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 #file-area h2 {
@@ -1194,6 +1224,12 @@ body[data-tool="pdf-editor"] #convert-button { display: none !important; }
   font-size: 0.85rem;
   cursor: pointer;
   z-index: 2;
+  transition: all var(--transition);
+}
+.browse-btn:hover {
+  background-color: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px var(--accent-dim);
 }
 
 /* --- Folder Button --- */
@@ -2103,7 +2139,8 @@ body[data-tool="image"] #convert-button { display: none !important; }
 }
 #vid-canvas:hover {
   border-color: var(--accent);
-  background: var(--accent-dim);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-color));
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 #vid-canvas.has-video {
   border-style: solid;
@@ -2775,7 +2812,7 @@ body[data-tool="image"] #convert-button { display: none !important; }
   background: var(--surface-color);
   border: 1px solid var(--input-border);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 24px;
 }
 
 /* ── Tabs ── */
@@ -3246,7 +3283,8 @@ body[data-tool="image"] #convert-button { display: none !important; }
 .speech-file-drop:hover,
 .speech-file-drop.dragover {
   border-color: var(--accent);
-  background: var(--accent-dim);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-color));
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .speech-file-drop:hover .speech-file-drop-icon,
 .speech-file-drop.dragover .speech-file-drop-icon {
@@ -3883,8 +3921,9 @@ body.ocr-tts-active .ocr-tts-overlay {
 .pde-drop-zone:hover,
 .pde-drop-zone.drag-over {
   border-color: var(--accent);
-  background: var(--accent-dim);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-color));
   color: var(--accent);
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .pde-drop-zone span {
   font-size: 0.85rem;
