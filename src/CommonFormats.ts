@@ -77,7 +77,7 @@ const CommonFormats = {
         Category.DATA
     ),
     CSV: new FormatDefinition(
-        "Comma Separated Values",
+        "Comma Seperated Values",
         "csv",
         "csv",
         "text/csv",
@@ -102,14 +102,14 @@ const CommonFormats = {
         "markdown",
         "markdown",
         "text/markdown",
-        [Category.DOCUMENT, Category.TEXT]
+        ["document", "text"]
     ),
     BATCH: new FormatDefinition(
         "Windows Batch file",
         "batch",
         "bat",
         "text/windows-batch",
-        [Category.TEXT]
+        ["text"]
     ),
     SH: new FormatDefinition(
         "Shell Script",

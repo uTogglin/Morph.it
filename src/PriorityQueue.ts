@@ -105,7 +105,7 @@ class PriorityQueue<T extends object> {
 
       if (
         right < this._size &&
-        object!.toString().localeCompare(this._queue[right]!.toString()) > 0
+        object!.toString().localeCompare(this._queue[right]!.toString())
       ) {
         object = this._queue[(child = right)];
       }

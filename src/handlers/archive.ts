@@ -19,9 +19,7 @@ export function createTar(files: FileData[]): Uint8Array {
   for (const file of files) {
     const header = new Uint8Array(BLOCK);
 
-    // Sanitize file name: strip path traversal sequences and leading slashes
-    const safeName = file.name.replace(/\.\.\//g, "").replace(/\.\.\\/g, "").replace(/^[/\\]+/, "");
-    writeField(header, safeName, 0, 100);                                                   // name
+    writeField(header, file.name, 0, 100);                                                   // name
     writeField(header, "0000644\0", 100, 8);                                                 // mode
     writeField(header, "0000000\0", 108, 8);                                                 // uid
     writeField(header, "0000000\0", 116, 8);                                                 // gid

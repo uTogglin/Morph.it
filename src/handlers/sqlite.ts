@@ -55,6 +55,8 @@ class sqlite3Handler implements FormatHandler {
     outputFormat: FileFormat
   ): Promise<FileData[]> {
     const outputFiles: FileData[] = [];
+    console.log(inputFormat, outputFormat);
+
     const sqlite3 = await sqlite3InitModule();
 
     if (inputFormat.internal == "sqlite3" && outputFormat.internal == "csv") {
@@ -78,19 +80,12 @@ class sqlite3Handler implements FormatHandler {
 
             
             for (const table of this.getTables(db)) {
-                const quotedTable = `"${String(table).replace(/"/g, '""')}"`;
-                const stmt = db.prepare(`SELECT * FROM ${quotedTable}`);
-                function csvEscape(val: unknown): string {
-                  const s = val == null ? "" : String(val);
-                  if (s.includes(",") || s.includes("\"") || s.includes("\n"))
-                    return `"${s.replace(/"/g, '""')}"`;
-                  return s;
-                }
-                let csvStr = stmt.getColumnNames().map(csvEscape).join(",") + "\n";
+                const stmt = db.prepare(`SELECT * FROM ${table}`);
+                let csvStr = stmt.getColumnNames().join(",") + "\n";
                 try {
                   while (stmt.step()) {
                     const row = Array.from({length: stmt.columnCount }, (_, j) => stmt.get(j))
-                    csvStr += row.map(csvEscape).join(",") + "\n"
+                    csvStr += row.join(", ") + "\n"
                   }
                 } finally {
                     stmt.finalize();
@@ -98,7 +93,7 @@ class sqlite3Handler implements FormatHandler {
 
                 const encoder = new TextEncoder()
                 outputFiles.push({
-                    name: table + ".csv",
+                    name: table,
                     bytes: new Uint8Array(encoder.encode(csvStr))
                 })
             }

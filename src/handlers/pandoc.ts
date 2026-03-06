@@ -176,7 +176,6 @@ class pandocHandler implements FormatHandler {
       // RevealJS seems to hang forever?
       if (format === "revealjs") continue;
       // Adjust plaintext format name to match other handlers
-      const originalFormat = format;
       if (format === "plain") format = "text";
       const name = pandocHandler.formatNames.get(format) || format;
       const extension = pandocHandler.formatExtensions.get(format) || format;
@@ -201,8 +200,8 @@ class pandocHandler implements FormatHandler {
       this.supportedFormats.push({
         name, format, extension,
         mime: mimeType,
-        from: inputFormats.includes(originalFormat),
-        to: outputFormats.includes(originalFormat),
+        from: inputFormats.includes(format),
+        to: outputFormats.includes(format),
         internal: format,
         category: categories.length === 1 ? categories[0] : categories,
         lossless: !isOfficeDocument

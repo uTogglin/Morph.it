@@ -79,36 +79,30 @@ class ImageMagickHandler implements FormatHandler {
     inputSettings.format = inputMagickFormat;
 
 
-    const bytes: Uint8Array = await new Promise((resolve, reject) => {
-      try {
-        MagickImageCollection.use(outputCollection => {
-          for (const inputFile of inputFiles) {
-             if (inputFormat.format == "rgb") {
-               // Guess square dimensions from pixel count
-               const pixelCount = inputFile.bytes.length / 3;
-               const side = Math.round(Math.sqrt(pixelCount));
-               inputSettings.width = side;
-               inputSettings.height = Math.ceil(pixelCount / side);
-             }
-            MagickImageCollection.use(fileCollection => {
-              fileCollection.read(inputFile.bytes, inputSettings);
-              while (fileCollection.length > 0) {
-                const image = fileCollection.shift();
-                if (!image) break;
-                outputCollection.push(image);
-              }
-            });
-          }
-          outputCollection.write(outputMagickFormat, (bytes) => {
-            resolve(new Uint8Array(bytes));
+    const bytes: Uint8Array = await new Promise(resolve => {
+      MagickImageCollection.use(outputCollection => {
+        for (const inputFile of inputFiles) {
+           if (inputFormat.format == "rgb") {
+             // Guess how big the Image should be
+             inputSettings.width = Math.sqrt(inputFile.bytes.length / 3);
+             inputSettings.height = inputSettings.width;
+           }
+          MagickImageCollection.use(fileCollection => {
+            fileCollection.read(inputFile.bytes, inputSettings);
+            while (fileCollection.length > 0) {
+              const image = fileCollection.shift();
+              if (!image) break;
+              outputCollection.push(image);
+            }
           });
+        }
+        outputCollection.write(outputMagickFormat, (bytes) => {
+          resolve(new Uint8Array(bytes));
         });
-      } catch (e) {
-        reject(e);
-      }
+      });
     });
 
-    const baseName = inputFiles[0].name.replace(/\.[^.]+$/, "") || inputFiles[0].name;
+    const baseName = inputFiles[0].name.split(".")[0];
     const name = baseName + "." + outputFormat.extension;
     return [{ bytes, name }];
 
