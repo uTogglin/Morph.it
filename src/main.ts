@@ -3012,10 +3012,10 @@ async function copyToClipboard(bytes: Uint8Array, mime: string): Promise<boolean
   try {
     let blob: Blob;
     if (mime === "image/png") {
-      blob = new Blob([bytes], { type: "image/png" });
+      blob = new Blob([bytes as BlobPart], { type: "image/png" });
     } else if (mime.startsWith("image/")) {
       // Clipboard API only supports PNG; convert via canvas
-      const imgBlob = new Blob([bytes], { type: mime });
+      const imgBlob = new Blob([bytes as BlobPart], { type: mime });
       const bitmap = await createImageBitmap(imgBlob);
       const canvas = document.createElement("canvas");
       canvas.width = bitmap.width;
