@@ -31,7 +31,8 @@ class heicHandler implements FormatHandler {
     },
     CommonFormats.PNG.builder("png").allowTo().markLossless(),
     CommonFormats.JPEG.builder("jpeg").allowTo(),
-    CommonFormats.WEBP.builder("webp").allowTo()
+    CommonFormats.WEBP.builder("webp").allowTo(),
+    CommonFormats.AVIF.builder("avif").allowTo()
   ];
 
   public ready: boolean = false;
@@ -54,14 +55,14 @@ class heicHandler implements FormatHandler {
     for (const inputFile of inputFiles) {
       const buffer = inputFile.bytes;
 
-      if (outputFormat.internal === "webp") {
-        // heic-convert doesn't support WebP directly, so decode to PNG then re-encode via canvas
+      if (outputFormat.internal === "webp" || outputFormat.internal === "avif") {
+        // heic-convert doesn't support WebP/AVIF directly, so decode to PNG then re-encode via canvas
         const pngBuffer: Uint8Array = await this.convert({
           buffer,
           format: "PNG"
         });
 
-        const blob = new Blob([pngBuffer], { type: "image/png" });
+        const blob = new Blob([pngBuffer as BlobPart], { type: "image/png" });
         const bitmap = await createImageBitmap(blob);
 
         const canvas = document.createElement("canvas");
@@ -71,8 +72,8 @@ class heicHandler implements FormatHandler {
         ctx.drawImage(bitmap, 0, 0);
         bitmap.close();
 
-        const bytes = await canvasToBytes(canvas, "image/webp");
-        const name = getBaseName(inputFile.name) + ".webp";
+        const bytes = await canvasToBytes(canvas, outputFormat.mime);
+        const name = getBaseName(inputFile.name) + "." + outputFormat.extension;
         outputFiles.push({ bytes, name });
       } else {
         const format = outputFormat.internal === "jpeg" ? "JPEG" : "PNG";

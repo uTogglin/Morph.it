@@ -41,6 +41,13 @@ const CommonFormats = {
         "image/webp",
         Category.IMAGE
     ),
+    AVIF: new FormatDefinition(
+        "AV1 Image File Format",
+        "avif",
+        "avif",
+        "image/avif",
+        Category.IMAGE
+    ),
     TIFF: new FormatDefinition(
         "Tagged Image File Format",
         "tiff",

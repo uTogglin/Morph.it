@@ -11,6 +11,7 @@ class canvasToBlobHandler implements FormatHandler {
     CommonFormats.PNG.supported("png", true, true, true),
     CommonFormats.JPEG.supported("jpeg", true, true),
     CommonFormats.WEBP.supported("webp", true, true),
+    CommonFormats.AVIF.supported("avif", true, true),
     CommonFormats.GIF.supported("gif", true, false),
     CommonFormats.SVG.supported("svg", true, false),
     CommonFormats.TEXT.supported("text", true, true)
