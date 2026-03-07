@@ -575,7 +575,7 @@ export function initSummarizeTool() {
       let sampleRate = 24000;
 
       // Split into sentence-sized chunks
-      const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+      const sentences = text.match(/.*?[.!?]+\s*|.+$/gs) || [text];
       const chunks: string[] = [];
       let cur = "";
       for (const s of sentences) {

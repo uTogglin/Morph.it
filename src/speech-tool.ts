@@ -588,7 +588,7 @@ export function initSpeechTool() {
 
       // Split text into sentence-sized chunks for generate()
       // (stream() hangs on WebGPU, so we chunk manually)
-      const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+      const sentences = text.match(/.*?[.!?]+\s*|.+$/gs) || [text];
       const chunks: string[] = [];
       let current = "";
       for (const s of sentences) {

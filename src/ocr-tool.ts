@@ -444,7 +444,7 @@ export function initOcrTool() {
       const chunkMeta: Array<{ text: string; samples: number }> = [];
       let sampleRate = 24000;
 
-      const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+      const sentences = text.match(/.*?[.!?]+\s*|.+$/gs) || [text];
       const chunks: string[] = [];
       let cur = "";
       for (const s of sentences) {
