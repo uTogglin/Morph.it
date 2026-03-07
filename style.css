@@ -127,7 +127,7 @@ textarea:focus-visible {
 /* ── Animated background orbs ── */
 .home-bg-effects {
   position: absolute;
-  inset: 0;
+  inset: -84px 0 0;
   pointer-events: none;
   overflow: hidden;
   z-index: 0;
@@ -410,6 +410,7 @@ textarea:focus-visible {
   body { padding-top: 72px; }
   #top-bar { top: 10px; left: 12px; right: 12px; padding: 10px 16px; }
   #home-page { padding: 0 16px; }
+  .home-bg-effects { inset: -72px 0 0; }
   .home-hero { min-height: auto; padding: 24px 0; }
   .home-grid { grid-template-columns: 1fr; }
   .home-title {
