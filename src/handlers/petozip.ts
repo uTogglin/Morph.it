@@ -56,7 +56,7 @@ class peToZipHandler implements FormatHandler {
 
         // Get metadata from PE headers
         //@ts-ignore
-        const peFile = Pe.NtExecutable.from(buffer);
+        const peFile = Pe.NtExecutable.from(buffer, { ignoreCert: true });
         const ntHeader = peFile.newHeader;
         
         const subsystemValue = ntHeader.optionalHeader.subsystem;
