@@ -1,6 +1,6 @@
 // Web Worker for BART/DistilBART summarization inference
 
-const ctx = self as unknown as DedicatedWorkerGlobalScope;
+const ctx = self as unknown as Worker;
 
 const MODELS: Record<string, { id: string; label: string }> = {
   "distilbart-6-6":  { id: "Xenova/distilbart-cnn-6-6",  label: "DistilBART 6-6" },

@@ -1,6 +1,6 @@
 // Web Worker for Kokoro TTS — runs model loading and inference off the main thread
 
-const ctx = self as unknown as DedicatedWorkerGlobalScope;
+const ctx = self as unknown as Worker;
 
 let tts: any = null;
 

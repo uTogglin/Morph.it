@@ -1,6 +1,6 @@
 // Web Worker for Whisper STT — runs model loading and transcription off the main thread
 
-const ctx = self as unknown as DedicatedWorkerGlobalScope;
+const ctx = self as unknown as Worker;
 
 const pipelines: Map<string, any> = new Map();
 let detectedDevice: "webgpu" | "wasm" | null = null;
@@ -81,9 +81,10 @@ ctx.onmessage = async (e: MessageEvent) => {
       });
 
       // WebGPU fix: patch model.__call__ to force tensor readback to CPU
-      if (device === "webgpu" && pipe.model?.__call__) {
-        const origCall = pipe.model.__call__.bind(pipe.model);
-        pipe.model.__call__ = async function (...args: any[]) {
+      const model = pipe.model as any;
+      if (device === "webgpu" && model?.__call__) {
+        const origCall = model.__call__.bind(model);
+        model.__call__ = async function (...args: any[]) {
           const output = await origCall(...args);
           for (const key of Object.keys(output)) {
             const tensor = output[key];
