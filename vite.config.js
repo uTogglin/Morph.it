@@ -12,6 +12,9 @@ export default defineConfig({
     ]
   },
   base: "/",
+  worker: {
+    format: "es",
+  },
   plugins: [
     viteStaticCopy({
       targets: [
