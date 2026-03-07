@@ -337,6 +337,14 @@
           <p class="sm-hint">Keep downloaded AI models &amp; WASM libraries in your browser's Cache Storage so they load instantly on future visits.</p>
         </div>
         <div class="sm-group">
+          <span class="sm-label">AI Acceleration</span>
+          <select id="sm-ai-device" class="sm-select">
+            <option value="auto">Auto (use GPU when available)</option>
+            <option value="wasm">CPU only (less browser lag)</option>
+          </select>
+          <p class="sm-hint">GPU acceleration is faster but can cause browser lag during AI tasks. CPU-only mode keeps the UI smooth.</p>
+        </div>
+        <div class="sm-group">
           <span class="sm-label">Accent color</span>
           <div id="accent-colors">
             <button class="color-dot active" data-color="#7C3AED" style="background:#7C3AED" title="Purple"></button>

@@ -83,7 +83,8 @@ export async function getKokoro(onProgress?: (pct: number, msg: string) => void)
     kokoroInitReject = reject;
   });
 
-  kokoroWorker!.postMessage({ type: 'init' });
+  const aiDevice = (() => { try { return localStorage.getItem("convert-ai-device") ?? "auto"; } catch { return "auto"; } })();
+  kokoroWorker!.postMessage({ type: 'init', forceDevice: aiDevice === "wasm" ? "wasm" : undefined });
 
   try {
     await kokoroInitPromise;

@@ -139,7 +139,8 @@ async function summarizeText(
   // Load model in worker
   const modelKey = getSumModel();
   createSumWorker();
-  await sumWorkerRequest({ type: 'load', modelKey }, onProgress);
+  const aiDevice = (() => { try { return localStorage.getItem("convert-ai-device") ?? "auto"; } catch { return "auto"; } })();
+  await sumWorkerRequest({ type: 'load', modelKey, forceDevice: aiDevice === "wasm" ? "wasm" : undefined }, onProgress);
 
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length <= wordLimit) return text; // Already short enough

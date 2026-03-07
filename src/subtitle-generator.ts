@@ -76,7 +76,8 @@ export async function generateSubtitles(
 
   // Step 2: Load Whisper model in worker (lazy, cached per model key)
   createWhisperWorker();
-  await whisperRequest({ type: 'load', modelKey }, undefined, onProgress);
+  const aiDevice = (() => { try { return localStorage.getItem("convert-ai-device") ?? "auto"; } catch { return "auto"; } })();
+  await whisperRequest({ type: 'load', modelKey, forceDevice: aiDevice === "wasm" ? "wasm" : undefined }, undefined, onProgress);
   loadedModelKey = modelKey;
 
   // Step 3: Convert WAV bytes to Float32Array for Whisper

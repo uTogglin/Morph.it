@@ -12,7 +12,8 @@ const MODELS: Record<string, { id: string; label: string }> = {
   "large-v3-turbo": { id: "onnx-community/whisper-large-v3-turbo", label: "Large V3 Turbo" },
 };
 
-async function getDevice(): Promise<"webgpu" | "wasm"> {
+async function getDevice(forceDevice?: string): Promise<"webgpu" | "wasm"> {
+  if (forceDevice === "wasm") { detectedDevice = "wasm"; return "wasm"; }
   if (detectedDevice) return detectedDevice;
   const hasWebGPU = "gpu" in navigator &&
     !!(await (navigator as any).gpu?.requestAdapter().catch(() => null));
@@ -43,7 +44,7 @@ ctx.onmessage = async (e: MessageEvent) => {
 
     try {
       const { pipeline } = await import("@huggingface/transformers");
-      const device = await getDevice();
+      const device = await getDevice(e.data.forceDevice);
       const dtype = getDtype(modelKey, device);
       const dtypeLabel = typeof dtype === "string" ? dtype : "mixed";
       ctx.postMessage({ type: "progress", pct: 10, msg: `Loading ${cfg.label} model (${device}, ${dtypeLabel})...` });

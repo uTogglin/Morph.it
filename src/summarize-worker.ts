@@ -27,7 +27,8 @@ ctx.onmessage = async (e: MessageEvent) => {
     try {
       const { pipeline } = await import("@huggingface/transformers");
 
-      const hasWebGPU = "gpu" in navigator &&
+      const forceDevice: string | undefined = e.data.forceDevice;
+      const hasWebGPU = !forceDevice && "gpu" in navigator &&
         !!(await (navigator as any).gpu?.requestAdapter().catch(() => null));
       const device = hasWebGPU ? "webgpu" : "wasm";
       const dtype = hasWebGPU ? "fp32" : "q8";

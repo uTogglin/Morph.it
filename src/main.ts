@@ -341,6 +341,7 @@ const ui = {
   rescaleLockInput: document.querySelector("#rescale-lock-ratio") as HTMLInputElement,
   privacyToggle: document.querySelector("#privacy-toggle") as HTMLButtonElement,
   cacheModelsToggle: document.querySelector("#cache-models-toggle") as HTMLButtonElement,
+  aiDeviceSelect: document.querySelector("#sm-ai-device") as HTMLSelectElement,
   compressOptions: document.querySelector("#compress-options") as HTMLDivElement,
   compressTargetInput: document.querySelector("#compress-target-mb") as HTMLInputElement,
   compressPresetSelect: document.querySelector("#compress-preset-select") as HTMLSelectElement,
@@ -1895,6 +1896,14 @@ if (ui.cacheModelsToggle) {
     } else {
       clearModelCache();
     }
+  });
+}
+
+// ──── AI Acceleration Setting ────
+if (ui.aiDeviceSelect) {
+  try { const saved = localStorage.getItem("convert-ai-device"); if (saved) ui.aiDeviceSelect.value = saved; } catch {}
+  ui.aiDeviceSelect.addEventListener("change", () => {
+    try { localStorage.setItem("convert-ai-device", ui.aiDeviceSelect.value); } catch {}
   });
 }
 
