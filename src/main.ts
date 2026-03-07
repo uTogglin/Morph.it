@@ -2019,7 +2019,10 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
   for (const deadEnd of deadEndAttempts) {
     let isDeadEnd = true;
     for (let i = 0; i < deadEnd.length; i++) {
-      if (path[i] === deadEnd[i]) continue;
+      const a = path[i], b = deadEnd[i];
+      if (a === b || (a.handler.name === b.handler.name
+        && a.format.mime === b.format.mime
+        && a.format.format === b.format.format)) continue;
       isDeadEnd = false;
       break;
     }
