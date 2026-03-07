@@ -12,75 +12,86 @@ async function getSpeechFFmpeg(): Promise<FFmpeg> {
   return speechFFmpeg;
 }
 
-// ── Lazy Kokoro TTS instance ───────────────────────────────────────────────
-let kokoroInstance: any = null;
-let kokoroLoading: Promise<any> | null = null;
+// ── Kokoro TTS via Web Worker ───────────────────────────────────────────────
+let kokoroWorker: Worker | null = null;
+let kokoroReady = false;
+let kokoroInitPromise: Promise<void> | null = null;
+let kokoroInitResolve: (() => void) | null = null;
+let kokoroInitReject: ((e: Error) => void) | null = null;
+let kokoroProgressCb: ((pct: number, msg: string) => void) | null = null;
+let kokoroGenId = 0;
+const pendingGens = new Map<number, { resolve: (r: any) => void; reject: (e: Error) => void }>();
+
+function createKokoroWorker() {
+  if (kokoroWorker) return;
+  kokoroWorker = new Worker(
+    new URL('./kokoro-worker.ts', import.meta.url),
+    { type: 'module' }
+  );
+  kokoroWorker.onmessage = (e: MessageEvent) => {
+    const msg = e.data;
+    switch (msg.type) {
+      case 'progress':
+        kokoroProgressCb?.(msg.pct, msg.msg);
+        break;
+      case 'ready':
+        kokoroReady = true;
+        kokoroInitResolve?.();
+        kokoroInitResolve = null;
+        kokoroInitReject = null;
+        break;
+      case 'result': {
+        const p = pendingGens.get(msg.id);
+        if (p) { pendingGens.delete(msg.id); p.resolve({ data: msg.audio, sampling_rate: msg.sampleRate }); }
+        break;
+      }
+      case 'error': {
+        if (msg.id != null) {
+          const p = pendingGens.get(msg.id);
+          if (p) { pendingGens.delete(msg.id); p.reject(new Error(msg.message)); }
+        } else {
+          kokoroInitPromise = null;
+          kokoroInitReject?.(new Error(msg.message));
+          kokoroInitResolve = null;
+          kokoroInitReject = null;
+        }
+        break;
+      }
+    }
+  };
+}
+
+const kokoroProxy = {
+  generate(text: string, opts: { voice: string; speed: number }): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const id = ++kokoroGenId;
+      pendingGens.set(id, { resolve, reject });
+      kokoroWorker!.postMessage({ type: 'generate', id, text, voice: opts.voice, speed: opts.speed });
+    });
+  }
+};
 
 export async function getKokoro(onProgress?: (pct: number, msg: string) => void): Promise<any> {
-  if (kokoroInstance) return kokoroInstance;
-  if (kokoroLoading) { await kokoroLoading; return kokoroInstance; }
+  if (kokoroReady) return kokoroProxy;
+  if (kokoroInitPromise) { await kokoroInitPromise; return kokoroProxy; }
 
-  kokoroLoading = (async () => {
-    const { KokoroTTS } = await import("kokoro-js");
+  createKokoroWorker();
+  kokoroProgressCb = onProgress ?? null;
 
-    // Use WebGPU when available, fall back to WASM
-    const hasWebGPU = typeof navigator !== "undefined" && "gpu" in navigator && await navigator.gpu?.requestAdapter().catch(() => null);
-    const device = hasWebGPU ? "webgpu" : "wasm";
-    const dtype = hasWebGPU ? "fp32" : "q8";
+  kokoroInitPromise = new Promise<void>((resolve, reject) => {
+    kokoroInitResolve = resolve;
+    kokoroInitReject = reject;
+  });
 
-    console.log(`[Kokoro TTS] Using device=${device}, dtype=${dtype}`);
-    onProgress?.(0, `Loading Kokoro model (${device})...`);
-
-    let lastKokoroUpdate = 0;
-    kokoroInstance = await KokoroTTS.from_pretrained(
-      "onnx-community/Kokoro-82M-v1.0-ONNX",
-      {
-        dtype: dtype as any,
-        device: device as any,
-        progress_callback: (info: any) => {
-          if (info.status === "progress" && typeof info.progress === "number") {
-            const now = performance.now();
-            if (now - lastKokoroUpdate < 200) return;
-            lastKokoroUpdate = now;
-            const loaded = info.loaded ? (info.loaded / 1024 / 1024).toFixed(0) : "";
-            const total = info.total ? (info.total / 1024 / 1024).toFixed(0) : "";
-            const sizeInfo = loaded && total ? ` — ${loaded} / ${total} MB` : "";
-            onProgress?.(Math.round(info.progress), `Downloading Kokoro model${sizeInfo}`);
-          }
-        },
-      },
-    );
-
-    // WebGPU fix: kokoro-js does `new RawAudio(waveform.data, SAMPLE_RATE)` but
-    // on WebGPU the ONNX output tensor keeps data on GPU, so `waveform.data` is
-    // undefined. Patch the model's __call__ to ensure waveform is read back to CPU.
-    if (device === "webgpu" && kokoroInstance.model?.__call__) {
-      const origCall = kokoroInstance.model.__call__.bind(kokoroInstance.model);
-      kokoroInstance.model.__call__ = async function (...args: any[]) {
-        const output = await origCall(...args);
-        // Ensure every output tensor has its data on CPU
-        for (const key of Object.keys(output)) {
-          const tensor = output[key];
-          if (tensor && typeof tensor.getData === "function") {
-            // .getData() reads GPU tensor back to CPU and populates .data
-            await tensor.getData();
-          }
-        }
-        return output;
-      };
-      console.log("[Kokoro TTS] Patched model.__call__ for WebGPU tensor readback");
-    }
-
-    console.log("[Kokoro TTS] Model loaded successfully");
-  })();
+  kokoroWorker!.postMessage({ type: 'init' });
 
   try {
-    await kokoroLoading;
+    await kokoroInitPromise;
   } catch (err) {
-    kokoroLoading = null;
+    kokoroInitPromise = null;
     throw err;
   }
-  return kokoroInstance;
+  return kokoroProxy;
 }
 
 // ── SVG icons ──────────────────────────────────────────────────────────────
@@ -560,7 +571,6 @@ export function initSpeechTool() {
 
       ttsProgressText.textContent = "Generating speech...";
       ttsProgressFill.style.width = "55%";
-      freezeWarning.classList.remove("hidden");
 
       const voice = ttsVoice.value;
       const speed = parseFloat(ttsSpeed.value);
@@ -862,11 +872,6 @@ export function initSpeechTool() {
         const result = await generateSubtitles(file, (stage, pct) => {
           micProgressFill.style.width = `${pct}%`;
           micProgressText.textContent = stage;
-          if (pct < 50 && pct > 5) {
-            micFreezeWarning.classList.remove("hidden");
-          } else if (pct >= 50) {
-            micFreezeWarning.classList.add("hidden");
-          }
         }, { language, model });
 
         const srtText = new TextDecoder().decode(result.bytes);
@@ -950,12 +955,6 @@ export function initSpeechTool() {
       const result = await generateSubtitles(sttFile, (stage, pct) => {
         sttProgressFill.style.width = `${pct}%`;
         sttProgressText.textContent = stage;
-        // Show freeze warning during model loading phase
-        if (pct < 50 && pct > 5) {
-          sttFreezeWarning.classList.remove("hidden");
-        } else if (pct >= 50) {
-          sttFreezeWarning.classList.add("hidden");
-        }
       }, { language, model });
 
       const srtText = new TextDecoder().decode(result.bytes);

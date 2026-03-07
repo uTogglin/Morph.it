@@ -434,7 +434,6 @@ export function initOcrTool() {
 
       ttsProgressText.textContent = "Generating speech...";
       ttsProgressFill.style.width = "65%";
-      ttsFreezeWarn.classList.remove("hidden");
 
       const voice = (() => { try { return localStorage.getItem("convert-tts-voice") ?? "af_heart"; } catch { return "af_heart"; } })();
       const speed = (() => { try { return parseFloat(localStorage.getItem("convert-tts-speed") ?? "1"); } catch { return 1; } })();

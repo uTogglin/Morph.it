@@ -1,53 +1,40 @@
 import type { FileData } from "./FormatHandler.ts";
 import { extractAudioAsWav } from "./video-editor.ts";
 
-const whisperPipelines: Map<string, any> = new Map();
-let whisperLoadingKey: string | null = null;
-let detectedDevice: "webgpu" | "wasm" | null = null;
+// ── Whisper STT via Web Worker ──────────────────────────────────────────────
+let whisperWorker: Worker | null = null;
+let loadedModelKey: string | null = null;
 
-interface ModelConfig {
-  id: string;
-  label: string;
-  size: string;
+function createWhisperWorker() {
+  if (whisperWorker) return;
+  whisperWorker = new Worker(
+    new URL('./whisper-worker.ts', import.meta.url),
+    { type: 'module' }
+  );
 }
 
-const MODELS: Record<string, ModelConfig> = {
-  base: { id: "onnx-community/whisper-base", label: "Base", size: "~75 MB" },
-  small: { id: "onnx-community/whisper-small", label: "Small", size: "~250 MB" },
-  medium: { id: "Xenova/whisper-medium", label: "Medium", size: "~1 GB" },
-  "large-v3-turbo": { id: "onnx-community/whisper-large-v3-turbo", label: "Large V3 Turbo", size: "~1.5 GB" },
-};
-
-async function getWhisperDevice(): Promise<"webgpu" | "wasm"> {
-  if (detectedDevice) return detectedDevice;
-  const hasWebGPU = typeof navigator !== "undefined" && "gpu" in navigator &&
-    !!(await navigator.gpu?.requestAdapter().catch(() => null));
-  detectedDevice = hasWebGPU ? "webgpu" : "wasm";
-  console.log(`[Whisper STT] Using device=${detectedDevice}`);
-  return detectedDevice;
-}
-
-function getWhisperDtype(modelKey: string, device: "webgpu" | "wasm"): any {
-  // Whisper encoder is very sensitive to quantization — keep it at fp16 minimum.
-  // Decoder can be aggressively quantized to q4 with minimal quality loss.
-  if (device === "webgpu") {
-    if (modelKey === "large-v3-turbo" || modelKey === "medium") {
-      // Per-module dtype: fp16 encoder saves ~50% VRAM vs fp32, q4 decoder for speed
-      return { encoder_model: "fp16", decoder_model_merged: "q4" };
-    }
-    // base / small are small enough for fp32 on GPU
-    return "fp32";
-  }
-  // WASM fallback — q8 for smaller models, q4 for large ones
-  if (modelKey === "large-v3-turbo") return "q4";
-  return "q8";
+function whisperRequest(
+  msg: any,
+  transfer: Transferable[] | undefined,
+  onProgress?: (stage: string, pct: number) => void,
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    whisperWorker!.onmessage = (e: MessageEvent) => {
+      const data = e.data;
+      if (data.type === 'progress') onProgress?.(data.msg, data.pct);
+      else if (data.type === 'loaded') resolve(data);
+      else if (data.type === 'result') resolve(data);
+      else if (data.type === 'error') reject(new Error(data.message));
+    };
+    whisperWorker!.postMessage(msg, transfer || []);
+  });
 }
 
 /**
  * Check if any Whisper model has been loaded into memory.
  */
 export function isWhisperLoaded(): boolean {
-  return whisperPipelines.size > 0;
+  return loadedModelKey !== null;
 }
 
 /**
@@ -81,106 +68,18 @@ export async function generateSubtitles(
   options?: GenerateSubtitleOptions,
 ): Promise<FileData> {
   const modelKey = options?.model || "large-v3-turbo";
-  const cfg = MODELS[modelKey];
-  if (!cfg) throw new Error(`Unknown Whisper model: ${modelKey}`);
-  const modelId = cfg.id;
   const language = options?.language || undefined;
 
   // Step 1: Extract audio as WAV (16kHz mono)
   onProgress?.("Extracting audio...", 5);
   const wavBytes = await extractAudioAsWav(file);
 
-  // Step 2: Load Whisper model (lazy, cached per model key)
-  let whisperPipeline = whisperPipelines.get(modelKey);
-  if (!whisperPipeline) {
-    if (whisperLoadingKey === modelKey) {
-      // Wait for an in-progress load
-      while (whisperLoadingKey === modelKey && !whisperPipelines.has(modelKey)) {
-        await new Promise(r => setTimeout(r, 200));
-      }
-      whisperPipeline = whisperPipelines.get(modelKey);
-    } else {
-      whisperLoadingKey = modelKey;
-      onProgress?.(`Loading ${cfg.label} model...`, 10);
+  // Step 2: Load Whisper model in worker (lazy, cached per model key)
+  createWhisperWorker();
+  await whisperRequest({ type: 'load', modelKey }, undefined, onProgress);
+  loadedModelKey = modelKey;
 
-      try {
-        const { pipeline } = await import("@huggingface/transformers");
-        const device = await getWhisperDevice();
-        const dtype = getWhisperDtype(modelKey, device);
-        const dtypeLabel = typeof dtype === "string" ? dtype : "mixed";
-        onProgress?.(`Loading ${cfg.label} model (${device}, ${dtypeLabel})...`, 10);
-
-        // Track per-file bytes for smooth overall progress
-        const fileProgress: Map<string, { loaded: number; total: number }> = new Map();
-        let fromCache = true;
-        let lastProgressCall = 0;
-
-        whisperPipeline = await pipeline(
-          "automatic-speech-recognition",
-          modelId,
-          {
-            dtype,
-            device: device as any,
-            progress_callback: (info: any) => {
-              if (info.status === "progress" && typeof info.progress === "number") {
-                const fname = info.file || "";
-                if (info.loaded && info.total) {
-                  fileProgress.set(fname, { loaded: info.loaded, total: info.total });
-                  if (info.loaded < info.total * 0.95) fromCache = false;
-                }
-                // Throttle UI updates to ~5/sec so text doesn't flicker
-                const now = performance.now();
-                if (now - lastProgressCall < 200) return;
-                lastProgressCall = now;
-
-                let totalLoaded = 0, totalSize = 0;
-                for (const fp of fileProgress.values()) {
-                  totalLoaded += fp.loaded;
-                  totalSize += fp.total;
-                }
-                const overallPct = totalSize > 0 ? totalLoaded / totalSize : 0;
-                const pct = Math.round(10 + overallPct * 40);
-                const loaded = (totalLoaded / 1024 / 1024).toFixed(0);
-                const total = (totalSize / 1024 / 1024).toFixed(0);
-                const action = fromCache ? "Loading" : "Downloading";
-                onProgress?.(`${action} ${cfg.label} model — ${loaded} / ${total} MB`, pct);
-              } else if (info.status === "ready") {
-                console.log(`[Whisper STT] Model ${cfg.label} ready (${device}, ${dtypeLabel})`);
-                onProgress?.(`${cfg.label} model loaded!`, 50);
-              }
-            },
-          },
-        );
-
-        // WebGPU fix: ONNX tensors stay on GPU — patch model.__call__ to force CPU readback
-        if (device === "webgpu" && whisperPipeline.model?.__call__) {
-          const origCall = whisperPipeline.model.__call__.bind(whisperPipeline.model);
-          whisperPipeline.model.__call__ = async function (...args: any[]) {
-            const output = await origCall(...args);
-            for (const key of Object.keys(output)) {
-              const tensor = output[key];
-              if (tensor && typeof tensor.getData === "function") {
-                await tensor.getData();
-              }
-            }
-            return output;
-          };
-          console.log("[Whisper STT] Patched model.__call__ for WebGPU tensor readback");
-        }
-
-        whisperPipelines.set(modelKey, whisperPipeline);
-      } finally {
-        whisperLoadingKey = null;
-      }
-    }
-  }
-
-  if (!whisperPipeline) throw new Error("Failed to load Whisper model");
-
-  // Step 3: Run transcription
-  onProgress?.("Transcribing...", 55);
-
-  // Convert WAV bytes to a Float32Array for Whisper
+  // Step 3: Convert WAV bytes to Float32Array for Whisper
   // WAV format: 44 byte header, then PCM data (16-bit LE)
   const audioData = new Float32Array((wavBytes.length - 44) / 2);
   const dataView = new DataView(wavBytes.buffer, wavBytes.byteOffset + 44);
@@ -188,26 +87,20 @@ export async function generateSubtitles(
     audioData[i] = dataView.getInt16(i * 2, true) / 32768;
   }
 
-  const pipelineOpts: any = {
-    return_timestamps: true,
-    chunk_length_s: 30,
-    stride_length_s: 5,
-  };
-  if (language) {
-    pipelineOpts.language = language;
-    pipelineOpts.task = "transcribe";
-  }
+  // Step 4: Transcribe in worker (transfer buffer for zero-copy)
+  const result = await whisperRequest(
+    { type: 'transcribe', modelKey, audioData, options: { language } },
+    [audioData.buffer],
+    onProgress,
+  );
 
-  const result = await whisperPipeline(audioData, pipelineOpts);
-
+  // Step 5: Format output as SRT
   onProgress?.("Formatting subtitles...", 90);
 
-  // Step 4: Format output as SRT
   const chunks: Array<{ text: string; timestamp: [number, number | null] }> =
     result.chunks || [];
 
   if (chunks.length === 0 && result.text) {
-    // Fallback: single chunk for entire text
     chunks.push({ text: result.text.trim(), timestamp: [0, null] });
   }
 

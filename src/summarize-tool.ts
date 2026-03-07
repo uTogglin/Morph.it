@@ -12,65 +12,31 @@ function getSumModel(): string {
   try { return localStorage.getItem("convert-sum-model") ?? "distilbart-12-6"; } catch { return "distilbart-12-6"; }
 }
 
-// ── Lazy summarization pipeline ─────────────────────────────────────────────
-let summarizer: any = null;
-let summarizerLoading: Promise<any> | null = null;
-let loadedModelKey: string | null = null;
+// ── Summarization via Web Worker ─────────────────────────────────────────────
+let sumWorker: Worker | null = null;
 
-async function getSummarizer(onProgress?: (pct: number, msg: string) => void): Promise<any> {
-  const modelKey = getSumModel();
+function createSumWorker() {
+  if (sumWorker) return;
+  sumWorker = new Worker(
+    new URL('./summarize-worker.ts', import.meta.url),
+    { type: 'module' }
+  );
+}
 
-  // If model changed, discard old pipeline
-  if (summarizer && loadedModelKey !== modelKey) {
-    summarizer = null;
-    summarizerLoading = null;
-  }
-
-  if (summarizer) return summarizer;
-  if (summarizerLoading) { await summarizerLoading; return summarizer; }
-
-  const modelInfo = SUM_MODELS[modelKey] || SUM_MODELS["distilbart-12-6"];
-
-  summarizerLoading = (async () => {
-    const { pipeline } = await import("@huggingface/transformers");
-
-    // Use WebGPU when available, fall back to WASM
-    const hasWebGPU = typeof navigator !== "undefined" && "gpu" in navigator
-      && await (navigator as any).gpu?.requestAdapter().catch(() => null);
-    const device = hasWebGPU ? "webgpu" : "wasm";
-    const dtype = hasWebGPU ? "fp32" : "q8";
-
-    onProgress?.(0, `Loading ${modelInfo.label} (${device})...`);
-    console.log(`[Summarize] Using device=${device}, dtype=${dtype}`);
-
-    let lastSumUpdate = 0;
-    summarizer = await pipeline("summarization", modelInfo.id, {
-      device,
-      dtype,
-      progress_callback: (info: any) => {
-        if (info.status === "progress" && typeof info.progress === "number") {
-          const now = performance.now();
-          if (now - lastSumUpdate < 200) return;
-          lastSumUpdate = now;
-          const loaded = info.loaded ? (info.loaded / 1024 / 1024).toFixed(0) : "";
-          const total = info.total ? (info.total / 1024 / 1024).toFixed(0) : "";
-          const sizeInfo = loaded && total ? ` — ${loaded} / ${total} MB` : "";
-          onProgress?.(Math.round(info.progress), `Downloading ${modelInfo.label}${sizeInfo}`);
-        }
-      },
-    } as any);
-
-    loadedModelKey = modelKey;
-    console.log(`[Summarize] ${modelInfo.label} loaded successfully (${device})`);
-  })();
-
-  try {
-    await summarizerLoading;
-  } catch (err) {
-    summarizerLoading = null;
-    throw err;
-  }
-  return summarizer;
+function sumWorkerRequest(
+  msg: any,
+  onProgress?: (pct: number, msg: string) => void,
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    sumWorker!.onmessage = (e: MessageEvent) => {
+      const data = e.data;
+      if (data.type === 'progress') onProgress?.(data.pct, data.msg);
+      else if (data.type === 'loaded') resolve(data);
+      else if (data.type === 'result') resolve(data);
+      else if (data.type === 'error') reject(new Error(data.message));
+    };
+    sumWorker!.postMessage(msg);
+  });
 }
 
 // ── Text extraction ─────────────────────────────────────────────────────────
@@ -170,7 +136,10 @@ async function summarizeText(
   wordLimit: number,
   onProgress?: (pct: number, msg: string) => void,
 ): Promise<string> {
-  const pipe = await getSummarizer(onProgress);
+  // Load model in worker
+  const modelKey = getSumModel();
+  createSumWorker();
+  await sumWorkerRequest({ type: 'load', modelKey }, onProgress);
 
   const words = text.split(/\s+/).filter(Boolean);
   if (words.length <= wordLimit) return text; // Already short enough
@@ -184,22 +153,22 @@ async function summarizeText(
     const partials: string[] = [];
     for (let i = 0; i < chunks.length; i++) {
       onProgress?.(Math.round(((i + 1) / (chunks.length + 1)) * 100), `Summarizing chunk ${i + 1}/${chunks.length}...`);
-      const result = await pipe(chunks[i], { max_length: maxTokens, min_length: Math.min(minTokens, 30) });
-      partials.push(result[0].summary_text);
+      const result = await sumWorkerRequest({ type: 'summarize', text: chunks[i], maxLength: maxTokens, minLength: Math.min(minTokens, 30) });
+      partials.push(result.summary);
     }
     // If combined partials are still long, do a final pass
     const combined = partials.join(" ");
     if (combined.split(/\s+/).length > wordLimit * 1.5) {
       onProgress?.(95, "Final summarization pass...");
-      const final = await pipe(combined, { max_length: maxTokens, min_length: minTokens });
-      return final[0].summary_text;
+      const final = await sumWorkerRequest({ type: 'summarize', text: combined, maxLength: maxTokens, minLength: minTokens });
+      return final.summary;
     }
     return combined;
   }
 
   onProgress?.(80, "Summarizing...");
-  const result = await pipe(text, { max_length: maxTokens, min_length: minTokens });
-  return result[0].summary_text;
+  const result = await sumWorkerRequest({ type: 'summarize', text, maxLength: maxTokens, minLength: minTokens });
+  return result.summary;
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────
@@ -594,7 +563,6 @@ export function initSummarizeTool() {
 
       ttsProgressText.textContent = "Generating speech...";
       ttsProgressFill.style.width = "55%";
-      ttsFreezeWarn.classList.remove("hidden");
 
       const voice = (() => { try { return localStorage.getItem("convert-tts-voice") ?? "af_heart"; } catch { return "af_heart"; } })();
       const speed = (() => { try { return parseFloat(localStorage.getItem("convert-tts-speed") ?? "1"); } catch { return 1; } })();
