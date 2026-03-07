@@ -1099,7 +1099,10 @@ const fileSelectHandler = (event: Event) => {
     inputFiles = event.dataTransfer?.files;
     if (inputFiles) event.preventDefault();
   } else if (event instanceof ClipboardEvent) {
-    inputFiles = event.clipboardData?.files;
+    const clipFiles = getClipboardFiles(event);
+    if (clipFiles.length === 0) return;
+    event.preventDefault();
+    inputFiles = clipFiles as unknown as FileList;
   } else {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) return;
@@ -1214,17 +1217,55 @@ window.addEventListener("drop", (e) => {
   fileSelectHandler(e);
 });
 window.addEventListener("dragover", e => e.preventDefault());
+/** Extract File objects from a ClipboardEvent, checking both items and files.
+ *  Renames generic clipboard image names (e.g. "image.png") to timestamped
+ *  names so users can distinguish multiple pastes. */
+function getClipboardFiles(e: ClipboardEvent): File[] {
+  const files: File[] = [];
+  const items = e.clipboardData?.items;
+  if (items) {
+    for (const item of items) {
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+  }
+  // Fall back to clipboardData.files if items yielded nothing
+  if (files.length === 0 && e.clipboardData?.files.length) {
+    files.push(...Array.from(e.clipboardData.files));
+  }
+  // Rename generic clipboard image names like "image.png"
+  return files.map(f => {
+    if (/^image\.\w+$/.test(f.name)) {
+      const ext = f.name.split(".").pop();
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      return new File([f], `clipboard-${stamp}.${ext}`, { type: f.type, lastModified: f.lastModified });
+    }
+    return f;
+  });
+}
+
 window.addEventListener("paste", (e) => {
+  // Don't intercept paste if the user is typing in an input, textarea, or
+  // contentEditable element — let the browser handle normal text paste
+  const active = document.activeElement;
+  if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || (active as HTMLElement).isContentEditable)) {
+    return;
+  }
+
+  const pastedFiles = getClipboardFiles(e);
+
   // On image page, redirect paste to image tools
-  if (activeTool === "image" && e.clipboardData?.files.length) {
+  if (activeTool === "image" && pastedFiles.length > 0) {
     e.preventDefault();
-    imgLoadFiles(Array.from(e.clipboardData.files));
+    imgLoadFiles(pastedFiles);
     return;
   }
   // On video page, redirect paste to video tools
-  if (activeTool === "video" && e.clipboardData?.files.length) {
+  if (activeTool === "video" && pastedFiles.length > 0) {
     e.preventDefault();
-    vidLoadFiles(Array.from(e.clipboardData.files));
+    vidLoadFiles(pastedFiles);
     return;
   }
   fileSelectHandler(e);
