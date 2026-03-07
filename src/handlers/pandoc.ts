@@ -1,4 +1,5 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import CommonFormats from "src/CommonFormats.ts";
 
 import mime from "mime";
 import normalizeMimeType from "../normalizeMimeType.ts";
@@ -21,11 +22,11 @@ class pandocHandler implements FormatHandler {
     ["context", "ConTeXt"],
     ["creole", "Creole 1.0"],
     ["csljson", "CSL JSON bibliography"],
-    ["csv", "CSV table"],
+    ["csv", CommonFormats.CSV.name],
     ["djot", "Djot markup"],
     ["docbook", "DocBook v4"],
     ["docbook5", "DocBook v5"],
-    ["docx", "Word"],
+    ["docx", CommonFormats.DOCX.name],
     ["dokuwiki", "DokuWiki markup"],
     ["dzslides", "DZSlides HTML slides"],
     ["endnotexml", "EndNote XML bibliography"],
@@ -35,14 +36,14 @@ class pandocHandler implements FormatHandler {
     ["fb2", "FictionBook2"],
     ["gfm", "GitHub-Flavored Markdown"],
     ["haddock", "Haddock markup"],
-    ["html", "HTML"],
+    ["html", CommonFormats.HTML.name],
     ["html4", "XHTML 1.0 Transitional"],
-    ["html5", "HTML"],
+    ["html5", CommonFormats.HTML.name],
     ["icml", "InDesign ICML"],
     ["ipynb", "Jupyter notebook"],
     ["jats", "JATS XML"],
     ["jira", "Jira/Confluence wiki markup"],
-    ["json", "JSON version of native AST"],
+    ["json", CommonFormats.JSON.name],
     ["latex", "LaTeX"],
     ["man", "roff man"],
     ["markdown", "Pandoc's Markdown"],
@@ -56,14 +57,14 @@ class pandocHandler implements FormatHandler {
     ["ms", "roff ms"],
     ["muse", "Muse"],
     ["native", "native Haskell"],
-    ["odt", "OpenDocument text"],
+    ["odt", "OpenDocument Text"],
     ["opendocument", "OpenDocument XML"],
     ["opml", "OPML"],
     ["org", "Emacs Org mode"],
     ["pdf", "PDF via Typst"],
-    ["text", "plain text"],
+    ["text", CommonFormats.TEXT.name],
     ["pod", "Perl POD"],
-    ["pptx", "PowerPoint"],
+    ["pptx", CommonFormats.PPTX.name],
     ["revealjs", "reveal.js HTML slides"],
     ["ris", "RIS bibliography"],
     ["rst", "reStructuredText"],
@@ -81,10 +82,11 @@ class pandocHandler implements FormatHandler {
     ["typst", "Typst"],
     ["vimdoc", "Vimdoc"],
     ["vimwiki", "Vimwiki"],
-    ["xlsx", "Excel spreadsheet"],
-    ["xml", "XML version of native AST"],
+    ["xlsx", CommonFormats.XLSX.name],
+    ["xml", CommonFormats.XML.name],
     ["xwiki", "XWiki markup"],
-    ["zimwiki", "ZimWiki markup"]
+    ["zimwiki", "ZimWiki markup"],
+    ["mathml", "Mathematical Markup Language"]
   ]);
 
   static formatExtensions: Map<string, string> = new Map([
@@ -144,7 +146,8 @@ class pandocHandler implements FormatHandler {
     ["djot", "dj"],
     ["fb2", "fb2"],
     ["opendocument", "xml"],
-    ["vimdoc", "txt"]
+    ["vimdoc", "txt"],
+    ["mathml", "mml"]
   ]);
 
   public name: string = "pandoc";
@@ -166,11 +169,15 @@ class pandocHandler implements FormatHandler {
     const inputFormats: string[] = await query({ query: "input-formats" });
     const outputFormats: string[] = await query({ query: "output-formats" });
 
+    // Pandoc supports MathML natively but doesn't expose as a format
+    outputFormats.push("mathml");
+
     const allFormats = new Set(inputFormats);
     outputFormats.forEach(format => allFormats.add(format));
 
     this.supportedFormats = [];
-    for (let format of allFormats) {
+    for (const internal of allFormats) {
+      let format = internal;
       // PDF doesn't seem to work, at least with this configuration
       if (format === "pdf") continue;
       // RevealJS seems to hang forever?
@@ -200,9 +207,9 @@ class pandocHandler implements FormatHandler {
       this.supportedFormats.push({
         name, format, extension,
         mime: mimeType,
-        from: inputFormats.includes(format) || (format === "text" && inputFormats.includes("plain")),
-        to: outputFormats.includes(format),
-        internal: format,
+        from: inputFormats.includes(internal) || (format === "text" && inputFormats.includes("plain")),
+        to: outputFormats.includes(internal),
+        internal,
         category: categories.length === 1 ? categories[0] : categories,
         lossless: !isOfficeDocument
       });
@@ -213,6 +220,17 @@ class pandocHandler implements FormatHandler {
     const htmlFormat = this.supportedFormats[htmlIndex];
     this.supportedFormats.splice(htmlIndex, 1);
     this.supportedFormats.unshift(htmlFormat);
+
+    // pandoc internal formats is almost always never what the user wants
+    const jsonXmlFormats = this.supportedFormats.filter(c =>
+      c.mime === "application/json"
+      || c.mime === "application/xml"
+    );
+    this.supportedFormats = this.supportedFormats.filter(c =>
+      c.mime !== "application/json"
+      && c.mime !== "application/xml"
+    );
+    this.supportedFormats.push(...jsonXmlFormats);
 
     this.ready = true;
   }
@@ -236,13 +254,22 @@ class pandocHandler implements FormatHandler {
         [inputFile.name]: new Blob([inputFile.bytes as BlobPart])
       };
 
-      const { stderr } = await this.convert({
+      let options: Record<string, any> = {
         from: inputFormat.internal,
         to: outputFormat.internal,
         "input-files": [inputFile.name],
         "output-file": "output",
-        "embed-resources": true
-      }, null, files);
+        "embed-resources": true,
+        "html-math-method": "mathjax",
+      }
+
+      // Set flag for outputting mathml
+      if (outputFormat.internal === "mathml") {
+        options.to = "html";
+        options["html-math-method"] = "mathml";
+      }
+
+      const { stderr } = await this.convert(options, null, files);
 
       if (stderr) throw new Error(stderr);
 

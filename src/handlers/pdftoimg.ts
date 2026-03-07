@@ -37,7 +37,7 @@ class pdftoimgHandler implements FormatHandler {
 
     if (
       outputFormat.format !== "png"
-      && outputFormat.format !== "jpg"
+      && outputFormat.format !== "jpeg"
     ) throw "Invalid output format.";
 
     const outputFiles: FileData[] = [];
@@ -47,8 +47,10 @@ class pdftoimgHandler implements FormatHandler {
       const blob = new Blob([inputFile.bytes as BlobPart], { type: inputFormat.mime });
       const url = URL.createObjectURL(blob);
 
+      const imgType = outputFormat.format === "jpeg" ? "jpg" : "png";
+
       const images = await pdfToImg(url, {
-        imgType: outputFormat.format,
+        imgType: imgType,
         pages: "all"
       });
       URL.revokeObjectURL(url);

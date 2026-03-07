@@ -1,6 +1,7 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
+import { parse } from "papaparse";
 
 class sqlite3Handler implements FormatHandler {
 
@@ -18,22 +19,22 @@ class sqlite3Handler implements FormatHandler {
         extension: "db",
         mime: "application/vnd.sqlite3",
         from: true,
-        to: false,
+        to: true,
         internal: "sqlite3",
         category: "database"
       },
       {
-        name: "Magic: The Gathering Arena Database",
-        format: "mtga",
-        extension: "mtga",
+        name: "iTunes Database",
+        format: "itdb",
+        extension: "itdb",
         mime: "application/vnd.sqlite3",
         from: true,
         to: false,
         internal: "sqlite3",
         category: "database"
       },
-      // Lossy because extracts only tables  
-      CommonFormats.CSV.builder("csv").allowTo()
+      // Lossy because extracts only tables
+      CommonFormats.CSV.builder("csv").allowTo().allowFrom()
     ];
     this.ready = true;
   }
@@ -107,9 +108,65 @@ class sqlite3Handler implements FormatHandler {
 
 
 
+    if (inputFormat.internal === "csv" && outputFormat.internal === "sqlite3") {
+        const db = new sqlite3.oo1.DB();
+        if (!db.pointer) {
+            throw new Error("Database pointer is undefined")
+        }
+
+        for (const file of inputFiles) {
+          const decoder = new TextDecoder('utf-8');
+          parse(decoder.decode(file.bytes), {
+            header: false,
+            skipEmptyLines: true,
+            complete: function(result) {
+              const tableName = file.name.replace(".csv", "");
+              const header = result.data[0] as string[];
+              const firstRow = result.data[1] as string[];
+
+              const schema = inferSchema(header, firstRow);
+              const quotedCols = schema.map(v => `"${v[0].replace(/"/g, '""')}" ${v[1]}`).join(", ");
+              db.exec(`CREATE TABLE "${tableName.replace(/"/g, '""')}" (${quotedCols})`);
+
+              const quotedHeader = header.map(h => `"${h.replace(/"/g, '""')}"`).join(", ");
+              for (const row of result.data.slice(1) as string[][]) {
+                db.exec(`INSERT INTO "${tableName.replace(/"/g, '""')}" (${quotedHeader}) VALUES (${row.map((v, i) => formatValue(v, schema[i][1]))})`)
+              }
+            }
+          });
+        }
+        const bfr = sqlite3.capi.sqlite3_js_db_export(db);
+        outputFiles.push({
+            name: "database.db",
+            bytes: bfr
+        });
+    }
+
     return outputFiles;
   }
 
 }
 
 export default sqlite3Handler;
+
+function formatValue(value: string, type: string) {
+    value = value.substring(1); // Strip leading space
+    if (value === "") return "NULL";
+    if (type === "TEXT") return `'${value.replace(/'/g, "''")}'`;
+    return value;
+}
+
+function inferType(value: string): string {
+    if (!isNaN(Number(value))) {
+        if (Number.isInteger(Number(value))) return "INTEGER";
+        return "REAL";
+    }
+    return "TEXT";
+}
+
+function inferSchema(header: string[], row: string[]): string[][] {
+    return header.map((h, i) => {
+        const type = inferType(row[i]);
+        return [h, type];
+    });
+}

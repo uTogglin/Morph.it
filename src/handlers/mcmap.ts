@@ -90,7 +90,7 @@ class mcMapHandler implements FormatHandler {
         this.supportedFormats = [
             CommonFormats.PNG.supported("png", true, true, false),
             {
-                name: "RGB",
+                name: "Raw red, green, and blue samples",
                 format: "rgb",
                 extension: "rgb",
                 mime: "image/x-rgb",
@@ -256,7 +256,7 @@ class mcMapHandler implements FormatHandler {
                         const bytes = await canvasToBytes(this.#canvas!, outputFormat.mime);
 
                         outputFiles.push({
-                            name: file.name,
+                            name: getBaseName(file.name) + "." + outputFormat.extension,
                             bytes: bytes
                         });
                     }
@@ -278,7 +278,7 @@ class mcMapHandler implements FormatHandler {
                             const colors = NBT.isTag<NBT.ByteArrayTag>(mapdata["colors"]) ? new Uint8Array(mapdata["colors"]) : new Uint8Array([]);
                             const bytes = map2rgb(colors, width, height);
                             outputFiles.push({
-                                name: file.name,
+                                name: getBaseName(file.name) + "." + outputFormat.extension,
                                 bytes: new Uint8Array(bytes)
                             })
                         }

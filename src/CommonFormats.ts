@@ -11,7 +11,8 @@ export const Category = {
     ARCHIVE: "archive",
     SPREADSHEET: "spreadsheet",
     PRESENTATION: "presentation",
-    FONT: "font"
+    FONT: "font",
+    CODE: "code"
 }
 
 /**
@@ -38,6 +39,20 @@ const CommonFormats = {
         "webp",
         "webp",
         "image/webp",
+        Category.IMAGE
+    ),
+    TIFF: new FormatDefinition(
+        "Tagged Image File Format",
+        "tiff",
+        "tiff",
+        "image/tiff",
+        Category.IMAGE
+    ),
+    BMP: new FormatDefinition(
+        "Microsoft Windows bitmap image",
+        "bmp",
+        "bmp",
+        "image/bmp",
         Category.IMAGE
     ),
     GIF: new FormatDefinition(
@@ -77,7 +92,7 @@ const CommonFormats = {
         Category.DATA
     ),
     CSV: new FormatDefinition(
-        "Comma Seperated Values",
+        "Comma Separated Values",
         "csv",
         "csv",
         "text/csv",
@@ -102,14 +117,21 @@ const CommonFormats = {
         "markdown",
         "markdown",
         "text/markdown",
-        ["document", "text"]
+        [Category.DOCUMENT, Category.TEXT]
     ),
     BATCH: new FormatDefinition(
         "Windows Batch file",
         "batch",
         "bat",
         "text/windows-batch",
-        ["text"]
+        Category.TEXT
+    ),
+    PYTHON: new FormatDefinition(
+        "Python Script",
+        "py",
+        "py",
+        "text/x-python",
+        Category.CODE
     ),
     SH: new FormatDefinition(
         "Shell Script",
@@ -201,21 +223,21 @@ const CommonFormats = {
     ),
     // documents - Microsoft Office
     DOCX: new FormatDefinition(
-        "Microsoft Office 365 Word Document",
+        "WordprocessingML Document",
         "docx",
         "docx",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         Category.DOCUMENT
     ),
     XLSX: new FormatDefinition(
-        "Microsoft Office 365 Workbook",
+        "SpreadsheetML Workbook",
         "xlsx",
         "xlsx",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         [Category.SPREADSHEET, Category.DOCUMENT]
     ),
     PPTX: new FormatDefinition(
-        "Microsoft Office 365 Presentation",
+        "PresentationML Presentation",
         "pptx",
         "pptx",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -249,6 +271,28 @@ const CommonFormats = {
         "woff2",
         "font/woff2",
         [Category.FONT]
+    ),
+    // music notation
+    MUSICXML: new FormatDefinition(
+        "MusicXML",
+        "musicxml",
+        "musicxml",
+        "application/vnd.recordare.musicxml+xml",
+        Category.DOCUMENT
+    ),
+    MXL: new FormatDefinition(
+        "MusicXML Compressed",
+        "mxl",
+        "mxl",
+        "application/vnd.recordare.musicxml",
+        Category.DOCUMENT
+    ),
+    EXE: new FormatDefinition(
+        "Windows Portable Executable",
+        "exe",
+        "exe",
+        "application/vnd.microsoft.portable-executable",
+        Category.CODE
     )
 }
 

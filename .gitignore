@@ -3,6 +3,5 @@ package-lock.json
 node_modules
 start.sh
 dist
-!public/minipaint/dist
 release
 cache.json

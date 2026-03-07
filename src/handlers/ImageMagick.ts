@@ -3,7 +3,8 @@ import {
   Magick,
   MagickFormat,
   MagickImageCollection,
-  MagickReadSettings
+  MagickReadSettings,
+  MagickGeometry
 } from "@imagemagick/magick-wasm";
 
 import mime from "mime";
@@ -12,6 +13,7 @@ import normalizeMimeType from "../normalizeMimeType.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import { getBaseName } from "../utils/file-utils.ts";
 import { cdnFetch } from "../cdn.ts";
+import CommonFormats from "src/CommonFormats.ts";
 
 class ImageMagickHandler implements FormatHandler {
 
@@ -23,7 +25,8 @@ class ImageMagickHandler implements FormatHandler {
 
   async init () {
 
-    const wasmBytes = await cdnFetch("magickWasm").then(r => r.bytes());
+    const wasmBuffer = await cdnFetch("magickWasm").then(r => r.arrayBuffer());
+    const wasmBytes = new Uint8Array(wasmBuffer);
 
     await initializeImageMagick(wasmBytes);
 
@@ -33,18 +36,27 @@ class ImageMagickHandler implements FormatHandler {
       if (formatName === "svg") return;
       if (formatName === "ttf") return;
       if (formatName === "otf") return;
-      const mimeType = format.mimeType || mime.getType(formatName);
+      let mimeType = format.mimeType || mime.getType(formatName);
       if (
         !mimeType
         || mimeType.startsWith("text/")
         || mimeType.startsWith("video/")
         || mimeType === "application/json"
       ) return;
+      mimeType = normalizeMimeType(mimeType);
+      // ImageMagick _really_ likes mislabeling formats
+      let description = format.description;
+      if (mimeType === "image/jpeg") description = CommonFormats.JPEG.name;
+      if (mimeType === "image/gif") description = CommonFormats.GIF.name;
+      if (mimeType === "image/webp") description = CommonFormats.WEBP.name;
+      if (formatName === "ico") description = "Microsoft Windows ICO";
+      if (formatName === "mpo") description = "Multi-Picture Object";
+      if (formatName === "vst") description = "Microsoft Visio Template";
       this.supportedFormats.push({
-        name: format.description,
+        name: description,
         format: formatName === "jpg" ? "jpeg" : formatName,
         extension: formatName,
-        mime: normalizeMimeType(mimeType),
+        mime: mimeType,
         from: mimeType === "application/pdf" ? false : format.supportsReading,
         to: format.supportsWriting,
         internal: format.format,
@@ -93,6 +105,10 @@ class ImageMagickHandler implements FormatHandler {
             while (fileCollection.length > 0) {
               const image = fileCollection.shift();
               if (!image) break;
+              if(outputFormat.format == "ico" && (image.width > 256 || image.height > 256)) {
+                const geometry = new MagickGeometry(256, 256);
+                image.resize(geometry);
+              }
               outputCollection.push(image);
             }
           });

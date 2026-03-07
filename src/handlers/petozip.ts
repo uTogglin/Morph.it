@@ -17,15 +17,7 @@ class peToZipHandler implements FormatHandler {
   public name: string = "petozip";
 
   public supportedFormats: FileFormat[] = [
-    {
-      name: "Windows Executable",
-      format: "exe",
-      extension: "exe",
-      mime: "application/vnd.microsoft.portable-executable",
-      from: true,
-      to: false,
-      internal: "exe"
-    },
+    CommonFormats.EXE.builder("exe").allowFrom(),
     {
       name: "Dynamic-Link Library",
       format: "dll",

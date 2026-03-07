@@ -1,5 +1,6 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import normalizeMimeType from "../normalizeMimeType.ts";
+import CommonFormats from "src/CommonFormats.ts";
 import { interleaveAudioBuffer, floatTo16BitPCM, buildWav } from "../utils/build-wav.ts";
 
 import { FFmpeg } from "@ffmpeg/ffmpeg";
@@ -128,17 +129,8 @@ class floHandler implements FormatHandler {
         category: "audio",
         lossless: false
       },
-      {
-        name: "WAV (signed 16-bit)",
-        format: "wav",
-        extension: "wav",
-        mime: normalizeMimeType("audio/wav"),
-        from: true,
-        to: true,
-        internal: "wav",
-        category: "audio",
-        lossless: true
-      },
+      CommonFormats.WAV.builder("wav")
+        .allowFrom().allowTo().markLossless(),
       {
         name: "Raw PCM Float32LE",
         format: "f32le",

@@ -2,6 +2,7 @@ import type { FileData, FileFormat, FormatHandler } from "src/FormatHandler";
 import { getBaseName } from "../utils/file-utils.ts";
 import * as NBT from "nbtify";
 import CommonFormats from "src/CommonFormats";
+import { gzipSync } from "fflate";
 
 class nbtHandler implements FormatHandler {
     public name: string = "nbt";
@@ -14,7 +15,7 @@ class nbtHandler implements FormatHandler {
         this.supportedFormats = [
             {
                 name: "Named Binary Tag",
-                format: "NBT",
+                format: "nbt",
                 extension: "nbt",
                 mime: "application/x-minecraft-nbt",
                 from: true,
@@ -26,7 +27,7 @@ class nbtHandler implements FormatHandler {
             CommonFormats.JSON.supported("json", true, true, true),
             {
                 name: "String Named Binary Tag",
-                format: "SNBT",
+                format: "snbt",
                 extension: "snbt",
                 mime: "application/x-minecraft-snbt",
                 from: true,
@@ -49,41 +50,46 @@ class nbtHandler implements FormatHandler {
         const decoder = new TextDecoder()
         const encoder = new TextEncoder()
 
-        // nbt <-> json
+        // nbt -> json
         if (inputFormat.internal == "nbt" && outputFormat.internal == "json") {
             for (const file of inputFiles) {
                 const nbt = await NBT.read(file.bytes);
-                const j = JSON.stringify(nbt.data, null, this.indent)
+                const j = JSON.stringify(nbt.data, (key, value) =>
+                    typeof value === 'bigint' ? value.toString() : value,
+                this.indent);
                 outputFiles.push({
                     name: getBaseName(file.name) + ".json",
                     bytes: encoder.encode(j)
-                })
+                });
             }
         }
+
+        // json -> nbt
         if (inputFormat.internal == "json" && outputFormat.internal == "nbt") {
             for (const file of inputFiles) {
                 const text = decoder.decode(file.bytes)
                 const obj = JSON.parse(text)
                 const bd = await NBT.write(obj)
                 outputFiles.push({
-                    name: getBaseName(file.name) + ".nbt",
+                    name: getBaseName(file.name) + `.${outputFormat.extension}`,
                     bytes: bd
                 })
             }
         }
 
-        // snbt <-> nbt
+        // snbt -> nbt
         if (inputFormat.internal == "snbt" && outputFormat.internal == "nbt") {
             for (const file of inputFiles) {
                 const text = decoder.decode(file.bytes)
                 const nbt = NBT.parse(text)
                 const bd = await NBT.write(nbt)
                 outputFiles.push({
-                    name: getBaseName(file.name) + ".nbt",
+                    name: getBaseName(file.name) + `.${outputFormat.extension}`,
                     bytes: bd
                 })
             }
         }
+        // nbt -> snbt
         if (inputFormat.internal == "nbt" && outputFormat.internal == "snbt") {
             for (const file of inputFiles) {
                 const nbt = await NBT.read(file.bytes)
@@ -97,30 +103,18 @@ class nbtHandler implements FormatHandler {
             }
         }
 
-        // snbt <-> json
-        if (inputFormat.internal == "snbt" && outputFormat.internal == "json") {
+        // nbt -> schem / schematic
+        if (inputFormat.internal == "nbt" && (outputFormat.internal == "schem" || outputFormat.internal == "schematic")) {
             for (const file of inputFiles) {
-                const snbt = decoder.decode(file.bytes)
-                const nbt = NBT.parse(snbt)
-                const text = JSON.stringify(nbt, null, this.indent)
                 outputFiles.push({
-                    name: getBaseName(file.name) + ".json",
-                    bytes: encoder.encode(text)
+                    name: getBaseName(file.name) + `.${outputFormat.extension}`,
+                    bytes: gzipSync(file.bytes)
                 })
             }
         }
-        if (inputFormat.internal == "json" && outputFormat.internal == "snbt") {
-            for (const file of inputFiles) {
-                const text = decoder.decode(file.bytes)
-                const obj = JSON.parse(text)
-                const snbt = NBT.stringify(obj, {
-                    space: this.indent
-                })
-                outputFiles.push({
-                    name: getBaseName(file.name) + ".snbt",
-                    bytes: encoder.encode(snbt)
-                })
-            }
+
+        if (outputFiles.length === 0) {
+            throw new Error(`nbtHandler does not support route: ${inputFormat.internal} -> ${outputFormat.internal}`);
         }
 
         return outputFiles

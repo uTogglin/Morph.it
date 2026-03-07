@@ -48,9 +48,8 @@ class htmlEmbedHandler implements FormatHandler {
         const text = decoder.decode(inputFile.bytes)
           .replaceAll("&", "&amp;")
           .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;")
-          .replaceAll("\n", "<br>");
-        html += `<p>${text}</p>`;
+          .replaceAll(">", "&gt;");
+        html += `<pre>${text}</pre>`;
       }
     } else {
       const escapedMime = inputFormat.mime.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

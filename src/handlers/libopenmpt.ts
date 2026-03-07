@@ -1,4 +1,5 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import CommonFormats from "src/CommonFormats.ts";
 import { cdnFetch, cdnUrl } from "../cdn.ts";
 import { buildWav } from "../utils/build-wav.ts";
 import { getBaseName } from "../utils/file-utils.ts";
@@ -128,17 +129,7 @@ class libopenmptHandler implements FormatHandler {
       });
     }
 
-    this.supportedFormats.push({
-      name: "Waveform Audio File Format",
-      format: "wav",
-      extension: "wav",
-      mime: "audio/wav",
-      from: false,
-      to: true,
-      internal: "wav",
-      category: "audio",
-      lossless: true
-    });
+    this.supportedFormats.push(CommonFormats.WAV.builder("wav").allowTo().markLossless());
 
     this.ready = true;
   }

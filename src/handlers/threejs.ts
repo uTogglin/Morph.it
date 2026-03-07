@@ -5,6 +5,7 @@ import { getBaseName } from "../utils/file-utils.ts";
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 
 class threejsHandler implements FormatHandler {
@@ -20,6 +21,26 @@ class threejsHandler implements FormatHandler {
       to: false,
       internal: "glb",
       category: "model"
+    },
+    {
+      name: "GL Transmission Format",
+      format: "gltf",
+      extension: "gltf",
+      mime: "model/gltf+json",
+      from: true,
+      to: false,
+      internal: "glb",
+      category: "model"
+    },
+    {
+      name: "Waveform OBJ",
+      format: "obj",
+      extension: "obj",
+      mime: "model/obj",
+      from: true,
+      to: false,
+      internal: "obj",
+      category: "model",
     },
     CommonFormats.PNG.supported("png", false, true),
     CommonFormats.JPEG.supported("jpeg", false, true),
@@ -38,7 +59,7 @@ class threejsHandler implements FormatHandler {
 
   async doConvert (
     inputFiles: FileData[],
-    _inputFormat: FileFormat,
+    inputFormat: FileFormat,
     outputFormat: FileFormat
   ): Promise<FileData[]> {
     const outputFiles: FileData[] = [];
@@ -48,20 +69,36 @@ class threejsHandler implements FormatHandler {
       const blob = new Blob([inputFile.bytes as BlobPart]);
       const url = URL.createObjectURL(blob);
 
-      const gltf: GLTF = await new Promise((resolve, reject) => {
-        const loader = new GLTFLoader();
-        loader.load(url, resolve, undefined, reject);
-      });
+      let object: THREE.Group<THREE.Object3DEventMap>;
+
+      switch (inputFormat.internal) {
+        case "glb": {
+          const gltf: GLTF = await new Promise((resolve, reject) => {
+            const loader = new GLTFLoader();
+            loader.load(url, resolve, undefined, reject);
+          });
+          object = gltf.scene;
+          break;
+        }
+        case "obj":
+          object = await new Promise((resolve, reject) => {
+            const loader = new OBJLoader();
+            loader.load(url, resolve, undefined, reject);
+          });
+          break;
+        default:
+          throw new Error("Invalid input format");
+      }
       URL.revokeObjectURL(url);
 
-      const bbox = new THREE.Box3().setFromObject(gltf.scene);
+      const bbox = new THREE.Box3().setFromObject(object);
       bbox.getCenter(this.camera.position);
       this.camera.position.z = bbox.max.z * 2;
 
       this.scene.background = new THREE.Color(0x424242);
-      this.scene.add(gltf.scene);
+      this.scene.add(object);
       this.renderer.render(this.scene, this.camera);
-      this.scene.remove(gltf.scene);
+      this.scene.remove(object);
 
       const bytes = await canvasToBytes(this.renderer.domElement, outputFormat.mime);
       const name = getBaseName(inputFile.name) + "." + outputFormat.extension;
