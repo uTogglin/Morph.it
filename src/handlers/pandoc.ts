@@ -226,7 +226,7 @@ class pandocHandler implements FormatHandler {
       !this.ready
       || !this.query
       || !this.convert
-    ) throw "Handler not initialized.";
+    ) throw new Error("Handler not initialized.");
 
     const outputFiles: FileData[] = [];
 
@@ -244,7 +244,7 @@ class pandocHandler implements FormatHandler {
         "embed-resources": true
       }, null, files);
 
-      if (stderr) throw stderr;
+      if (stderr) throw new Error(stderr);
 
       const outputBlob = files.output;
       if (!(outputBlob instanceof Blob)) continue;

@@ -82,6 +82,17 @@ console.error = (...args: unknown[]) => { _origConsoleError(...args); _appendApp
 console.warn  = (...args: unknown[]) => { _origConsoleWarn(...args);  _appendAppLog("warn",  args); };
 // ──────────────────────────────────────────────────────────────────────────────
 
+/** Read a setting from localStorage with JSON.parse, returning fallback on missing key or parse error */
+function loadSetting<T>(key: string, fallback: T): T {
+  try {
+    const val = localStorage.getItem(key);
+    if (val === null) return fallback;
+    return JSON.parse(val) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 /** Files currently selected for conversion */
 let selectedFiles: File[] = [];
 /**
@@ -93,24 +104,16 @@ let selectedFiles: File[] = [];
 let simpleMode: boolean = true;
 
 /** Auto-download: when true, files download immediately; when false, only appear in output tray */
-let autoDownload: boolean = (() => {
-  try { return localStorage.getItem("convert-auto-download") !== "false"; } catch { return true; }
-})();
+let autoDownload: boolean = loadSetting("convert-auto-download", true);
 
 /** Archive multi-file output: when true, multiple converted files are zipped; when false, downloaded separately */
-let archiveMultiOutput: boolean = (() => {
-  try { return localStorage.getItem("convert-archive-multi") !== "false"; } catch { return true; }
-})();
+let archiveMultiOutput: boolean = loadSetting("convert-archive-multi", true);
 
 /** Apply edits to all files: when true, current settings are applied to every loaded file during processing */
-let applyAll: boolean = (() => {
-  try { return localStorage.getItem("convert-apply-all") === "true"; } catch { return false; }
-})();
+let applyAll: boolean = loadSetting("convert-apply-all", false);
 
 /** Remove background: when true, image outputs have their background removed */
-let removeBg: boolean = (() => {
-  try { return localStorage.getItem("convert-remove-bg") === "true"; } catch { return false; }
-})();
+let removeBg: boolean = loadSetting("convert-remove-bg", false);
 
 /** Background removal mode: "local" uses RMBG-1.4, "api" uses remove.bg */
 let bgMode: "local" | "api" = (() => {
@@ -123,31 +126,21 @@ let bgApiKey: string = (() => {
 })();
 
 /** Correction: when true, preserves text/graphics during background removal */
-let bgCorrection: boolean = (() => {
-  try { return localStorage.getItem("convert-bg-correction") === "true"; } catch { return false; }
-})();
+let bgCorrection: boolean = loadSetting("convert-bg-correction", false);
 
 /** Image rescaling settings */
-let rescaleEnabled: boolean = (() => {
-  try { return localStorage.getItem("convert-rescale") === "true"; } catch { return false; }
-})();
+let rescaleEnabled: boolean = loadSetting("convert-rescale", false);
 let rescaleWidth: number = (() => {
   try { return parseInt(localStorage.getItem("convert-rescale-width") ?? "0") || 0; } catch { return 0; }
 })();
 let rescaleHeight: number = (() => {
   try { return parseInt(localStorage.getItem("convert-rescale-height") ?? "0") || 0; } catch { return 0; }
 })();
-let rescaleLockRatio: boolean = (() => {
-  try { return localStorage.getItem("convert-rescale-lock") !== "false"; } catch { return true; }
-})();
+let rescaleLockRatio: boolean = loadSetting("convert-rescale-lock", true);
 
 /** Inpainting (object removal) settings */
-let inpaintEnabled: boolean = (() => {
-  try { return localStorage.getItem("convert-inpaint") === "true"; } catch { return false; }
-})();
-let inpaintFeather: boolean = (() => {
-  try { return localStorage.getItem("convert-inpaint-feather") === "true"; } catch { return false; }
-})();
+let inpaintEnabled: boolean = loadSetting("convert-inpaint", false);
+let inpaintFeather: boolean = loadSetting("convert-inpaint-feather", false);
 let inpaintModel: "migan" | "lama" = (() => {
   try { const v = localStorage.getItem("convert-inpaint-model"); return v === "lama" ? "lama" : "migan"; } catch { return "migan" as const; }
 })();
@@ -162,14 +155,10 @@ let inpaintSession: any = null;
 let inpaintSessionModel: string = "";
 
 /** Privacy mode: strips metadata and randomizes filenames for API calls */
-let privacyMode: boolean = (() => {
-  try { return localStorage.getItem("convert-privacy") === "true"; } catch { return false; }
-})();
+let privacyMode: boolean = loadSetting("convert-privacy", false);
 
 /** Compression: compress output files to fit a target size or re-encode for quality */
-let compressEnabled: boolean = (() => {
-  try { return localStorage.getItem("convert-compress") === "true"; } catch { return false; }
-})();
+let compressEnabled: boolean = loadSetting("convert-compress", false);
 let compressTargetMB: number = (() => {
   try { return parseFloat(localStorage.getItem("convert-compress-target") ?? "0") || 0; } catch { return 0; }
 })();
@@ -189,9 +178,7 @@ let compressSpeed: "fast" | "balanced" | "quality" = (() => {
     return "balanced";
   } catch { return "balanced" as const; }
 })();
-let compressWebmMode: boolean = (() => {
-  try { return localStorage.getItem("convert-compress-webm") === "true"; } catch { return false; }
-})();
+let compressWebmMode: boolean = loadSetting("convert-compress-webm", false);
 /** Default TTS voice */
 let ttsVoiceDefault: string = (() => {
   try { return localStorage.getItem("convert-tts-voice") ?? "af_heart"; } catch { return "af_heart"; }
@@ -276,6 +263,13 @@ let vidCropLockRatio: boolean = false;
 /** Merge state */
 let vidMergeFiles: File[] = [];
 let vidMergeReEncode: boolean = false;
+
+/** Clear cached processed video data and revoke its object URL */
+function vidInvalidateProcessed() {
+  vidProcessedData = null;
+  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
+  vidUpdateActionButton();
+}
 
 /** Returns the broad media category from a file's MIME type */
 function getMediaCategory(file: File): string {
@@ -744,9 +738,7 @@ ui.smSumWordLimit?.addEventListener("change", () => {
 });
 
 // CORS proxy toggle
-let sumCorsProxy: boolean = (() => {
-  try { return localStorage.getItem("convert-sum-cors-proxy") === "true"; } catch { return false; }
-})();
+let sumCorsProxy: boolean = loadSetting("convert-sum-cors-proxy", false);
 if (ui.smSumCorsProxy) {
   ui.smSumCorsProxy.classList.toggle("active", sumCorsProxy);
   ui.smSumCorsProxy.addEventListener("click", () => {
@@ -4161,11 +4153,9 @@ function vidSetupHandleDrag(handle: HTMLElement, isLeft: boolean) {
         if (ui.vidTrimEndInput) ui.vidTrimEndInput.value = vidFormatTime(vidTrimEnd);
       }
 
-      vidProcessedData = null;
-      if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
+      vidInvalidateProcessed();
       vidUpdateTimeline();
       vidUpdateTrimInfo();
-      vidUpdateActionButton();
     };
 
     const onUp = () => {
@@ -4185,11 +4175,9 @@ ui.vidTrimStartInput?.addEventListener("change", () => {
   const t = vidParseTime(ui.vidTrimStartInput.value);
   if (t !== null && t >= 0 && t < vidTrimEnd) {
     vidTrimStart = t;
-    vidProcessedData = null;
-    if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
+    vidInvalidateProcessed();
     vidUpdateTimeline();
     vidUpdateTrimInfo();
-    vidUpdateActionButton();
   }
   ui.vidTrimStartInput.value = vidFormatTime(vidTrimStart);
 });
@@ -4198,11 +4186,9 @@ ui.vidTrimEndInput?.addEventListener("change", () => {
   const t = vidParseTime(ui.vidTrimEndInput.value);
   if (t !== null && t > vidTrimStart && t <= vidDuration) {
     vidTrimEnd = t;
-    vidProcessedData = null;
-    if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
+    vidInvalidateProcessed();
     vidUpdateTimeline();
     vidUpdateTrimInfo();
-    vidUpdateActionButton();
   }
   ui.vidTrimEndInput.value = vidFormatTime(vidTrimEnd);
 });
@@ -4213,29 +4199,23 @@ ui.vidTrimReset?.addEventListener("click", () => {
   vidTrimEnd = vidDuration;
   if (ui.vidTrimStartInput) ui.vidTrimStartInput.value = vidFormatTime(0);
   if (ui.vidTrimEndInput) ui.vidTrimEndInput.value = vidFormatTime(vidDuration);
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
+  vidInvalidateProcessed();
   vidUpdateTimeline();
   vidUpdateTrimInfo();
-  vidUpdateActionButton();
 });
 
 // Remove audio toggle
 ui.vidRemoveAudioToggle?.addEventListener("click", () => {
   vidRemoveAudio = !vidRemoveAudio;
   ui.vidRemoveAudioToggle.classList.toggle("active", vidRemoveAudio);
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-  vidUpdateActionButton();
+  vidInvalidateProcessed();
 });
 
 // Remove subtitles toggle
 ui.vidRemoveSubsToggle?.addEventListener("click", () => {
   vidRemoveSubtitles = !vidRemoveSubtitles;
   ui.vidRemoveSubsToggle.classList.toggle("active", vidRemoveSubtitles);
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-  vidUpdateActionButton();
+  vidInvalidateProcessed();
 });
 
 // Extract subtitles button
@@ -4353,9 +4333,7 @@ ui.vidEqSliders?.forEach((slider, i) => {
     if (ui.vidEqValues[i]) {
       ui.vidEqValues[i].textContent = (val > 0 ? "+" : "") + val + " dB";
     }
-    vidProcessedData = null;
-    if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-    vidUpdateActionButton();
+    vidInvalidateProcessed();
   });
 });
 
@@ -4366,9 +4344,7 @@ ui.vidEqReset?.addEventListener("click", () => {
     s.value = "0";
     if (ui.vidEqValues[i]) ui.vidEqValues[i].textContent = "0 dB";
   });
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-  vidUpdateActionButton();
+  vidInvalidateProcessed();
 });
 
 // ── Crop helpers & handlers ──────────────────────────────────────────────────
@@ -4378,11 +4354,9 @@ function vidEven(n: number): number { return Math.round(n / 2) * 2; }
 
 /** Invalidate processed data on crop change */
 function vidCropChanged() {
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
+  vidInvalidateProcessed();
   vidUpdateCropOverlay();
   vidUpdateCropInfo();
-  vidUpdateActionButton();
 }
 
 /** Update crop info text */
@@ -4659,9 +4633,7 @@ ui.vidCropReset?.addEventListener("click", () => {
     dragType = null;
     document.removeEventListener("pointermove", onPointerMove);
     document.removeEventListener("pointerup", onPointerUp);
-    vidProcessedData = null;
-    if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-    vidUpdateActionButton();
+    vidInvalidateProcessed();
   }
 
   ui.vidCropBox?.addEventListener("pointerdown", onPointerDown);
@@ -4746,10 +4718,8 @@ function vidUpdateMergeList() {
 }
 
 function vidMergeChanged() {
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
+  vidInvalidateProcessed();
   vidUpdateMergeList();
-  vidUpdateActionButton();
 }
 
 // Trim collapsible toggle
@@ -4788,9 +4758,7 @@ ui.vidMergeFileInput?.addEventListener("change", () => {
 ui.vidMergeReEncode?.addEventListener("click", () => {
   vidMergeReEncode = !vidMergeReEncode;
   ui.vidMergeReEncode.classList.toggle("active", vidMergeReEncode);
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-  vidUpdateActionButton();
+  vidInvalidateProcessed();
 });
 
 // Fullscreen toggle
@@ -4821,9 +4789,7 @@ ui.vidSubFileInput?.addEventListener("change", () => {
   if (files && files.length > 0) {
     vidSubFile = files[0];
     if (ui.vidSubFileName) ui.vidSubFileName.textContent = vidSubFile.name;
-    vidProcessedData = null;
-    if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-    vidUpdateActionButton();
+    vidInvalidateProcessed();
     ui.vidSubFileInput.value = "";
   }
 });
@@ -4837,9 +4803,7 @@ ui.vidMuxToggle?.addEventListener("click", () => {
     vidAddSubBurn = false;
     ui.vidBurnToggle?.classList.remove("active");
   }
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-  vidUpdateActionButton();
+  vidInvalidateProcessed();
 });
 
 // Burn toggle
@@ -4851,9 +4815,7 @@ ui.vidBurnToggle?.addEventListener("click", () => {
     vidAddSubMux = false;
     ui.vidMuxToggle?.classList.remove("active");
   }
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-  vidUpdateActionButton();
+  vidInvalidateProcessed();
 });
 
 // ── Video settings panel prefs (bidirectional sync with sidebar) ─────────────
@@ -4894,18 +4856,14 @@ ui.vidPrefRemoveAudio?.addEventListener("click", () => {
   vidRemoveAudio = !vidRemoveAudio;
   ui.vidPrefRemoveAudio.classList.toggle("active", vidRemoveAudio);
   ui.vidRemoveAudioToggle?.classList.toggle("active", vidRemoveAudio);
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-  vidUpdateActionButton();
+  vidInvalidateProcessed();
 });
 // Sync pref toggles with sidebar toggles (remove subs)
 ui.vidPrefRemoveSubs?.addEventListener("click", () => {
   vidRemoveSubtitles = !vidRemoveSubtitles;
   ui.vidPrefRemoveSubs.classList.toggle("active", vidRemoveSubtitles);
   ui.vidRemoveSubsToggle?.classList.toggle("active", vidRemoveSubtitles);
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-  vidUpdateActionButton();
+  vidInvalidateProcessed();
 });
 // Sync pref toggles with sidebar toggles (mux)
 ui.vidPrefMux?.addEventListener("click", () => {
@@ -4917,9 +4875,7 @@ ui.vidPrefMux?.addEventListener("click", () => {
     ui.vidPrefBurn?.classList.remove("active");
     ui.vidBurnToggle?.classList.remove("active");
   }
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-  vidUpdateActionButton();
+  vidInvalidateProcessed();
 });
 // Sync pref toggles with sidebar toggles (burn)
 ui.vidPrefBurn?.addEventListener("click", () => {
@@ -4931,9 +4887,7 @@ ui.vidPrefBurn?.addEventListener("click", () => {
     ui.vidPrefMux?.classList.remove("active");
     ui.vidMuxToggle?.classList.remove("active");
   }
-  vidProcessedData = null;
-  if (vidProcessedUrl) { URL.revokeObjectURL(vidProcessedUrl); vidProcessedUrl = null; }
-  vidUpdateActionButton();
+  vidInvalidateProcessed();
 });
 
 // Reverse sync: sidebar → settings panel for toggles

@@ -13,11 +13,14 @@
   --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --highlight-color: var(--accent);
 
+  /* Semantic colors */
+  --color-success: #00c853;
+  --color-danger: #e53935;
+  --color-danger-hover: #c62828;
+
   /* Legacy aliases so archive panel, file preview etc. keep working */
   --primary-color: var(--accent);
   --primary-light: var(--accent-hover);
-  --radius-lg: 14px;
-  --radius-md: 10px;
   --radius-xl: 18px;
 }
 
@@ -595,93 +598,60 @@ textarea:focus-visible {
 #back-to-home.hidden { display: none; }
 
 /* ── Tool view visibility ── */
+
+/* Home page: hide all shared convert elements and tool pages */
 .tool-view-hidden #file-area,
 .tool-view-hidden #archive-panel,
 .tool-view-hidden #output-tray,
 .tool-view-hidden #format-containers,
 .tool-view-hidden #convert-button,
 .tool-view-hidden .tool-page {
-  display: none !important;
+  display: none;
 }
 
-body[data-tool="compress"] #file-area,
-body[data-tool="compress"] #archive-panel,
+/* Tool pages are shown/hidden via .hidden class in JS (see .tool-page.hidden rule).
+   Shared convert elements default to visible; hide them per-tool below. */
+
+/* #format-containers: only shown for "convert" tool */
 body[data-tool="compress"] #format-containers,
 body[data-tool="image"] #format-containers,
 body[data-tool="video"] #format-containers,
 body[data-tool="speech"] #format-containers,
 body[data-tool="summarize"] #format-containers,
 body[data-tool="ocr"] #format-containers,
-body[data-tool="pdf-editor"] #format-containers { display: none !important; }
-body[data-tool="compress"] #image-page,
-body[data-tool="compress"] #video-page,
-body[data-tool="compress"] #speech-page,
-body[data-tool="compress"] #summarize-page,
-body[data-tool="compress"] #ocr-page,
-body[data-tool="compress"] #pdf-editor-page,
-body[data-tool="image"] #compress-page,
-body[data-tool="image"] #video-page,
-body[data-tool="image"] #speech-page,
-body[data-tool="image"] #summarize-page,
-body[data-tool="image"] #ocr-page,
-body[data-tool="image"] #pdf-editor-page,
-body[data-tool="video"] #compress-page,
-body[data-tool="video"] #image-page,
-body[data-tool="video"] #speech-page,
-body[data-tool="video"] #summarize-page,
-body[data-tool="video"] #ocr-page,
-body[data-tool="video"] #pdf-editor-page,
-body[data-tool="speech"] #compress-page,
-body[data-tool="speech"] #image-page,
-body[data-tool="speech"] #video-page,
-body[data-tool="speech"] #summarize-page,
-body[data-tool="speech"] #ocr-page,
-body[data-tool="speech"] #pdf-editor-page,
-body[data-tool="summarize"] #compress-page,
-body[data-tool="summarize"] #image-page,
-body[data-tool="summarize"] #video-page,
-body[data-tool="summarize"] #speech-page,
-body[data-tool="summarize"] #ocr-page,
-body[data-tool="summarize"] #pdf-editor-page,
-body[data-tool="ocr"] #compress-page,
-body[data-tool="ocr"] #image-page,
-body[data-tool="ocr"] #video-page,
-body[data-tool="ocr"] #speech-page,
-body[data-tool="ocr"] #summarize-page,
-body[data-tool="ocr"] #pdf-editor-page,
-body[data-tool="pdf-editor"] #compress-page,
-body[data-tool="pdf-editor"] #image-page,
-body[data-tool="pdf-editor"] #video-page,
-body[data-tool="pdf-editor"] #speech-page,
-body[data-tool="pdf-editor"] #summarize-page,
-body[data-tool="pdf-editor"] #ocr-page,
-body[data-tool="convert"] #compress-page,
-body[data-tool="convert"] #image-page,
-body[data-tool="convert"] #video-page,
-body[data-tool="convert"] #speech-page,
-body[data-tool="convert"] #summarize-page,
-body[data-tool="convert"] #ocr-page,
-body[data-tool="convert"] #pdf-editor-page { display: none !important; }
-body[data-tool="video"] #file-area { display: none !important; }
-body[data-tool="video"] #archive-panel { display: none !important; }
-body[data-tool="video"] #output-tray { display: none !important; }
-body[data-tool="video"] #convert-button { display: none !important; }
-body[data-tool="speech"] #file-area { display: none !important; }
-body[data-tool="speech"] #archive-panel { display: none !important; }
-body[data-tool="speech"] #output-tray { display: none !important; }
-body[data-tool="speech"] #convert-button { display: none !important; }
-body[data-tool="summarize"] #file-area { display: none !important; }
-body[data-tool="summarize"] #archive-panel { display: none !important; }
-body[data-tool="summarize"] #output-tray { display: none !important; }
-body[data-tool="summarize"] #convert-button { display: none !important; }
-body[data-tool="ocr"] #file-area { display: none !important; }
-body[data-tool="ocr"] #archive-panel { display: none !important; }
-body[data-tool="ocr"] #output-tray { display: none !important; }
-body[data-tool="ocr"] #convert-button { display: none !important; }
-body[data-tool="pdf-editor"] #file-area { display: none !important; }
-body[data-tool="pdf-editor"] #archive-panel { display: none !important; }
-body[data-tool="pdf-editor"] #output-tray { display: none !important; }
-body[data-tool="pdf-editor"] #convert-button { display: none !important; }
+body[data-tool="pdf-editor"] #format-containers {
+  display: none;
+}
+
+/* "compress" hides file-area and archive-panel (has its own drop zone) */
+body[data-tool="compress"] #file-area,
+body[data-tool="compress"] #archive-panel {
+  display: none;
+}
+
+/* Full-page tools: hide all shared convert elements */
+body[data-tool="video"] #file-area,
+body[data-tool="video"] #archive-panel,
+body[data-tool="video"] #output-tray,
+body[data-tool="video"] #convert-button,
+body[data-tool="speech"] #file-area,
+body[data-tool="speech"] #archive-panel,
+body[data-tool="speech"] #output-tray,
+body[data-tool="speech"] #convert-button,
+body[data-tool="summarize"] #file-area,
+body[data-tool="summarize"] #archive-panel,
+body[data-tool="summarize"] #output-tray,
+body[data-tool="summarize"] #convert-button,
+body[data-tool="ocr"] #file-area,
+body[data-tool="ocr"] #archive-panel,
+body[data-tool="ocr"] #output-tray,
+body[data-tool="ocr"] #convert-button,
+body[data-tool="pdf-editor"] #file-area,
+body[data-tool="pdf-editor"] #archive-panel,
+body[data-tool="pdf-editor"] #output-tray,
+body[data-tool="pdf-editor"] #convert-button {
+  display: none;
+}
 
 /* =========================================
    TOOL PAGES — shared layout
@@ -1670,7 +1640,7 @@ body[data-tool="pdf-editor"] #convert-button { display: none !important; }
 .file-preview-header span {
   font-weight: 700;
   font-size: 1rem;
-  color: #00c853;
+  color: var(--color-success);
 }
 
 /* Scrollable grid of file thumbnails */
@@ -1708,7 +1678,7 @@ body[data-tool="pdf-editor"] #convert-button { display: none !important; }
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #e53935;
+  background: var(--color-danger);
   color: white;
   border: none;
   font-size: 12px;
@@ -1722,7 +1692,7 @@ body[data-tool="pdf-editor"] #convert-button { display: none !important; }
   transition: background var(--transition);
 }
 .file-remove-btn:hover {
-  background: #c62828;
+  background: var(--color-danger-hover);
 }
 
 /* Thumbnail box */
@@ -3623,12 +3593,12 @@ body[data-tool="image"] #convert-button { display: none !important; }
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #e74c3c;
+  background: var(--color-danger);
   flex-shrink: 0;
 }
 .speech-record-btn.recording {
-  border-color: #e74c3c;
-  background: rgba(231, 76, 60, 0.06);
+  border-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 6%, transparent);
 }
 .speech-record-btn.recording .speech-record-dot {
   animation: speech-pulse 1.2s ease-in-out infinite;
@@ -4639,7 +4609,7 @@ body.ocr-tts-active .ocr-tts-overlay {
   background: var(--accent);
 }
 .pde-thumb-remove:hover {
-  background: #e74c3c !important;
+  background: var(--color-danger) !important;
 }
 .pde-thumb-merge {
   border-left: 3px solid var(--accent);

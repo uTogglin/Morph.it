@@ -12,6 +12,24 @@
 </head>
 <body>
 
+  <!-- Shared SVG icon definitions -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <defs>
+      <symbol id="icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+      </symbol>
+      <symbol id="icon-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </symbol>
+      <symbol id="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>
+      </symbol>
+    </defs>
+  </svg>
+
   <input id="file-input" type="file" multiple>
 
   <a id="commit-id" href="https://github.com/p2r3/convert"></a>
@@ -46,10 +64,7 @@
         <span id="log-badge" class="log-badge hidden">0</span>
       </button>
       <button id="settings-toggle" title="Settings">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
+        <svg width="20" height="20"><use href="#icon-gear"/></svg>
       </button>
     </div>
   </header>
@@ -107,7 +122,7 @@
         </div>
         <span class="home-card-tag">Most popular</span>
         <span class="home-card-arrow">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
       <button class="home-card" data-tool="compress">
@@ -125,7 +140,7 @@
         </div>
         <span class="home-card-tag">Video</span>
         <span class="home-card-arrow">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
       <button class="home-card" data-tool="image">
@@ -142,7 +157,7 @@
         </div>
         <span class="home-card-tag">Batch edit</span>
         <span class="home-card-arrow">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
       <button class="home-card" data-tool="video">
@@ -158,7 +173,7 @@
         </div>
         <span class="home-card-tag">Trim & merge</span>
         <span class="home-card-arrow">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
       <button class="home-card" data-tool="speech">
@@ -176,7 +191,7 @@
         </div>
         <span class="home-card-tag">TTS & STT</span>
         <span class="home-card-arrow">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
       <button class="home-card" data-tool="summarize">
@@ -195,7 +210,7 @@
         </div>
         <span class="home-card-tag">Docs & URLs</span>
         <span class="home-card-arrow">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
       <button class="home-card" data-tool="ocr">
@@ -214,7 +229,7 @@
         </div>
         <span class="home-card-tag">Scan to text</span>
         <span class="home-card-arrow">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
       <button class="home-card" data-tool="pdf-editor">
@@ -230,7 +245,7 @@
         </div>
         <span class="home-card-tag">Sign & annotate</span>
         <span class="home-card-arrow">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
     </div>
@@ -262,7 +277,7 @@
       <h2 class="sm-title">Settings</h2>
       <nav class="sm-nav">
         <button class="sm-nav-btn active" data-panel="convert">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg width="16" height="16"><use href="#icon-gear"/></svg>
           General
         </button>
         <button class="sm-nav-btn" data-panel="compress">
@@ -309,15 +324,15 @@
           <span class="sm-label">Output</span>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Auto-download</span>
-            <button id="auto-download-toggle" class="sm-switch" role="switch"></button>
+            <button id="auto-download-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Archive multi-file output</span>
-            <button id="archive-multi-toggle" class="sm-switch" role="switch"></button>
+            <button id="archive-multi-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Apply edits to all files</span>
-            <button id="apply-all-toggle" class="sm-switch" role="switch"></button>
+            <button id="apply-all-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <p class="sm-hint">When enabled, current settings are applied to every loaded file during processing.</p>
         </div>
@@ -325,14 +340,14 @@
           <span class="sm-label">Privacy</span>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Privacy mode</span>
-            <button id="privacy-toggle" class="sm-switch" role="switch"></button>
+            <button id="privacy-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
         </div>
         <div class="sm-group">
           <span class="sm-label">Storage</span>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Cache AI models locally</span>
-            <button id="cache-models-toggle" class="sm-switch" role="switch"></button>
+            <button id="cache-models-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <p class="sm-hint">Keep downloaded AI models &amp; WASM libraries in your browser's Cache Storage so they load instantly on future visits.</p>
         </div>
@@ -394,7 +409,7 @@
             <span class="sm-label">Output format</span>
             <label class="sm-switch-row">
             <span class="sm-switch-label">WebM mode</span>
-            <button id="webm-mode-toggle" class="sm-switch" role="switch"></button>
+            <button id="webm-mode-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
             <p id="webm-hint" class="sm-hint hidden">Tries VP9 first for faster, smaller files. Output will be .webm.</p>
           </div>
@@ -428,7 +443,7 @@
           <button id="bg-mode-toggle" class="sm-btn">Mode: Local</button>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Correction</span>
-            <button id="bg-correction-toggle" class="sm-switch" role="switch"></button>
+            <button id="bg-correction-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <div id="bg-api-key-row" class="hidden">
             <input type="password" id="bg-api-key" placeholder="remove.bg API key" autocomplete="off">
@@ -440,14 +455,14 @@
           <button id="inpaint-model-toggle" class="sm-btn">Model: MI-GAN</button>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Feather mask edges</span>
-            <button id="inpaint-feather-toggle" class="sm-switch" role="switch"></button>
+            <button id="inpaint-feather-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
         </div>
         <div class="sm-group">
           <span class="sm-label">Rescale</span>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Rescale images</span>
-            <button id="rescale-toggle" class="sm-switch" role="switch"></button>
+            <button id="rescale-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <div id="rescale-options" class="hidden">
             <div class="sm-size-row">
@@ -575,7 +590,7 @@
           <span class="sm-label">URL Fetching</span>
           <label class="sm-switch-row">
             <span class="sm-switch-label">CORS proxy</span>
-            <button id="sm-sum-cors-proxy" class="sm-switch" role="switch"></button>
+            <button id="sm-sum-cors-proxy" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <p class="sm-hint">Most websites block cross-origin requests. Enable this to route URL fetches through a third-party proxy (allorigins.win). Your requested URL will be sent to that server.</p>
         </div>
@@ -647,7 +662,7 @@
           <span class="sm-label">Audio</span>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Remove audio</span>
-            <button id="vid-pref-remove-audio" class="sm-switch" role="switch"></button>
+            <button id="vid-pref-remove-audio" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <p class="sm-hint">5-band equalizer available per video in the editor sidebar.</p>
         </div>
@@ -655,15 +670,15 @@
           <span class="sm-label">Subtitles</span>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Remove subtitles</span>
-            <button id="vid-pref-remove-subs" class="sm-switch" role="switch"></button>
+            <button id="vid-pref-remove-subs" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Mux as track</span>
-            <button id="vid-pref-mux" class="sm-switch" role="switch"></button>
+            <button id="vid-pref-mux" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <label class="sm-switch-row">
             <span class="sm-switch-label">Burn onto video</span>
-            <button id="vid-pref-burn" class="sm-switch" role="switch"></button>
+            <button id="vid-pref-burn" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
           <p class="sm-hint">Supports SRT, ASS, VTT, and SSA formats.</p>
         </div>
@@ -904,7 +919,7 @@
                 <button id="vid-merge-add" class="sm-btn">+ Add video</button>
                 <label class="sm-switch-row">
                   <span class="sm-switch-label">Re-encode</span>
-                  <button id="vid-merge-reencode" class="sm-switch" role="switch"></button>
+                  <button id="vid-merge-reencode" class="sm-switch" role="switch" aria-checked="false"></button>
                 </label>
                 <p class="sm-hint">Enable re-encode for files with different codecs.</p>
               </div>
@@ -937,7 +952,7 @@
           <div class="vid-settings-group">
             <label class="sm-switch-row">
               <span class="sm-switch-label">Crop</span>
-              <button id="vid-crop-toggle" class="sm-switch" role="switch"></button>
+              <button id="vid-crop-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
             </label>
             <div class="vid-crop-presets">
               <button class="vid-crop-preset" data-ratio="16:9">16:9</button>
@@ -947,7 +962,7 @@
             </div>
             <label class="sm-switch-row">
               <span class="sm-switch-label">Lock aspect ratio</span>
-              <button id="vid-crop-lock-ratio" class="sm-switch" role="switch"></button>
+              <button id="vid-crop-lock-ratio" class="sm-switch" role="switch" aria-checked="false"></button>
             </label>
             <div class="vid-collapsible" id="vid-crop-manual-collapsible">
               <button id="vid-crop-manual-toggle" class="vid-collapsible-header">
@@ -983,7 +998,7 @@
             <span class="sm-label">Audio</span>
             <label class="sm-switch-row">
               <span class="sm-switch-label">Remove audio</span>
-              <button id="vid-remove-audio" class="sm-switch" role="switch"></button>
+              <button id="vid-remove-audio" class="sm-switch" role="switch" aria-checked="false"></button>
             </label>
             <div class="vid-collapsible" id="vid-eq-collapsible">
               <button id="vid-eq-toggle" class="vid-collapsible-header">
@@ -1038,7 +1053,7 @@
                 </div>
                 <label class="sm-switch-row">
                   <span class="sm-switch-label">Remove subtitles</span>
-                  <button id="vid-remove-subs" class="sm-switch" role="switch"></button>
+                  <button id="vid-remove-subs" class="sm-switch" role="switch" aria-checked="false"></button>
                 </label>
                 <div class="vid-collapsible" id="vid-add-subs-collapsible">
                   <button id="vid-add-subs-toggle" class="vid-collapsible-header">
@@ -1050,11 +1065,11 @@
                     <span id="vid-sub-file-name" class="vid-sub-file-name"></span>
                     <label class="sm-switch-row">
                       <span class="sm-switch-label">Mux (embed as track)</span>
-                      <button id="vid-mux-toggle" class="sm-switch" role="switch"></button>
+                      <button id="vid-mux-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
                     </label>
                     <label class="sm-switch-row">
                       <span class="sm-switch-label">Burn (hardcode)</span>
-                      <button id="vid-burn-toggle" class="sm-switch" role="switch"></button>
+                      <button id="vid-burn-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
                     </label>
                   </div>
                 </div>
@@ -1313,7 +1328,7 @@
           <div class="speech-stt-output-header">
             <span class="speech-stt-output-label">Transcription</span>
             <button id="speech-stt-copy" class="speech-copy-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <svg width="14" height="14"><use href="#icon-copy"/></svg>
               Copy
             </button>
           </div>
@@ -1348,7 +1363,7 @@
             </button>
           </div>
           <button id="speech-download-mp3" class="ocr-download-audio-btn" title="Download Audio">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <svg width="16" height="16"><use href="#icon-download"/></svg>
             Download Audio
           </button>
         </div>
@@ -1459,11 +1474,11 @@
           <span class="speech-stt-output-label">Summary</span>
           <div class="sum-output-actions">
             <button id="sum-copy-btn" class="speech-copy-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <svg width="14" height="14"><use href="#icon-copy"/></svg>
               Copy
             </button>
             <button id="sum-download-btn" class="speech-copy-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <svg width="14" height="14"><use href="#icon-download"/></svg>
               Download
             </button>
             <button id="sum-read-aloud-btn" class="speech-copy-btn">
@@ -1549,7 +1564,7 @@
           Extract Text
         </button>
         <button class="ocr-settings-btn tool-page-settings-link" data-open-panel="ocr" title="Settings">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg width="18" height="18"><use href="#icon-gear"/></svg>
         </button>
       </div>
 
@@ -1583,11 +1598,11 @@
             <span class="speech-stt-output-label">Extracted Text</span>
             <div class="sum-output-actions">
               <button id="ocr-copy-btn" class="speech-copy-btn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                <svg width="14" height="14"><use href="#icon-copy"/></svg>
                 Copy
               </button>
               <button id="ocr-download-btn" class="speech-copy-btn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <svg width="14" height="14"><use href="#icon-download"/></svg>
                 Download
               </button>
               <button id="ocr-read-aloud-btn" class="speech-copy-btn">
@@ -1635,7 +1650,7 @@
             </button>
           </div>
           <button id="ocr-download-audio-btn" class="ocr-download-audio-btn" title="Download Audio">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <svg width="16" height="16"><use href="#icon-download"/></svg>
             Download Audio
           </button>
         </div>
@@ -1726,7 +1741,7 @@
           <span>Export Images</span>
         </button>
         <button id="pde-download" class="pde-download-btn" title="Download PDF">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <svg width="16" height="16"><use href="#icon-download"/></svg>
           <span>Download</span>
         </button>
       </div>

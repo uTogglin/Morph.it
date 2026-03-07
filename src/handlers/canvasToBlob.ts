@@ -34,7 +34,7 @@ class canvasToBlobHandler implements FormatHandler {
   ): Promise<FileData[]> {
 
     if (!this.#canvas || !this.#ctx) {
-      throw "Handler not initialized.";
+      throw new Error("Handler not initialized.");
     }
 
     const outputFiles: FileData[] = [];

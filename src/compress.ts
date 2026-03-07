@@ -6,6 +6,25 @@ import { cdnUrl, cdnFetch } from "./cdn.ts";
 
 const escHtml = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
+/** Build the standard HTML for the compression progress popup */
+function buildProgressPopupHtml(heading: string, fileName?: string, subtitle?: string): string {
+  return `<h2>${heading}</h2>` +
+    (fileName ? `<p>${escHtml(fileName)}</p>` : '') +
+    (subtitle ? `<p style="color:var(--text-muted);font-size:0.85rem">${subtitle}</p>` : '') +
+    `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
+      `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
+    `</div>` +
+    `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`;
+}
+
+/** Update the progress bar and percentage label in the compression popup */
+function updateProgressBar(pct: number): void {
+  const bar = document.getElementById("compress-progress-bar");
+  const label = document.getElementById("compress-progress-pct");
+  if (bar) bar.style.width = pct + "%";
+  if (label) label.textContent = Math.round(pct) + "%";
+}
+
 /** Coerce FFmpeg readFile result to Uint8Array without unnecessary copies */
 function ensureUint8Array(data: Uint8Array | string): Uint8Array {
   return typeof data === 'string' ? new TextEncoder().encode(data) : data;
@@ -90,10 +109,7 @@ async function ffExecWithProgress(args: string[], _totalDuration: number, _label
   const onProgress = (e: any) => {
     if ((e.progress ?? 0) > 0) progressMoved = true;
     const pct = Math.min(Math.round((e.progress ?? 0) * 100), 99);
-    const bar = document.getElementById("compress-progress-bar");
-    const pctEl = document.getElementById("compress-progress-pct");
-    if (bar) bar.style.width = pct + "%";
-    if (pctEl) pctEl.textContent = pct + "%";
+    updateProgressBar(pct);
   };
 
   // Also parse time= from log as fallback (some ffmpeg.wasm versions)
@@ -104,10 +120,7 @@ async function ffExecWithProgress(args: string[], _totalDuration: number, _label
       if (current > 0) progressMoved = true;
       if (_totalDuration > 0) {
         const pct = Math.min(Math.round((current / _totalDuration) * 100), 99);
-        const bar = document.getElementById("compress-progress-bar");
-        const pctEl = document.getElementById("compress-progress-pct");
-        if (bar) bar.style.width = pct + "%";
-        if (pctEl) pctEl.textContent = pct + "%";
+        updateProgressBar(pct);
       }
     }
   };
@@ -223,10 +236,7 @@ async function compressImage(file: FileData, targetBytes: number, mode: "auto" |
 
   const updateProgress = async (step: number, total: number) => {
     const pct = Math.round((step / total) * 100);
-    const bar = document.getElementById("compress-progress-bar");
-    const pctEl = document.getElementById("compress-progress-pct");
-    if (bar) bar.style.width = pct + "%";
-    if (pctEl) pctEl.textContent = pct + "%";
+    updateProgressBar(pct);
     await yieldToBrowser();
   };
 
@@ -383,10 +393,7 @@ async function compressGif(file: FileData, targetBytes: number): Promise<FileDat
     for (const scale of scales) {
       attempt++;
       const pct = Math.min(Math.round((attempt / totalAttempts) * 100), 99);
-      const bar = document.getElementById("compress-progress-bar");
-      const pctEl = document.getElementById("compress-progress-pct");
-      if (bar) bar.style.width = pct + "%";
-      if (pctEl) pctEl.textContent = pct + "%";
+      updateProgressBar(pct);
 
       const vf = scale < 1
         ? `fps=${fps},scale=iw*${scale}:ih*${scale}:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse`
@@ -436,13 +443,7 @@ async function compressVideo(
     if (result !== null) return result;
     console.info(`WebCodecs unavailable for "${file.name}", falling back to ffmpeg.wasm`);
     await showCompressPopup(
-      `<h2>Falling back to software encoding...</h2>` +
-      `<p>${escHtml(file.name)}</p>` +
-      `<p style="color:var(--text-muted);font-size:0.85rem">WebCodecs couldn't hit target size. Using ffmpeg for tighter control.</p>` +
-      `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
-        `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
-      `</div>` +
-      `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`
+      buildProgressPopupHtml("Falling back to software encoding...", file.name, "WebCodecs couldn't hit target size. Using ffmpeg for tighter control.")
     );
   }
 
@@ -497,13 +498,7 @@ async function compressVideo(
       if (codec === "h265" && !isWebM) {
         console.warn(`H.265 encoding failed for "${file.name}", falling back to H.264:`, e);
         await showCompressPopup(
-          `<h2>H.265 failed, falling back to H.264...</h2>` +
-          `<p>${escHtml(file.name)}</p>` +
-          `<p style="color:var(--text-muted);font-size:0.85rem">H.265 is not supported in this browser build. Re-encoding with H.264 instead.</p>` +
-          `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
-            `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
-          `</div>` +
-          `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`
+          buildProgressPopupHtml("H.265 failed, falling back to H.264...", file.name, "H.265 is not supported in this browser build. Re-encoding with H.264 instead.")
         );
         await reloadFFmpeg();
         return compressVideo(file, targetBytes, encoderSpeed, crf, "h264");
@@ -558,13 +553,7 @@ async function compressVideo(
     if (codec === "h265" && !isWebM) {
       console.warn(`H.265 compression failed for "${file.name}", falling back to H.264:`, e);
       await showCompressPopup(
-        `<h2>H.265 failed, falling back to H.264...</h2>` +
-        `<p>${escHtml(file.name)}</p>` +
-        `<p style="color:var(--text-muted);font-size:0.85rem">H.265 is not supported in this browser build. Compressing with H.264 instead.</p>` +
-        `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
-          `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
-        `</div>` +
-        `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`
+        buildProgressPopupHtml("H.265 failed, falling back to H.264...", file.name, "H.265 is not supported in this browser build. Compressing with H.264 instead.")
       );
       await reloadFFmpeg();
       return compressVideo(file, targetBytes, encoderSpeed, crf, "h264");
@@ -590,13 +579,7 @@ async function compressVideo(
     // ffmpeg couldn't hit target — try VP9 as last resort (changes format to WebM)
     if (targetBytes > 0 && isWebCodecsAvailable()) {
       await showCompressPopup(
-        `<h2>Trying VP9 codec (last resort)...</h2>` +
-        `<p>${escHtml(file.name)}</p>` +
-        `<p style="color:var(--text-muted);font-size:0.85rem">Original codec couldn't hit target. Trying VP9 — output will be WebM.</p>` +
-        `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
-          `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
-        `</div>` +
-        `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`
+        buildProgressPopupHtml("Trying VP9 codec (last resort)...", file.name, "Original codec couldn't hit target. Trying VP9 — output will be WebM.")
       );
       const vp9Result = await compressVideoVP9(file, targetBytes);
       if (vp9Result) return vp9Result;
@@ -726,17 +709,14 @@ export async function applyFileCompression(
     const type = getMediaType(f.name);
     const sizeMB = (f.bytes.length / 1024 / 1024).toFixed(1);
 
-    const heading = isReencode
-      ? `<h2>Re-encoding video...</h2><p>${escHtml(f.name)} (${sizeMB} MB)</p>`
-      : `<h2>Compressing ${type}...</h2><p>${escHtml(f.name)} (${sizeMB} MB → ${targetMB} MB)</p>`;
+    const headingText = isReencode ? "Re-encoding video..." : `Compressing ${type}...`;
+    const fileLabel = isReencode
+      ? `${f.name} (${sizeMB} MB)`
+      : `${f.name} (${sizeMB} MB → ${targetMB} MB)`;
+    const subtitle = toProcess.length > 1 ? `File ${idx} of ${toProcess.length}` : undefined;
 
     await showCompressPopup(
-      heading +
-      (toProcess.length > 1 ? `<p style="color:var(--text-muted);font-size:0.85rem">File ${idx} of ${toProcess.length}</p>` : "") +
-      `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
-        `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
-      `</div>` +
-      `<p id="compress-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>`
+      buildProgressPopupHtml(headingText, fileLabel, subtitle)
     );
 
     switch (type) {

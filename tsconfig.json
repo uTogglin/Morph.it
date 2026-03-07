@@ -21,6 +21,7 @@
     "allowJs": true,
     /* Linting */
     "strict": true,
+    "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     /* Temporary fix!!! This is only really a problem in dependencies. */
