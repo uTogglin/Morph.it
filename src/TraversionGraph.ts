@@ -36,11 +36,11 @@ const LOSSY_COST_MULTIPLIER : number = 1.4; // Cost multiplier for lossy convers
 const HANDLER_PRIORITY_COST : number = 0.02; // Cost multiplier for handler priority. Higher values will make the algorithm prefer handlers with higher priority more strongly.
 const FORMAT_PRIORITY_COST : number = 0.05; // Cost multiplier for format priority. Higher values will make the algorithm prefer formats with higher priority more strongly.
 
-const LOG_FREQUENCY = 1000;
+const LOG_FREQUENCY = 5000;
 /** Yield to the browser event loop every this many iterations to stay responsive */
-const YIELD_EVERY = 200;
+const YIELD_EVERY = 4000;
 /** Hard cap on search iterations — avoids infinite hang when no route exists. */
-const MAX_SEARCH_ITERATIONS = 500_000;
+const MAX_SEARCH_ITERATIONS = 2_000_000;
 
 export interface Node {
     identifier: string;
@@ -233,6 +233,13 @@ export class TraversionGraph {
             });
             handlerIndex++;
         });
+        // Precompute minimum costs for a tighter A* heuristic
+        if (this.edges.length > 0) {
+            this.minEdgeCost = this.edges.reduce((min, e) => Math.min(min, e.cost), Infinity);
+        }
+        if (this.categoryChangeCosts.length > 0) {
+            this.minCategoryChangeCost = this.categoryChangeCosts.reduce((min, c) => Math.min(min, c.cost), Infinity);
+        }
         const endTime = performance.now();
         console.log(`Traversion graph initialized in ${(endTime - startTime).toFixed(2)} ms with ${this.nodes.length} nodes and ${this.edges.length} edges.`);
     }
@@ -342,19 +349,25 @@ export class TraversionGraph {
         this.listeners.forEach(l => l(state, path));
     }
 
+    /** Precomputed minimum edge cost across the entire graph for tighter heuristic bounds */
+    private minEdgeCost: number = DEPTH_COST;
+    /** Precomputed minimum category-change cost for cross-category heuristic */
+    private minCategoryChangeCost: number = DEFAULT_CATEGORY_CHANGE_COST;
+
     /**
      * A* heuristic: estimates minimum remaining cost from `current` to `target`.
      * Admissible: never overestimates (uses the minimum possible cost per step).
-     * Guides search toward the target category, dramatically reducing iterations.
+     * Uses precomputed minimum costs for tighter bounds, guiding A* to explore
+     * fewer irrelevant nodes and find paths faster.
      */
     private heuristic(current: FileFormat, target: FileFormat): number {
-        if (current.mime === target.mime) return 0;
+        if (current.mime === target.mime && current.format === target.format) return 0;
         const currentCats = [current.category ?? current.mime.split("/")[0]].flat();
         const targetCats = [target.category ?? target.mime.split("/")[0]].flat();
-        // If already in the same category as target, cost within DEPTH_COST range
-        if (currentCats.some(c => targetCats.includes(c))) return DEPTH_COST;
-        // Different category — estimate one extra conversion step plus min category change cost
-        return DEPTH_COST + DEFAULT_CATEGORY_CHANGE_COST;
+        // Same category — at least one conversion step at minimum edge cost
+        if (currentCats.some(c => targetCats.includes(c))) return this.minEdgeCost;
+        // Different category — one step to bridge categories + the category change cost
+        return this.minEdgeCost + this.minCategoryChangeCost;
     }
 
     public async* searchPath(from: ConvertPathNode, to: ConvertPathNode, simpleMode: boolean) : AsyncGenerator<ConvertPathNode[]> {
