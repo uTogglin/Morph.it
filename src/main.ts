@@ -734,8 +734,16 @@ ui.settingsOverlay.addEventListener("click", closeSettings);
 document.getElementById("settings-close-btn")?.addEventListener("click", closeSettings);
 window.addEventListener("keydown", e => {
   if (e.key === "Escape") {
-    if (!ui.settingsModal.classList.contains("hidden")) closeSettings();
-    if (!ui.logsPopout.classList.contains("hidden")) closeLogs();
+    // Priority 1: close settings / logs modals
+    if (!ui.settingsModal.classList.contains("hidden")) { closeSettings(); return; }
+    if (!ui.logsPopout.classList.contains("hidden")) { closeLogs(); return; }
+    // Priority 2: close TTS overlay (back to tool page)
+    const ocrTtsOverlay = document.getElementById("ocr-tts-overlay");
+    const speechTtsOverlay = document.getElementById("speech-tts-overlay");
+    if (activeTool === "ocr" && ocrTtsOverlay && !ocrTtsOverlay.classList.contains("hidden")) { ocrTool.stopTts(); return; }
+    if (activeTool === "speech" && speechTtsOverlay && !speechTtsOverlay.classList.contains("hidden")) { speechTool.stopTts(); return; }
+    // Priority 3: go back to home from any tool page
+    if (activeTool !== null) { showHomePage(); return; }
   }
 });
 
