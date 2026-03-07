@@ -99,6 +99,7 @@
     "tesseract.js": "^5.1.1",
     "pdf-lib": "^1.17.1",
     "fabric": "^6.6.1",
-    "onnxruntime-web": "1.21.0"
+    "onnxruntime-web": "1.21.0",
+    "heic-convert": "^2.1.0"
   }
 }

@@ -60,6 +60,7 @@ import otaHandler from "./ota.ts";
 import comicsHandler from "./comics.ts";
 import terrariaWldHandler from "./terrariawld.ts";
 import ArchiveHandler from "./archive.ts";
+import heicHandler from "./heic.ts";
 
 const handlers: FormatHandler[] = [];
 try { handlers.push(new svgTraceHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
@@ -125,5 +126,6 @@ try { handlers.push(new otaHandler()) } catch (e) { console.warn("Failed to init
 try { handlers.push(new comicsHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
 try { handlers.push(new terrariaWldHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
 try { handlers.push(new ArchiveHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new heicHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
 
 export default handlers;
