@@ -430,8 +430,6 @@ export class TraversionGraph {
             }
 
             if (current.index === toIndex) {
-                // Skip paths through known dead ends (Infinity cost)
-                if (!isFinite(current.gcost)) continue;
                 // Reconstruct the full path from parent pointers
                 const path = TraversionGraph.reconstructPath(current);
                 // Return the path of handlers and formats to get from the input format to the output format
