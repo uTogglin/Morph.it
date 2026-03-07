@@ -65,6 +65,28 @@ class ImageMagickHandler implements FormatHandler {
       });
     });
 
+    // ====== Camera RAW formats (input-only) ======
+    // ImageMagick WASM may not report these in supportedFormats or they may
+    // lack a MIME type, so we add them explicitly as input-only entries.
+    const rawFormats: FileFormat[] = [
+      CommonFormats.DNG.builder("DNG").allowFrom().markLossless(),
+      CommonFormats.CR2.builder("CR2").allowFrom().markLossless(),
+      CommonFormats.NEF.builder("NEF").allowFrom().markLossless(),
+      CommonFormats.ARW.builder("ARW").allowFrom().markLossless(),
+      CommonFormats.RAF.builder("RAF").allowFrom().markLossless(),
+      CommonFormats.ORF.builder("ORF").allowFrom().markLossless(),
+      CommonFormats.RW2.builder("RW2").allowFrom().markLossless(),
+      CommonFormats.CR3.builder("CR3").allowFrom().markLossless()
+    ];
+    for (const raw of rawFormats) {
+      const already = this.supportedFormats.some(
+        f => f.format === raw.format || f.extension === raw.extension
+      );
+      if (!already) {
+        this.supportedFormats.push(raw);
+      }
+    }
+
     // ====== Manual fine-tuning ======
 
     const prioritize = ["png", "jpeg", "gif", "pdf"];

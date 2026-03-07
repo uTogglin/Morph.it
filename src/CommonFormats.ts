@@ -300,6 +300,63 @@ const CommonFormats = {
         "exe",
         "application/vnd.microsoft.portable-executable",
         Category.CODE
+    ),
+    // camera RAW formats
+    DNG: new FormatDefinition(
+        "Adobe Digital Negative",
+        "dng",
+        "dng",
+        "image/x-adobe-dng",
+        Category.IMAGE
+    ),
+    CR2: new FormatDefinition(
+        "Canon RAW 2",
+        "cr2",
+        "cr2",
+        "image/x-canon-cr2",
+        Category.IMAGE
+    ),
+    NEF: new FormatDefinition(
+        "Nikon Electronic Format",
+        "nef",
+        "nef",
+        "image/x-nikon-nef",
+        Category.IMAGE
+    ),
+    ARW: new FormatDefinition(
+        "Sony Alpha RAW",
+        "arw",
+        "arw",
+        "image/x-sony-arw",
+        Category.IMAGE
+    ),
+    RAF: new FormatDefinition(
+        "Fujifilm RAW",
+        "raf",
+        "raf",
+        "image/x-fuji-raf",
+        Category.IMAGE
+    ),
+    ORF: new FormatDefinition(
+        "Olympus RAW Format",
+        "orf",
+        "orf",
+        "image/x-olympus-orf",
+        Category.IMAGE
+    ),
+    RW2: new FormatDefinition(
+        "Panasonic RAW",
+        "rw2",
+        "rw2",
+        "image/x-panasonic-rw2",
+        Category.IMAGE
+    ),
+    CR3: new FormatDefinition(
+        "Canon RAW 3",
+        "cr3",
+        "cr3",
+        "image/x-canon-cr3",
+        Category.IMAGE
     )
 }
 
