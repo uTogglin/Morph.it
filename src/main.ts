@@ -2924,6 +2924,37 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
 }
 
+/** Copy file bytes to clipboard (images only — converts to PNG for clipboard compat) */
+async function copyToClipboard(bytes: Uint8Array, mime: string): Promise<boolean> {
+  try {
+    let blob: Blob;
+    if (mime === "image/png") {
+      blob = new Blob([bytes], { type: "image/png" });
+    } else if (mime.startsWith("image/")) {
+      // Clipboard API only supports PNG; convert via canvas
+      const imgBlob = new Blob([bytes], { type: mime });
+      const bitmap = await createImageBitmap(imgBlob);
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas toBlob failed")), "image/png");
+      });
+    } else {
+      return false;
+    }
+    await navigator.clipboard.write([
+      new ClipboardItem({ [blob.type]: blob })
+    ]);
+    return true;
+  } catch (e) {
+    console.error("Copy to clipboard failed:", e);
+    return false;
+  }
+}
+
 /** Add a converted file to the output tray */
 function addToOutputTray(bytes: Uint8Array, name: string) {
   const blob = new Blob([bytes as BlobPart], { type: "application/octet-stream" });
@@ -2963,6 +2994,28 @@ function addToOutputTray(bytes: Uint8Array, name: string) {
     triggerDownload(blobUrl, name);
   };
   thumb.appendChild(dlBtn);
+
+  // Copy-to-clipboard button (images only)
+  if (imageExts.includes(ext) && typeof navigator.clipboard?.write === "function") {
+    const extToMime: Record<string, string> = {
+      png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+      gif: "image/gif", webp: "image/webp", bmp: "image/bmp",
+      svg: "image/svg+xml", ico: "image/x-icon", avif: "image/avif",
+    };
+    const mime = extToMime[ext] ?? "image/png";
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "output-copy-btn";
+    copyBtn.title = "Copy to clipboard";
+    copyBtn.textContent = "Copy";
+    copyBtn.onclick = async (e) => {
+      e.stopPropagation();
+      copyBtn.disabled = true;
+      const ok = await copyToClipboard(bytes, mime);
+      copyBtn.textContent = ok ? "Copied!" : "Failed";
+      setTimeout(() => { copyBtn.textContent = "Copy"; copyBtn.disabled = false; }, 1500);
+    };
+    thumb.appendChild(copyBtn);
+  }
 
   const nameEl = document.createElement("div");
   nameEl.className = "output-item-name";

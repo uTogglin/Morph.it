@@ -1955,6 +1955,35 @@ body[data-tool="pdf-editor"] #convert-button {
   background: var(--accent-hover);
 }
 
+.output-copy-btn {
+  position: absolute;
+  bottom: -2px;
+  left: -2px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: white;
+  border: 2px solid var(--surface-color);
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition);
+  z-index: 2;
+  white-space: nowrap;
+}
+.output-copy-btn:hover {
+  background: var(--accent-hover);
+}
+.output-copy-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
 /* =========================================
    5. MAIN LAYOUT
    ========================================= */
