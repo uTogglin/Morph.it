@@ -460,6 +460,90 @@ const ui = {
   compressFileInput: document.querySelector("#compress-file-input") as HTMLInputElement,
 };
 
+// ── Page transition helper ───────────────────────────────────────────────────
+function animatePageIn(el: HTMLElement) {
+  el.classList.remove("page-enter");
+  void el.offsetWidth; // force reflow so re-adding class restarts animation
+  el.classList.add("page-enter");
+  el.addEventListener("animationend", () => el.classList.remove("page-enter"), { once: true });
+}
+
+// ── Recent file history ─────────────────────────────────────────────────────
+interface RecentEntry { name: string; tool: string; time: number; }
+const RECENT_KEY = "convert-recent-files";
+const RECENT_MAX = 10;
+
+function getRecentFiles(): RecentEntry[] {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; }
+}
+function saveRecentFile(name: string, tool: string) {
+  const list = getRecentFiles();
+  list.unshift({ name, tool, time: Date.now() });
+  // Deduplicate by name+tool, keep latest
+  const seen = new Set<string>();
+  const deduped = list.filter(e => {
+    const key = e.name + "|" + e.tool;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(deduped.slice(0, RECENT_MAX))); } catch {}
+}
+
+const toolLabels: Record<string, string> = {
+  convert: "Convert", compress: "Compress", image: "Image Tools",
+  video: "Video Editor", speech: "Text & Speech", summarize: "Summarize",
+  ocr: "OCR", "pdf-editor": "PDF Editor",
+};
+const toolIcons: Record<string, string> = {
+  convert: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>',
+  compress: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="6" y1="10" x2="18" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/><line x1="10" y1="18" x2="14" y2="18"/></svg>',
+  image: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
+  video: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>',
+  speech: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>',
+  summarize: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+  ocr: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><circle cx="17.5" cy="17.5" r="3.5"/><line x1="22" y1="22" x2="20" y2="20"/></svg>',
+  "pdf-editor": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+};
+
+function renderRecentFiles() {
+  const container = document.getElementById("recent-history")!;
+  const list = document.getElementById("recent-list")!;
+  const entries = getRecentFiles();
+  if (entries.length === 0) { container.classList.add("hidden"); return; }
+  container.classList.remove("hidden");
+  list.innerHTML = "";
+  for (const entry of entries) {
+    const btn = document.createElement("button");
+    btn.className = "recent-item";
+    const ago = formatTimeAgo(entry.time);
+    btn.innerHTML = `
+      <div class="recent-item-icon">${toolIcons[entry.tool] || toolIcons.convert}</div>
+      <div class="recent-item-info">
+        <div class="recent-item-name">${escapeHtml(entry.name)}</div>
+        <div class="recent-item-meta">${escapeHtml(toolLabels[entry.tool] || entry.tool)}</div>
+      </div>
+      <span class="recent-item-time">${ago}</span>`;
+    btn.addEventListener("click", () => showToolView(entry.tool as any));
+    list.appendChild(btn);
+  }
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function formatTimeAgo(ts: number) {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
 // ── Home page / tool navigation ──────────────────────────────────────────────
 /** Which tool view is active, or null when on the home page */
 let activeTool: "convert" | "compress" | "image" | "video" | "speech" | "summarize" | "ocr" | "pdf-editor" | null = null;
@@ -493,6 +577,8 @@ function showHomePage() {
   summarizePage.classList.add("hidden");
   ocrPage.classList.add("hidden");
   pdfEditorPage.classList.add("hidden");
+  animatePageIn(ui.homePage);
+  renderRecentFiles();
 }
 
 function showToolView(tool: "convert" | "compress" | "image" | "video" | "speech" | "summarize" | "ocr" | "pdf-editor") {
@@ -516,8 +602,10 @@ function showToolView(tool: "convert" | "compress" | "image" | "video" | "speech
   ocrPage.classList.add("hidden");
   pdfEditorPage.classList.add("hidden");
 
+  let pageEl: HTMLElement | null = null;
   if (tool === "compress") {
     compressPage.classList.remove("hidden");
+    pageEl = compressPage;
     // Auto-enable compression — always on for compress tool
     if (!compressEnabled) {
       compressEnabled = true;
@@ -528,23 +616,39 @@ function showToolView(tool: "convert" | "compress" | "image" | "video" | "speech
     ui.compressWorkspace?.classList.add("hidden");
   } else if (tool === "image") {
     imagePage.classList.remove("hidden");
+    pageEl = imagePage;
     syncImageSettingsUI();
   } else if (tool === "video") {
     videoPage.classList.remove("hidden");
+    pageEl = videoPage;
   } else if (tool === "speech") {
     speechPage.classList.remove("hidden");
+    pageEl = speechPage;
   } else if (tool === "summarize") {
     summarizePage.classList.remove("hidden");
+    pageEl = summarizePage;
   } else if (tool === "ocr") {
     ocrPage.classList.remove("hidden");
+    pageEl = ocrPage;
   } else if (tool === "pdf-editor") {
     pdfEditorPage.classList.remove("hidden");
+    pageEl = pdfEditorPage;
+  } else if (tool === "convert") {
+    pageEl = document.getElementById("file-area");
   }
+  if (pageEl) animatePageIn(pageEl);
   updateProcessButton();
 }
 
 // Start on the home page
 document.body.classList.add("tool-view-hidden");
+renderRecentFiles();
+
+// Clear recent history
+document.getElementById("recent-clear")?.addEventListener("click", () => {
+  try { localStorage.removeItem(RECENT_KEY); } catch {}
+  renderRecentFiles();
+});
 
 // Back button
 ui.backToHome.addEventListener("click", showHomePage);
@@ -1444,8 +1548,12 @@ function applyTheme(theme: string) {
   setTimeout(() => document.documentElement.classList.remove("theme-transitioning"), 350);
 }
 try {
-  const savedTheme = localStorage.getItem("convert-theme") || "dark";
-  applyTheme(savedTheme);
+  const savedTheme = localStorage.getItem("convert-theme");
+  if (savedTheme) {
+    applyTheme(savedTheme);
+  } else {
+    applyTheme(window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  }
 } catch { applyTheme("dark"); }
 
 if (ui.themeToggle) {
@@ -2821,6 +2929,7 @@ function downloadFile(bytes: Uint8Array, name: string) {
     const blobUrl = outputTrayUrls[outputTrayUrls.length - 1];
     triggerDownload(blobUrl, name);
   }
+  saveRecentFile(name, activeTool || "convert");
 }
 
 /** Whether archive mode temporarily suspended queue grouping */
