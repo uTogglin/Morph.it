@@ -745,6 +745,7 @@ export function initSpeechTool() {
     seekThumb.style.left = `${pct}%`;
     timeCurrent.textContent = formatTime(audio.currentTime);
     timeDuration.textContent = formatTime(audio.duration);
+    if (audio.paused) updateWordHighlight();
   });
 
   audio.addEventListener("loadedmetadata", () => {

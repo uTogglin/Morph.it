@@ -523,6 +523,7 @@ export function initSummarizeTool() {
     seekThumb.style.left = `${pct}%`;
     timeCurrent.textContent = fmtTime(ttsAudio.currentTime);
     timeDuration.textContent = fmtTime(ttsAudio.duration);
+    if (ttsAudio.paused) updateHighlight();
   });
   ttsAudio.addEventListener("loadedmetadata", () => {
     timeCurrent.textContent = "0:00";
