@@ -2010,6 +2010,21 @@ if (ui.clearOutputBtn) {
 }
 
 let deadEndAttempts: ConvertPathNode[][];
+/** Number of routes tried in the last search — used for failure UI */
+let _lastSearchRoutesTried = 0;
+
+function showConversionFailedPopup(fromFmt: string, toFmt: string) {
+  const routes = _lastSearchRoutesTried;
+  window.showPopup(
+    `<h2>Conversion failed</h2>` +
+    `<p>Could not find a working route from <b>${fromFmt}</b> to <b>${toFmt}</b>.</p>` +
+    (routes > 0
+      ? `<p>${routes.toLocaleString()} route${routes !== 1 ? "s" : ""} explored — all failed or led to dead ends.</p>`
+      : `<p>No conversion routes exist between these formats.</p>`) +
+    `<p style="opacity:0.7;font-size:0.9em">Check the activity log in the top-right corner for details.</p>` +
+    `<button onclick="window.hidePopup()">OK</button>`
+  );
+}
 
 async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
 
@@ -2137,6 +2152,7 @@ window.tryConvertByTraversing = async function (
   window.traversionGraph.addPathEventListener(searchListener);
 
   let result = null;
+  _lastSearchRoutesTried = 0;
   // Retry limit: restart the search up to this many times when a route
   // fails at runtime.  Each restart gets a fresh visited set but the
   // dead-end list is preserved so the same broken route is never tried
@@ -2147,6 +2163,7 @@ window.tryConvertByTraversing = async function (
     let foundAny = false;
     for await (const path of window.traversionGraph.searchPath(from, to, simpleMode)) {
       foundAny = true;
+      _lastSearchRoutesTried++;
       // Use exact output format if the target handler supports it
       if (path.at(-1)?.handler === to.handler) {
         path[path.length - 1] = to;
@@ -5240,8 +5257,7 @@ ui.convertButton.onclick = async function () {
 
         const output = await window.tryConvertByTraversing(fileData, inputOption, outputOption);
         if (!output) {
-          window.hidePopup();
-          alert(`Failed to find conversion route for ${inputOption.format.format} → ${outputFormat.format}.`);
+          showConversionFailedPopup(inputOption.format.format, outputFormat.format);
           return;
         }
         allOutputFiles.push(...output.files);
@@ -5303,8 +5319,7 @@ ui.convertButton.onclick = async function () {
 
         const output = await window.tryConvertByTraversing(inputFileData, inputOption, outputOption);
         if (!output) {
-          window.hidePopup();
-          alert("Failed to find conversion route.");
+          showConversionFailedPopup(inputOption.format.format, outputFormat.format);
           return;
         }
 
@@ -5361,8 +5376,7 @@ ui.convertButton.onclick = async function () {
 
       const output = await window.tryConvertByTraversing(inputFileData, inputOption, outputOption);
       if (!output) {
-        window.hidePopup();
-        alert("Failed to find conversion route.");
+        showConversionFailedPopup(inputOption.format.format, outputOption.format.format);
         return;
       }
 
@@ -5388,9 +5402,14 @@ ui.convertButton.onclick = async function () {
 
   } catch (e) {
 
-    window.hidePopup();
-    alert("Unexpected error while routing:\n" + e);
     console.error(e);
+    window.showPopup(
+      `<h2>Conversion failed</h2>` +
+      `<p>An unexpected error occurred during conversion.</p>` +
+      `<p style="opacity:0.7;font-size:0.9em">${e instanceof Error ? e.message : String(e)}</p>` +
+      `<p style="opacity:0.7;font-size:0.9em">Check the activity log in the top-right corner for details.</p>` +
+      `<button onclick="window.hidePopup()">OK</button>`
+    );
 
   }
 
