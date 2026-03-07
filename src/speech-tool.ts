@@ -389,19 +389,22 @@ export function initSpeechTool() {
   });
 
   // ── Build word display with spans ──────────────────────────────────────
-  function buildWordDisplay(text: string): HTMLSpanElement[] {
+  function buildWordDisplay(chunks: string[]): HTMLSpanElement[] {
     wordDisplay.innerHTML = "";
-    const words = text.split(/(\s+)/); // preserve whitespace
     const spans: HTMLSpanElement[] = [];
-    for (const token of words) {
-      if (/^\s+$/.test(token)) {
-        wordDisplay.appendChild(document.createTextNode(token));
-      } else {
-        const span = document.createElement("span");
-        span.className = "speech-word";
-        span.textContent = token;
-        wordDisplay.appendChild(span);
-        spans.push(span);
+    for (let c = 0; c < chunks.length; c++) {
+      if (c > 0) wordDisplay.appendChild(document.createTextNode(" "));
+      const tokens = chunks[c].split(/(\s+)/);
+      for (const tok of tokens) {
+        if (/^\s+$/.test(tok)) {
+          wordDisplay.appendChild(document.createTextNode(tok));
+        } else if (tok) {
+          const span = document.createElement("span");
+          span.className = "speech-word";
+          span.textContent = tok;
+          wordDisplay.appendChild(span);
+          spans.push(span);
+        }
       }
     }
     return spans;
@@ -576,9 +579,6 @@ export function initSpeechTool() {
       const voice = ttsVoice.value;
       const speed = parseFloat(ttsSpeed.value);
 
-      // Build word display from input text
-      const wordSpans = buildWordDisplay(text);
-
       // Use streaming to handle long text — collect all chunks
       const audioChunks: Float32Array[] = [];
       const chunkMeta: Array<{ text: string; samples: number }> = [];
@@ -600,6 +600,9 @@ export function initSpeechTool() {
         }
       }
       if (current.trim()) chunks.push(current.trim());
+
+      // Build word display from chunks (same source as buildTimings)
+      const wordSpans = buildWordDisplay(chunks);
 
       console.log(`[Kokoro TTS] Split into ${chunks.length} chunk(s)`);
 

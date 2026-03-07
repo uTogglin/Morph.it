@@ -429,19 +429,22 @@ export function initSummarizeTool() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   }
 
-  function buildWordSpans(text: string): HTMLSpanElement[] {
+  function buildWordSpans(chunks: string[]): HTMLSpanElement[] {
     wordDisplay.innerHTML = "";
-    const tokens = text.split(/(\s+)/);
     const spans: HTMLSpanElement[] = [];
-    for (const tok of tokens) {
-      if (/^\s+$/.test(tok)) {
-        wordDisplay.appendChild(document.createTextNode(tok));
-      } else {
-        const sp = document.createElement("span");
-        sp.className = "speech-word";
-        sp.textContent = tok;
-        wordDisplay.appendChild(sp);
-        spans.push(sp);
+    for (let c = 0; c < chunks.length; c++) {
+      if (c > 0) wordDisplay.appendChild(document.createTextNode(" "));
+      const tokens = chunks[c].split(/(\s+)/);
+      for (const tok of tokens) {
+        if (/^\s+$/.test(tok)) {
+          wordDisplay.appendChild(document.createTextNode(tok));
+        } else if (tok) {
+          const sp = document.createElement("span");
+          sp.className = "speech-word";
+          sp.textContent = tok;
+          wordDisplay.appendChild(sp);
+          spans.push(sp);
+        }
       }
     }
     return spans;
@@ -569,7 +572,6 @@ export function initSummarizeTool() {
       const voice = (() => { try { return localStorage.getItem("convert-tts-voice") ?? "af_heart"; } catch { return "af_heart"; } })();
       const speed = (() => { try { return parseFloat(localStorage.getItem("convert-tts-speed") ?? "1"); } catch { return 1; } })();
 
-      const wordSpans = buildWordSpans(text);
       const audioChunks: Float32Array[] = [];
       const chunkMeta: Array<{ text: string; samples: number }> = [];
       let sampleRate = 24000;
@@ -583,6 +585,8 @@ export function initSummarizeTool() {
         else cur += s;
       }
       if (cur.trim()) chunks.push(cur.trim());
+
+      const wordSpans = buildWordSpans(chunks);
 
       for (let i = 0; i < chunks.length; i++) {
         ttsProgressText.textContent = chunks.length > 1
