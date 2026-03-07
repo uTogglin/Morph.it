@@ -2,6 +2,8 @@ import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import { Replay } from "./bsor/replay.ts";
 import { render } from "./bsor/renderer.ts";
 import CommonFormats from "src/CommonFormats.ts";
+import { canvasToBytes } from "../utils/canvas-to-bytes.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 class bsorHandler implements FormatHandler {
   public name: string = "bsor";
@@ -36,7 +38,7 @@ class bsorHandler implements FormatHandler {
       const replay = new Replay(file.bytes);
       if(outputFormat.internal == "json") {
         return [{
-          name: file.name.split(".")[0] + ".json",
+          name: getBaseName(file.name) + ".json",
           bytes: new TextEncoder().encode(JSON.stringify(replay))
         }];
       }
@@ -44,14 +46,9 @@ class bsorHandler implements FormatHandler {
       await new Promise<void>(resolve => {
         render(replay, 640, 480,
           async(renderer) => {
-            const bytes: Uint8Array = await new Promise((resolve, reject) => {
-              renderer.domElement.toBlob((blob) => {
-                if (!blob) return reject("Canvas output failed");
-                blob.arrayBuffer().then(buf => resolve(new Uint8Array(buf)));
-              }, outputFormat.mime);
-            });
+            const bytes = await canvasToBytes(renderer.domElement, outputFormat.mime);
             outputs.push({
-              name: file.name.split(".")[0]+"_"+(frameIndex++)+"."+outputFormat.extension,
+              name: getBaseName(file.name)+"_"+(frameIndex++)+"."+outputFormat.extension,
               bytes: bytes
             });
           },

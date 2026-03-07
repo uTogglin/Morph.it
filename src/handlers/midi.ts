@@ -1,6 +1,9 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import { cdnFetch, cdnScript } from "../cdn.ts";
 import { extractEvents, tableToString, stringToTable, buildMidi, parseRtttl, parseGrubTune, tableToRtttl, tableToGrubTune, pngToMidi, midiToPng } from "./midi/midifilelib.js";
+import { buildWav } from "../utils/build-wav.ts";
+import { getBaseName } from "../utils/file-utils.ts";
+import { canvasToBytes } from "../utils/canvas-to-bytes.ts";
 
 const SAMPLE_RATE = 44100;
 const BUFFER_FRAMES = 4096;
@@ -105,7 +108,7 @@ export class midiCodecHandler implements FormatHandler {
     const outputFiles: FileData[] = [];
 
     for (const inputFile of inputFiles) {
-      const baseName = inputFile.name.replace(/\.[^.]+$/, "");
+      const baseName = getBaseName(inputFile.name);
 
       // Step 1: input -> event table
 
@@ -171,12 +174,7 @@ export class midiCodecHandler implements FormatHandler {
         canvas.height = height;
         const ctx = canvas.getContext("2d")!;
         ctx.putImageData(new ImageData(pixels as ImageDataArray, width, height), 0, 0);
-        const bytes: Uint8Array = await new Promise((res, rej) => {
-          canvas.toBlob(b => {
-            if (!b) return rej("Canvas output failed");
-            b.arrayBuffer().then(buf => res(new Uint8Array(buf)));
-          }, "image/png");
-        });
+        const bytes = await canvasToBytes(canvas, "image/png");
         outputFiles.push({ bytes, name: baseName + ".png" });
 
       } else {
@@ -266,39 +264,11 @@ export class midiSynthHandler implements FormatHandler {
         }
       }
 
-      const wavBytes = buildWav(pcm, SAMPLE_RATE, 2, 16);
-      outputFiles.push({ bytes: wavBytes, name: inputFile.name.replace(/\.[^.]+$/, "") + ".wav" });
+      const pcmBytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+      const wavBytes = buildWav(pcmBytes, SAMPLE_RATE, 2, 16);
+      outputFiles.push({ bytes: wavBytes, name: getBaseName(inputFile.name) + ".wav" });
     }
 
     return outputFiles;
   }
-}
-
-function buildWav(pcmData: Int16Array, sampleRate: number, numChannels: number, bitsPerSample: number): Uint8Array {
-  const bytesPerSample = bitsPerSample / 8;
-  const dataSize = pcmData.length * bytesPerSample;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  const writeStr = (offset: number, str: string) => {
-    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-  };
-
-  writeStr(0, "RIFF");
-  view.setUint32(4, 36 + dataSize, true);
-  writeStr(8, "WAVE");
-  writeStr(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
-  view.setUint16(32, numChannels * bytesPerSample, true);
-  view.setUint16(34, bitsPerSample, true);
-  writeStr(36, "data");
-  view.setUint32(40, dataSize, true);
-
-  new Int16Array(buffer, 44).set(pcmData);
-
-  return new Uint8Array(buffer);
 }

@@ -7,8 +7,10 @@ class sqlite3Handler implements FormatHandler {
   public name: string = "sqlite3";
   public supportedFormats?: FileFormat[];
   public ready: boolean = false;
+  private sqlite3: any;
 
   async init () {
+    this.sqlite3 = await sqlite3InitModule();
     this.supportedFormats = [
       {
         name: "SQLite3",
@@ -55,11 +57,10 @@ class sqlite3Handler implements FormatHandler {
     outputFormat: FileFormat
   ): Promise<FileData[]> {
     const outputFiles: FileData[] = [];
-    console.log(inputFormat, outputFormat);
 
-    const sqlite3 = await sqlite3InitModule();
+    const sqlite3 = this.sqlite3;
 
-    if (inputFormat.internal == "sqlite3" && outputFormat.internal == "csv") {
+    if (inputFormat.internal === "sqlite3" && outputFormat.internal === "csv") {
         for (const file of inputFiles) {
             const p = sqlite3.wasm.allocFromTypedArray(file.bytes);
 
@@ -80,12 +81,16 @@ class sqlite3Handler implements FormatHandler {
 
             
             for (const table of this.getTables(db)) {
-                const stmt = db.prepare(`SELECT * FROM ${table}`);
-                let csvStr = stmt.getColumnNames().join(",") + "\n";
+                const stmt = db.prepare(`SELECT * FROM "${table.replace(/"/g, '""')}"`);
+                const csvEscape = (val: any): string => {
+                  const s = String(val ?? '');
+                  return /[,"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+                };
+                let csvStr = stmt.getColumnNames().map(csvEscape).join(",") + "\n";
                 try {
                   while (stmt.step()) {
-                    const row = Array.from({length: stmt.columnCount }, (_, j) => stmt.get(j))
-                    csvStr += row.join(", ") + "\n"
+                    const row = Array.from({length: stmt.columnCount }, (_, j) => csvEscape(stmt.get(j)))
+                    csvStr += row.join(",") + "\n"
                   }
                 } finally {
                     stmt.finalize();
@@ -93,8 +98,8 @@ class sqlite3Handler implements FormatHandler {
 
                 const encoder = new TextEncoder()
                 outputFiles.push({
-                    name: table,
-                    bytes: new Uint8Array(encoder.encode(csvStr))
+                    name: table + ".csv",
+                    bytes: encoder.encode(csvStr)
                 })
             }
          }

@@ -1,10 +1,24 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 import { parseODT, parseODP, parseODS } from "./envelope/parseODF.js";
 import parseDOCX from "./envelope/parseDOCX.js";
 import parsePPTX from "./envelope/parsePPTX.js";
 import parseXLSX from "./envelope/parseXLSX.js";
 import CommonFormats from "src/CommonFormats.ts";
+
+function sanitizeHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script,style,iframe,object,embed').forEach(el => el.remove());
+  doc.querySelectorAll('*').forEach(el => {
+    for (const attr of [...el.attributes]) {
+      if (attr.name.startsWith('on') || attr.value.startsWith('javascript:')) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  });
+  return doc.body.innerHTML;
+}
 
 class envelopeHandler implements FormatHandler {
 
@@ -79,11 +93,12 @@ class envelopeHandler implements FormatHandler {
     const encoder = new TextEncoder();
 
     for (const inputFile of inputFiles) {
+      const parsedContent = sanitizeHtml(await parser(inputFile.bytes));
       const html = `<div style="background: #fff">
-        ${await parser(inputFile.bytes)}
+        ${parsedContent}
       </div>`;
       const bytes = encoder.encode(html);
-      const baseName = inputFile.name.split(".")[0];
+      const baseName = getBaseName(inputFile.name);
       const name = baseName + "." + outputFormat.extension;
       outputFiles.push({ bytes, name });
     }

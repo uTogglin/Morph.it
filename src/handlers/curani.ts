@@ -4,6 +4,7 @@
 // • ani -> apng/gif
 
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import CommonFormats from "src/CommonFormats.ts";
 
 class curaniHandler implements FormatHandler {
@@ -176,7 +177,7 @@ class curaniHandler implements FormatHandler {
             }
 
             outputFiles.push({
-                name: file.name.split(".").slice(0, -1).join(".") + "." + outputFormat.extension,
+                name: getBaseName(file.name) + "." + outputFormat.extension,
                 bytes: new_file_bytes
             })
         }

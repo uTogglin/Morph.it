@@ -4,6 +4,13 @@ import type { LogEvent } from "@ffmpeg/ffmpeg";
 import { compressVideoWebCodecs, compressVideoVP9, isWebCodecsAvailable } from "./webcodecs-compress.ts";
 import { cdnUrl, cdnFetch } from "./cdn.ts";
 
+const escHtml = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
+/** Coerce FFmpeg readFile result to Uint8Array without unnecessary copies */
+function ensureUint8Array(data: Uint8Array | string): Uint8Array {
+  return typeof data === 'string' ? new TextEncoder().encode(data) : data;
+}
+
 /** Returns ["-map_metadata", "-1"] when privacy mode is active, else [] */
 function privacyArgs(): string[] {
   try { return localStorage.getItem("convert-privacy") === "true" ? ["-map_metadata", "-1"] : []; } catch { return []; }
@@ -364,7 +371,7 @@ async function compressGif(file: FileData, targetBytes: number): Promise<FileDat
   const inputName = "compress_input.gif";
   const outputName = "compress_output.gif";
 
-  await ff.writeFile(inputName, new Uint8Array(file.bytes));
+  await ff.writeFile(inputName, file.bytes);
 
   const scales = [1, 0.75, 0.5, 0.35];
   const fpsOptions = [15, 10, 8];
@@ -388,7 +395,7 @@ async function compressGif(file: FileData, targetBytes: number): Promise<FileDat
       try {
         await ffExec(["-hide_banner", "-y", "-i", inputName, "-vf", vf, ...privacyArgs(), outputName]);
         const data = await ff.readFile(outputName);
-        const bytes = data instanceof Uint8Array ? new Uint8Array(data) : new TextEncoder().encode(data as string);
+        const bytes = ensureUint8Array(data);
 
         if (bytes.length <= targetBytes) {
           await ff.deleteFile(inputName).catch(() => {});
@@ -402,7 +409,7 @@ async function compressGif(file: FileData, targetBytes: number): Promise<FileDat
   // Return best effort
   try {
     const data = await ff.readFile(outputName);
-    const bytes = data instanceof Uint8Array ? new Uint8Array(data) : new TextEncoder().encode(data as string);
+    const bytes = ensureUint8Array(data);
     await ff.deleteFile(inputName).catch(() => {});
     await ff.deleteFile(outputName).catch(() => {});
     console.warn(`Could not compress GIF "${file.name}" to target size.`);
@@ -430,7 +437,7 @@ async function compressVideo(
     console.info(`WebCodecs unavailable for "${file.name}", falling back to ffmpeg.wasm`);
     await showCompressPopup(
       `<h2>Falling back to software encoding...</h2>` +
-      `<p>${file.name}</p>` +
+      `<p>${escHtml(file.name)}</p>` +
       `<p style="color:var(--text-muted);font-size:0.85rem">WebCodecs couldn't hit target size. Using ffmpeg for tighter control.</p>` +
       `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
         `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
@@ -455,7 +462,7 @@ async function compressVideo(
   // Stall detection: if progress stays at 0% for 15s, codec likely unsupported in this WASM build
   const stallTimeout = (codec === "h265" && !isWebM) ? 15000 : -1;
 
-  await ff.writeFile(inputName, new Uint8Array(file.bytes));
+  await ff.writeFile(inputName, file.bytes);
 
   // Probe duration and audio presence
   const probeLog = await ffExecWithLog(["-hide_banner", "-i", inputName, "-f", "null", "-"]);
@@ -491,7 +498,7 @@ async function compressVideo(
         console.warn(`H.265 encoding failed for "${file.name}", falling back to H.264:`, e);
         await showCompressPopup(
           `<h2>H.265 failed, falling back to H.264...</h2>` +
-          `<p>${file.name}</p>` +
+          `<p>${escHtml(file.name)}</p>` +
           `<p style="color:var(--text-muted);font-size:0.85rem">H.265 is not supported in this browser build. Re-encoding with H.264 instead.</p>` +
           `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
             `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
@@ -507,7 +514,7 @@ async function compressVideo(
     }
 
     const data = await ff.readFile(outputName);
-    const bytes = data instanceof Uint8Array ? new Uint8Array(data) : new TextEncoder().encode(data as string);
+    const bytes = ensureUint8Array(data);
     await ff.deleteFile(inputName).catch(() => {});
     await ff.deleteFile(outputName).catch(() => {});
 
@@ -552,7 +559,7 @@ async function compressVideo(
       console.warn(`H.265 compression failed for "${file.name}", falling back to H.264:`, e);
       await showCompressPopup(
         `<h2>H.265 failed, falling back to H.264...</h2>` +
-        `<p>${file.name}</p>` +
+        `<p>${escHtml(file.name)}</p>` +
         `<p style="color:var(--text-muted);font-size:0.85rem">H.265 is not supported in this browser build. Compressing with H.264 instead.</p>` +
         `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
           `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
@@ -568,7 +575,7 @@ async function compressVideo(
   }
 
   const data = await ff.readFile(outputName);
-  const bytes = data instanceof Uint8Array ? new Uint8Array(data) : new TextEncoder().encode(data as string);
+  const bytes = ensureUint8Array(data);
 
   await ff.deleteFile(inputName).catch(() => {});
   await ff.deleteFile(outputName).catch(() => {});
@@ -584,7 +591,7 @@ async function compressVideo(
     if (targetBytes > 0 && isWebCodecsAvailable()) {
       await showCompressPopup(
         `<h2>Trying VP9 codec (last resort)...</h2>` +
-        `<p>${file.name}</p>` +
+        `<p>${escHtml(file.name)}</p>` +
         `<p style="color:var(--text-muted);font-size:0.85rem">Original codec couldn't hit target. Trying VP9 — output will be WebM.</p>` +
         `<div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">` +
           `<div id="compress-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>` +
@@ -609,7 +616,7 @@ async function compressAudio(file: FileData, targetBytes: number, mode: "auto" |
   const inputName = "compress_input." + ext;
   const baseName = file.name.replace(/\.[^.]+$/, "");
 
-  await ff.writeFile(inputName, new Uint8Array(file.bytes));
+  await ff.writeFile(inputName, file.bytes);
 
   // Lossless: WAV → FLAC
   if (mode === "auto" && ext === "wav") {
@@ -617,7 +624,7 @@ async function compressAudio(file: FileData, targetBytes: number, mode: "auto" |
     try {
       await ffExec(["-hide_banner", "-y", "-i", inputName, "-c:a", "flac", ...privacyArgs(), flacName]);
       const data = await ff.readFile(flacName);
-      const bytes = data instanceof Uint8Array ? new Uint8Array(data) : new TextEncoder().encode(data as string);
+      const bytes = ensureUint8Array(data);
       await ff.deleteFile(flacName).catch(() => {});
 
       if (bytes.length <= targetBytes) {
@@ -670,7 +677,7 @@ async function compressAudio(file: FileData, targetBytes: number, mode: "auto" |
   }
 
   const data = await ff.readFile(outputName);
-  const bytes = data instanceof Uint8Array ? new Uint8Array(data) : new TextEncoder().encode(data as string);
+  const bytes = ensureUint8Array(data);
 
   await ff.deleteFile(inputName).catch(() => {});
   await ff.deleteFile(outputName).catch(() => {});
@@ -720,8 +727,8 @@ export async function applyFileCompression(
     const sizeMB = (f.bytes.length / 1024 / 1024).toFixed(1);
 
     const heading = isReencode
-      ? `<h2>Re-encoding video...</h2><p>${f.name} (${sizeMB} MB)</p>`
-      : `<h2>Compressing ${type}...</h2><p>${f.name} (${sizeMB} MB → ${targetMB} MB)</p>`;
+      ? `<h2>Re-encoding video...</h2><p>${escHtml(f.name)} (${sizeMB} MB)</p>`
+      : `<h2>Compressing ${type}...</h2><p>${escHtml(f.name)} (${sizeMB} MB → ${targetMB} MB)</p>`;
 
     await showCompressPopup(
       heading +

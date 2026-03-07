@@ -1,5 +1,6 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 import headUrl from "./batToExe/exe65824head.bin?url";
 import footUrl from "./batToExe/exe65824foot.bin?url";
@@ -63,7 +64,7 @@ class batToExeHandler implements FormatHandler {
       out.set(footer, offset);
 
       const outputName =
-        file.name.split(".").slice(0, -1).join(".") +
+        getBaseName(file.name) +
         "." +
         outputFormat.extension;
 

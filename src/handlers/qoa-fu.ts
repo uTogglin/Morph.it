@@ -1,4 +1,5 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 import { QOAEncoder, QOADecoder, QOABase } from "qoa-fu";
 import { WaveFile } from "wavefile";
@@ -143,7 +144,7 @@ class qoaFuHandler implements FormatHandler {
           wav.fromScratch(decoder.getChannels(), decoder.getSampleRate(), "16", audioData);
 
           const wavBytes = wav.toBuffer();
-          const name = inputFile.name.split(".")[0]+".wav";
+          const name = getBaseName(inputFile.name)+".wav";
           outputFiles.push({bytes: wavBytes, name});
         }
     } else { // any audio => QOA
@@ -183,7 +184,7 @@ class qoaFuHandler implements FormatHandler {
         }
 
         const qoaBytes = encoder.getData();
-        const name = inputFile.name.split(".")[0]+".qoa";
+        const name = getBaseName(inputFile.name)+".qoa";
         outputFiles.push({bytes: qoaBytes, name});
       }
     }

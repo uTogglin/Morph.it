@@ -1329,7 +1329,15 @@ export function initPdfEditorTool() {
 
   function sampleBgColor(x: number, y: number, w: number, h: number): string {
     try {
-      const ctx = bgCanvas.getContext("2d")!;
+      // Ensure cached image data is available
+      if (!_bgImageData) {
+        const ctx = bgCanvas.getContext("2d")!;
+        _bgImageData = ctx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
+      }
+      const imgData = _bgImageData;
+      const imgW = imgData.width;
+      const imgH = imgData.height;
+      const data = imgData.data;
       // Sample pixels around the edges of the bounding box (background, not text)
       let totalR = 0, totalG = 0, totalB = 0, count = 0;
       const offsets = [
@@ -1341,9 +1349,9 @@ export function initPdfEditorTool() {
       for (const [sx, sy] of offsets) {
         const px = Math.round(sx);
         const py = Math.round(sy);
-        if (px < 0 || py < 0 || px >= bgCanvas.width || py >= bgCanvas.height) continue;
-        const pd = ctx.getImageData(px, py, 1, 1).data;
-        totalR += pd[0]; totalG += pd[1]; totalB += pd[2];
+        if (px < 0 || py < 0 || px >= imgW || py >= imgH) continue;
+        const idx = (py * imgW + px) * 4;
+        totalR += data[idx]; totalG += data[idx + 1]; totalB += data[idx + 2];
         count++;
       }
       if (count > 0) {
@@ -1422,22 +1430,30 @@ export function initPdfEditorTool() {
         }
       }
 
-      // Sample text color
+      // Sample text color using cached image data
       let color = "#000000";
       try {
-        const ctx = bgCanvas.getContext("2d")!;
+        if (!_bgImageData) {
+          const ctx = bgCanvas.getContext("2d")!;
+          _bgImageData = ctx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
+        }
+        const imgData = _bgImageData;
+        const imgW = imgData.width;
+        const imgH = imgData.height;
+        const data = imgData.data;
         let darkest = 255;
         let darkR = 0, darkG = 0, darkB = 0;
         for (let dy = -0.6; dy <= -0.1; dy += 0.12) {
           for (let dx = 0.2; dx <= 0.8; dx += 0.15) {
             const sx = Math.round(cx + glyphH * dx);
             const sy = Math.round(cy + glyphH * dy);
-            if (sx < 0 || sy < 0 || sx >= bgCanvas.width || sy >= bgCanvas.height) continue;
-            const px = ctx.getImageData(sx, sy, 1, 1).data;
-            const brightness = px[0] * 0.299 + px[1] * 0.587 + px[2] * 0.114;
+            if (sx < 0 || sy < 0 || sx >= imgW || sy >= imgH) continue;
+            const idx = (sy * imgW + sx) * 4;
+            const pR = data[idx], pG = data[idx + 1], pB = data[idx + 2];
+            const brightness = pR * 0.299 + pG * 0.587 + pB * 0.114;
             if (brightness < darkest) {
               darkest = brightness;
-              darkR = px[0]; darkG = px[1]; darkB = px[2];
+              darkR = pR; darkG = pG; darkB = pB;
             }
           }
         }
@@ -1571,6 +1587,12 @@ export function initPdfEditorTool() {
    * 2. Render at calibrated size, compare pixel luminance against source
    * 3. Return the best-matching font and its calibrated pixel size
    */
+  // Reusable canvases for font detection — avoids creating DOM elements per line
+  let _fontDetectTmpCanvas: HTMLCanvasElement | null = null;
+  let _fontDetectTmpCtx: CanvasRenderingContext2D | null = null;
+  let _fontDetectCalCanvas: HTMLCanvasElement | null = null;
+  let _fontDetectCalCtx: CanvasRenderingContext2D | null = null;
+
   function detectFontForLine(
     srcCanvas: HTMLCanvasElement, text: string,
     bbox: { x0: number; y0: number; x1: number; y1: number },
@@ -1581,12 +1603,25 @@ export function initPdfEditorTool() {
     const fallback = { font: "Arial", fontSizePx: bh * 0.92 };
     if (bw < 10 || bh < 8 || text.length < 2) return fallback;
 
-    // Crop source luminance
-    const srcCtx = srcCanvas.getContext("2d")!;
-    const srcData = srcCtx.getImageData(Math.round(bbox.x0), Math.round(bbox.y0), bw, bh).data;
+    // Crop source luminance — use cached _bgImageData when srcCanvas is bgCanvas
     const srcLum = new Float32Array(bw * bh);
-    for (let i = 0; i < bw * bh; i++) {
-      srcLum[i] = srcData[i * 4] * 0.299 + srcData[i * 4 + 1] * 0.587 + srcData[i * 4 + 2] * 0.114;
+    const bx = Math.round(bbox.x0);
+    const by = Math.round(bbox.y0);
+    if (srcCanvas === bgCanvas && _bgImageData) {
+      const fullData = _bgImageData.data;
+      const fullW = _bgImageData.width;
+      for (let row = 0; row < bh; row++) {
+        for (let col = 0; col < bw; col++) {
+          const srcIdx = ((by + row) * fullW + (bx + col)) * 4;
+          srcLum[row * bw + col] = fullData[srcIdx] * 0.299 + fullData[srcIdx + 1] * 0.587 + fullData[srcIdx + 2] * 0.114;
+        }
+      }
+    } else {
+      const srcCtx = srcCanvas.getContext("2d")!;
+      const srcData = srcCtx.getImageData(bx, by, bw, bh).data;
+      for (let i = 0; i < bw * bh; i++) {
+        srcLum[i] = srcData[i * 4] * 0.299 + srcData[i * 4 + 1] * 0.587 + srcData[i * 4 + 2] * 0.114;
+      }
     }
     let srcMin = 255, srcMax = 0;
     for (let i = 0; i < srcLum.length; i++) {
@@ -1595,16 +1630,27 @@ export function initPdfEditorTool() {
     }
     const srcRange = srcMax - srcMin || 1;
 
-    const tmpCanvas = document.createElement("canvas");
-    tmpCanvas.width = bw;
-    tmpCanvas.height = bh;
-    const tmpCtx = tmpCanvas.getContext("2d")!;
-    const calCanvas = document.createElement("canvas");
-    const calCtx = calCanvas.getContext("2d")!;
+    // Reuse persistent canvases, resizing only when needed
+    if (!_fontDetectTmpCanvas || !_fontDetectTmpCtx) {
+      _fontDetectTmpCanvas = document.createElement("canvas");
+      _fontDetectTmpCtx = _fontDetectTmpCanvas.getContext("2d")!;
+    }
+    if (_fontDetectTmpCanvas.width !== bw || _fontDetectTmpCanvas.height !== bh) {
+      _fontDetectTmpCanvas.width = bw;
+      _fontDetectTmpCanvas.height = bh;
+    }
+    if (!_fontDetectCalCanvas || !_fontDetectCalCtx) {
+      _fontDetectCalCanvas = document.createElement("canvas");
+      _fontDetectCalCtx = _fontDetectCalCanvas.getContext("2d")!;
+    }
+    const tmpCtx = _fontDetectTmpCtx;
+    const calCtx = _fontDetectCalCtx;
 
     let bestFont = "Arial";
     let bestSize = bh * 0.92;
     let bestScore = Infinity;
+    const weight = bold ? "bold" : "normal";
+    const style = italic ? "italic" : "normal";
 
     for (const font of candidates) {
       // Step 1: calibrate fontSize so rendered width matches source width
@@ -1614,8 +1660,6 @@ export function initPdfEditorTool() {
       tmpCtx.clearRect(0, 0, bw, bh);
       tmpCtx.fillStyle = "#ffffff";
       tmpCtx.fillRect(0, 0, bw, bh);
-      const weight = bold ? "bold" : "normal";
-      const style = italic ? "italic" : "normal";
       tmpCtx.font = `${style} ${weight} ${fontSize}px "${font}"`;
       tmpCtx.fillStyle = "#000000";
       tmpCtx.textBaseline = "top";
@@ -1640,28 +1684,54 @@ export function initPdfEditorTool() {
 
   /** Sample background color for an OCR line by reading pixels around it and from page margins */
   function sampleOcrBgColor(srcCanvas: HTMLCanvasElement, bbox: { x0: number; y0: number; x1: number; y1: number }): string {
-    const ctx = srcCanvas.getContext("2d")!;
     const samples: [number, number, number][] = [];
     const w = bbox.x1 - bbox.x0;
     const midY = Math.round((bbox.y0 + bbox.y1) / 2);
 
+    // Use cached image data when srcCanvas is bgCanvas, otherwise fall back to getImageData
+    let cachedData: Uint8ClampedArray | null = null;
+    let imgW = srcCanvas.width;
+    let imgH = srcCanvas.height;
+    if (srcCanvas === bgCanvas && _bgImageData) {
+      cachedData = _bgImageData.data;
+      imgW = _bgImageData.width;
+      imgH = _bgImageData.height;
+    } else if (srcCanvas === bgCanvas) {
+      const ctx = srcCanvas.getContext("2d")!;
+      _bgImageData = ctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+      cachedData = _bgImageData.data;
+      imgW = _bgImageData.width;
+      imgH = _bgImageData.height;
+    }
+
+    const readPixel = cachedData
+      ? (px: number, py: number) => {
+          const idx = (py * imgW + px) * 4;
+          return [cachedData![idx], cachedData![idx + 1], cachedData![idx + 2]] as [number, number, number];
+        }
+      : (px: number, py: number) => {
+          const ctx = srcCanvas.getContext("2d")!;
+          const pd = ctx.getImageData(px, py, 1, 1).data;
+          return [pd[0], pd[1], pd[2]] as [number, number, number];
+        };
+
     // Sample from 15px above and below the line (far enough to avoid anti-aliased text)
     for (const sy of [bbox.y0 - 15, bbox.y1 + 15]) {
-      if (sy < 0 || sy >= srcCanvas.height) continue;
+      if (sy < 0 || sy >= imgH) continue;
       for (let i = 0; i < 10; i++) {
         const sx = Math.round(bbox.x0 + (w * i) / 9);
-        if (sx < 0 || sx >= srcCanvas.width) continue;
-        const pd = ctx.getImageData(sx, Math.round(sy), 1, 1).data;
-        const brightness = pd[0] * 0.299 + pd[1] * 0.587 + pd[2] * 0.114;
-        if (brightness > 200) samples.push([pd[0], pd[1], pd[2]]);
+        if (sx < 0 || sx >= imgW) continue;
+        const [r, g, b] = readPixel(sx, Math.round(sy));
+        const brightness = r * 0.299 + g * 0.587 + b * 0.114;
+        if (brightness > 200) samples.push([r, g, b]);
       }
     }
     // Sample from left/right page margins at the same Y level as the text
     for (const sx of [5, 15, srcCanvas.width - 15, srcCanvas.width - 5]) {
-      if (sx < 0 || sx >= srcCanvas.width) continue;
-      const pd = ctx.getImageData(sx, midY, 1, 1).data;
-      const brightness = pd[0] * 0.299 + pd[1] * 0.587 + pd[2] * 0.114;
-      if (brightness > 200) samples.push([pd[0], pd[1], pd[2]]);
+      if (sx < 0 || sx >= imgW) continue;
+      const [r, g, b] = readPixel(sx, midY);
+      const brightness = r * 0.299 + g * 0.587 + b * 0.114;
+      if (brightness > 200) samples.push([r, g, b]);
     }
 
     if (samples.length > 0) {
@@ -1683,25 +1753,43 @@ export function initPdfEditorTool() {
     srcCanvas: HTMLCanvasElement,
     bbox: { x0: number; y0: number; x1: number; y1: number },
   ): { top: number; bottom: number; left: number; right: number } {
-    const ctx = srcCanvas.getContext("2d")!;
     const x = Math.max(0, Math.round(bbox.x0));
     const y = Math.max(0, Math.round(bbox.y0));
     const w = Math.min(Math.round(bbox.x1 - bbox.x0), srcCanvas.width - x);
     const h = Math.min(Math.round(bbox.y1 - bbox.y0), srcCanvas.height - y);
     if (w < 1 || h < 1) return { top: bbox.y0, bottom: bbox.y1, left: bbox.x0, right: bbox.x1 };
 
-    const data = ctx.getImageData(x, y, w, h).data;
     let firstRow = h, lastRow = -1, firstCol = w, lastCol = -1;
 
-    for (let row = 0; row < h; row++) {
-      for (let col = 0; col < w; col++) {
-        const i = (row * w + col) * 4;
-        const brightness = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-        if (brightness < 128) {
-          if (row < firstRow) firstRow = row;
-          if (row > lastRow) lastRow = row;
-          if (col < firstCol) firstCol = col;
-          if (col > lastCol) lastCol = col;
+    // Use cached image data when srcCanvas is bgCanvas to avoid per-line getImageData
+    if (srcCanvas === bgCanvas && _bgImageData) {
+      const fullData = _bgImageData.data;
+      const fullW = _bgImageData.width;
+      for (let row = 0; row < h; row++) {
+        for (let col = 0; col < w; col++) {
+          const srcIdx = ((y + row) * fullW + (x + col)) * 4;
+          const brightness = fullData[srcIdx] * 0.299 + fullData[srcIdx + 1] * 0.587 + fullData[srcIdx + 2] * 0.114;
+          if (brightness < 128) {
+            if (row < firstRow) firstRow = row;
+            if (row > lastRow) lastRow = row;
+            if (col < firstCol) firstCol = col;
+            if (col > lastCol) lastCol = col;
+          }
+        }
+      }
+    } else {
+      const ctx = srcCanvas.getContext("2d")!;
+      const data = ctx.getImageData(x, y, w, h).data;
+      for (let row = 0; row < h; row++) {
+        for (let col = 0; col < w; col++) {
+          const i = (row * w + col) * 4;
+          const brightness = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+          if (brightness < 128) {
+            if (row < firstRow) firstRow = row;
+            if (row > lastRow) lastRow = row;
+            if (col < firstCol) firstCol = col;
+            if (col > lastCol) lastCol = col;
+          }
         }
       }
     }
@@ -1729,6 +1817,11 @@ export function initPdfEditorTool() {
 
       const scale = currentZoom * 1.5; // must match renderPage scale
       const items: any[] = [];
+      // Pre-cache full page image data to avoid per-line getImageData calls
+      if (!_bgImageData && canvas === bgCanvas) {
+        const ctx = canvas.getContext("2d")!;
+        _bgImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      }
       updateOcrProgress(50, "Detecting fonts");
       for (let li = 0; li < lines.length; li++) {
         const line = lines[li];

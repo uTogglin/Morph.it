@@ -1,5 +1,6 @@
 import CommonFormats, { Category } from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 // base class for handling renames
 function renameHandler(name: string, formats: FileFormat[]): FormatHandler {
@@ -16,7 +17,7 @@ function renameHandler(name: string, formats: FileFormat[]): FormatHandler {
       outputFormat: FileFormat
     ): Promise<FileData[]> {
       return inputFiles.map(file => {
-        file.name = file.name.split(".")[0] + "." + outputFormat.extension;
+        file.name = getBaseName(file.name) + "." + outputFormat.extension;
         return file;
       });
     }

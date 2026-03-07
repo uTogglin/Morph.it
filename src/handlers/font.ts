@@ -2,6 +2,7 @@ import { Font, Glyph, Path, parse } from "opentype.js";
 import { SVGPathData } from "svg-pathdata";
 import { compress, decompress} from 'woff2-encoder';
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import CommonFormats from 'src/CommonFormats.ts';
 
 function escapeHtml(str: string) {
@@ -84,7 +85,7 @@ function sfntToSvg(inputFile: FileData, encoder: TextEncoder) {
   </text>
 </svg>`;
       
-  const name = inputFile.name.split(".")[0] + ".svg";
+  const name = getBaseName(inputFile.name) + ".svg";
   const bytes = encoder.encode(svgFont);
 
   return { bytes, name };
@@ -186,7 +187,7 @@ function svgToOtf(inputFile: FileData, decoder: TextDecoder) {
   });
 
   const bytes = new Uint8Array(font.toArrayBuffer());
-  const name = inputFile.name.split(".")[0] + ".otf";
+  const name = getBaseName(inputFile.name) + ".otf";
 
   return { bytes, name };
 }
@@ -197,7 +198,7 @@ function svgToOtf(inputFile: FileData, decoder: TextDecoder) {
 function sfntToOtf(inputFile: FileData) {
   const font = parse(inputFile.bytes.buffer);
   const bytes = new Uint8Array(font.toArrayBuffer());
-  const name = inputFile.name.split(".")[0] + ".otf";
+  const name = getBaseName(inputFile.name) + ".otf";
 
   return { bytes, name };
 }
@@ -208,7 +209,7 @@ async function sfntToWoff2(inputFile: FileData): Promise<FileData> {
 
   const bytes = await compress(sfnt);
 
-  const name =inputFile.name.split(".")[0] + ".woff2";
+  const name = getBaseName(inputFile.name) + ".woff2";
 
   return { bytes, name };
 }

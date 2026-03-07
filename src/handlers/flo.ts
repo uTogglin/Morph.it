@@ -1,71 +1,8 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import normalizeMimeType from "../normalizeMimeType.ts";
+import { interleaveAudioBuffer, floatTo16BitPCM, buildWav } from "../utils/build-wav.ts";
 
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-
-function interleaveAudioBuffer(buffer: AudioBuffer): Float32Array {
-  const { numberOfChannels, length } = buffer;
-  const out = new Float32Array(length * numberOfChannels);
-  for (let i = 0; i < length; i++) {
-    for (let ch = 0; ch < numberOfChannels; ch++) {
-      out[i * numberOfChannels + ch] = buffer.getChannelData(ch)[i];
-    }
-  }
-  return out;
-}
-
-function floatTo16BitPCM(float32: Float32Array): Uint8Array {
-  const buffer = new ArrayBuffer(float32.length * 2);
-  const view = new DataView(buffer);
-  let offset = 0;
-  for (let i = 0; i < float32.length; i++, offset += 2) {
-    let s = Math.max(-1, Math.min(1, float32[i]));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-  }
-  return new Uint8Array(buffer);
-}
-
-function writeWavHeader(
-  samples: Uint8Array,
-  sampleRate: number,
-  channels: number,
-  bitsPerSample: number,
-) {
-  const blockAlign = channels * (bitsPerSample / 8);
-  const byteRate = sampleRate * blockAlign;
-  const buffer = new ArrayBuffer(44 + samples.length);
-  const view = new DataView(buffer);
-  let p = 0;
-  function writeString(s: string) {
-    for (let i = 0; i < s.length; i++) view.setUint8(p++, s.charCodeAt(i));
-  }
-  writeString("RIFF");
-  view.setUint32(p, 36 + samples.length, true);
-  p += 4;
-  writeString("WAVE");
-  writeString("fmt ");
-  view.setUint32(p, 16, true);
-  p += 4; // Subchunk1Size
-  view.setUint16(p, 1, true);
-  p += 2; // PCM
-  view.setUint16(p, channels, true);
-  p += 2;
-  view.setUint32(p, sampleRate, true);
-  p += 4;
-  view.setUint32(p, byteRate, true);
-  p += 4;
-  view.setUint16(p, blockAlign, true);
-  p += 2;
-  view.setUint16(p, bitsPerSample, true);
-  p += 2;
-  writeString("data");
-  view.setUint32(p, samples.length, true);
-  p += 4;
-  // copy samples
-  const outU8 = new Uint8Array(buffer);
-  outU8.set(samples, 44);
-  return outU8;
-}
 
 async function decodeWithBrowser(
   bytes: Uint8Array,
@@ -282,7 +219,7 @@ class floHandler implements FormatHandler {
         outputFormat.mime === "audio/wav"
       ) {
         const pcm16 = floatTo16BitPCM(samples);
-        const wav = writeWavHeader(pcm16, sampleRate, channels, 16);
+        const wav = buildWav(pcm16, sampleRate, channels, 16);
         return [{ bytes: wav, name: baseName + ".wav" }];
       }
 

@@ -1,5 +1,6 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import parseXML from "./envelope/parseXML.js";
 import * as yaml from "yaml";
 
@@ -25,7 +26,7 @@ export class toJsonHandler implements FormatHandler {
     outputFormat: FileFormat
   ): Promise<FileData[]> {
     return inputFiles.map(file => {
-      const name = file.name.split(".")[0]+".json";
+      const name = getBaseName(file.name)+".json";
       const text = new TextDecoder().decode(file.bytes);
       let object: any;
       switch(inputFormat.mime) {
@@ -92,7 +93,7 @@ export class fromJsonHandler {
     outputFormat: FileFormat
   ): Promise<FileData[]> {
     return inputFiles.map(file => {
-      const name = file.name.split(".")[0]+"."+outputFormat.extension;
+      const name = getBaseName(file.name)+"."+outputFormat.extension;
       let object = JSON.parse(new TextDecoder().decode(file.bytes));
       let text = "";
       switch(outputFormat.mime) {
@@ -142,11 +143,11 @@ export class fromJsonHandler {
         case "application/xml": {
           function xmlEscape(str: string): string {
             return str
+              .replaceAll("&", "&amp;")
               .replaceAll("<", "&lt;")
               .replaceAll(">", "&gt;")
               .replaceAll("\"", "&quot;")
-              .replaceAll("'", "&apos;")
-              .replaceAll("&", "&amp;");
+              .replaceAll("'", "&apos;");
           }
           function write(value: any, tagName: string | null = null) {
             if(tagName != null)

@@ -1,5 +1,7 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import { cdnFetch, cdnUrl } from "../cdn.ts";
+import { buildWav } from "../utils/build-wav.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 interface LibOpenMPTModule {
   __render(fileData: Uint8Array, sampleRate: number): Int16Array;
@@ -154,43 +156,15 @@ class libopenmptHandler implements FormatHandler {
     for (const inputFile of inputFiles) {
       const bytes = new Uint8Array(inputFile.bytes);
       const pcmData = mod.__render(bytes, SAMPLE_RATE);
-      const wavBytes = buildWav(pcmData, SAMPLE_RATE, 2, 16);
-      const name = inputFile.name.replace(/\.[^.]+$/, "") + ".wav";
+      const pcmBytes = new Uint8Array(pcmData.buffer, pcmData.byteOffset, pcmData.byteLength);
+      const wavBytes = buildWav(pcmBytes, SAMPLE_RATE, 2, 16);
+      const name = getBaseName(inputFile.name) + ".wav";
       outputFiles.push({ bytes: wavBytes, name });
     }
 
     return outputFiles;
   }
 
-}
-
-function buildWav (pcmData: Int16Array, sampleRate: number, numChannels: number, bitsPerSample: number): Uint8Array {
-  const bytesPerSample = bitsPerSample / 8;
-  const dataSize = pcmData.length * bytesPerSample;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  const writeStr = (offset: number, str: string) => {
-    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-  };
-
-  writeStr(0, "RIFF");
-  view.setUint32(4, 36 + dataSize, true);
-  writeStr(8, "WAVE");
-  writeStr(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);  // PCM
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
-  view.setUint16(32, numChannels * bytesPerSample, true);
-  view.setUint16(34, bitsPerSample, true);
-  writeStr(36, "data");
-  view.setUint32(40, dataSize, true);
-
-  new Int16Array(buffer, 44).set(pcmData);
-
-  return new Uint8Array(buffer);
 }
 
 export default libopenmptHandler;

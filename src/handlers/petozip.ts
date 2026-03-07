@@ -2,6 +2,7 @@
 // npm install pe-library jszip buffer
 
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import * as Pe from "pe-library"; 
 import JSZip from "jszip";
 
@@ -109,7 +110,7 @@ class peToZipHandler implements FormatHandler {
           compressionOptions: { level: 9 }
         });
         
-        const baseName = inputFile.name.split(".")[0];
+        const baseName = getBaseName(inputFile.name);
         const newName = `${baseName}_pe_data.zip`;
 
         outputFiles.push({

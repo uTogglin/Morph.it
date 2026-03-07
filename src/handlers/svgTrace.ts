@@ -1,6 +1,7 @@
 import { imageTracer } from 'imagetracer'
 
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import CommonFormats from 'src/CommonFormats.ts';
 
 class svgTraceHandler implements FormatHandler {
@@ -34,7 +35,8 @@ class svgTraceHandler implements FormatHandler {
       const blob = new Blob([inputFile.bytes as BlobPart], { type: inputFormat.mime });
       const url = URL.createObjectURL(blob);
       const traced = await imageTracer.imageToSVG(url); // return the full svg string
-      const name = inputFile.name.split(".")[0] + ".svg";
+      URL.revokeObjectURL(url);
+      const name = getBaseName(inputFile.name) + ".svg";
       const bytes = encoder.encode(traced);
 
 

@@ -10,6 +10,7 @@ import mime from "mime";
 import normalizeMimeType from "../normalizeMimeType.ts";
 
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import { cdnFetch } from "../cdn.ts";
 
 class ImageMagickHandler implements FormatHandler {
@@ -102,7 +103,7 @@ class ImageMagickHandler implements FormatHandler {
       });
     });
 
-    const baseName = inputFiles[0].name.split(".")[0];
+    const baseName = getBaseName(inputFiles[0].name);
     const name = baseName + "." + outputFormat.extension;
     return [{ bytes, name }];
 

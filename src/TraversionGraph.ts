@@ -7,7 +7,12 @@ interface QueueNode {
     cost: number;
     /** g = actual cost from start — used for path result and logging */
     gcost: number;
-    path: ConvertPathNode[];
+    /** Parent search node — null for the start node */
+    parent: QueueNode | null;
+    /** The handler+format edge that led to this node (null for the start node) */
+    edge: ConvertPathNode | null;
+    /** Depth of this node in the search tree (0 for start) — avoids walking parent chain to get length */
+    depth: number;
     /** Only used in multi-path (simple=false) mode */
     visitedBorder: number;
 };
@@ -161,11 +166,30 @@ export class TraversionGraph {
         return this.handlerPairsCache;
     }
 
+    /** Map from node identifier to index for O(1) lookup */
+    private nodeIndexMap: Map<string, number> = new Map();
+
+    /**
+     * Reconstructs the full path array from a QueueNode by walking parent pointers.
+     * The start node's edge is the initial ConvertPathNode (e.g. the `from` node).
+     */
+    private static reconstructPath(node: QueueNode): ConvertPathNode[] {
+        const path: ConvertPathNode[] = new Array(node.depth + 1);
+        let current: QueueNode | null = node;
+        let i = node.depth;
+        while (current) {
+            path[i--] = current.edge!;
+            current = current.parent;
+        }
+        return path;
+    }
+
     public init(supportedFormatCache: Map<string, FileFormat[]>, handlers: FormatHandler[], strictCategories: boolean = false) {
         this.handlers = handlers;
         this.nodes.length = 0;
         this.edges.length = 0;
         this.handlerMap.clear();
+        this.nodeIndexMap.clear();
         this.handlerPairsCache = null;
         for (const h of handlers) this.handlerMap.set(h.name, h);
 
@@ -177,13 +201,14 @@ export class TraversionGraph {
             let toIndices: Array<{format: FileFormat, index: number}> = [];
             formats.forEach(format => {
                 const formatIdentifier = format.mime + `(${format.format})`;
-                let index = this.nodes.findIndex(node => node.identifier === formatIdentifier);
-                if (index === -1) {
+                let index = this.nodeIndexMap.get(formatIdentifier);
+                if (index === undefined) {
                     index = this.nodes.length;
                     this.nodes.push({
                         identifier: formatIdentifier,
                         edges: []
                     });
+                    this.nodeIndexMap.set(formatIdentifier, index);
                 }
                 if (format.from) fromIndices.push({format, index});
                 if (format.to) toIndices.push({format, index});
@@ -345,12 +370,12 @@ export class TraversionGraph {
         let visitedCount = 0;
         const fromIdentifier = from.format.mime + `(${from.format.format})`;
         const toIdentifier = to.format.mime + `(${to.format.format})`;
-        let fromIndex = this.nodes.findIndex(node => node.identifier === fromIdentifier);
-        let toIndex = this.nodes.findIndex(node => node.identifier === toIdentifier);
-        if (fromIndex === -1 || toIndex === -1) return []; // If either format is not in the graph, return empty array
+        let fromIndex = this.nodeIndexMap.get(fromIdentifier);
+        let toIndex = this.nodeIndexMap.get(toIdentifier);
+        if (fromIndex === undefined || toIndex === undefined) return []; // If either format is not in the graph, return empty array
         const toFormat = to.format;
         const h0 = simpleMode ? this.heuristic(from.format, toFormat) : 0;
-        queue.add({index: fromIndex, cost: h0, gcost: 0, path: [from], visitedBorder: 0});
+        queue.add({index: fromIndex, cost: h0, gcost: 0, parent: null, edge: from, depth: 0, visitedBorder: 0});
         console.log(`Starting path search from ${from.format.mime}(${from.handler?.name}) to ${to.format.mime}(${to.handler?.name}) (simple mode: ${simpleMode})`);
         let iterations = 0;
         let pathsFound = 0;
@@ -383,24 +408,26 @@ export class TraversionGraph {
                 // Multi-path mode: allow re-visiting if node was queued before it was first visited
                 const visitPos = visitedMap.get(current.index);
                 if (visitPos !== undefined && visitPos < current.visitedBorder) {
-                    this.dispatchEvent("skipped", current.path);
+                    this.dispatchEvent("skipped", TraversionGraph.reconstructPath(current));
                     continue;
                 }
             }
 
             if (current.index === toIndex) {
+                // Reconstruct the full path from parent pointers
+                const path = TraversionGraph.reconstructPath(current);
                 // Return the path of handlers and formats to get from the input format to the output format
-                const logString = `${iterations} with cost ${current.gcost.toFixed(3)}: ${current.path.map(p => p.handler.name + "(" + p.format.mime + ")").join(" → ")}`;
-                const foundPathLast = current.path.at(-1);
+                const logString = `${iterations} with cost ${current.gcost.toFixed(3)}: ${path.map(p => p.handler.name + "(" + p.format.mime + ")").join(" → ")}`;
+                const foundPathLast = path.at(-1);
                 if (simpleMode || !to.handler || to.handler.name === foundPathLast?.handler.name) {
                     console.log(`Found path at iteration ${logString}`);
-                    this.dispatchEvent("found", current.path);
-                    yield current.path;
+                    this.dispatchEvent("found", path);
+                    yield path;
                     pathsFound++;
                 }
                 else {
                     console.log(`Invalid path at iteration ${logString}`);
-                    this.dispatchEvent("skipped", current.path);
+                    this.dispatchEvent("skipped", path);
                 }
                 continue;
             }
@@ -411,7 +438,7 @@ export class TraversionGraph {
             } else {
                 visitedMap.set(current.index, visitedCount++);
             }
-            this.dispatchEvent("searching", current.path);
+            this.dispatchEvent("searching", TraversionGraph.reconstructPath(current));
 
             this.nodes[current.index].edges.forEach(edgeIndex => {
                 let edge = this.edges[edgeIndex];
@@ -428,16 +455,22 @@ export class TraversionGraph {
                 const handler = this.handlerMap.get(edge.handler);
                 if (!handler) return; // If the handler for this edge is not found, skip it
 
-                let path = current.path.concat({handler: handler, format: edge.to.format});
-                const gcost = current.gcost + edge.cost + this.calculateAdaptiveCost(path);
-                const hcost = simpleMode ? this.heuristic(edge.to.format, toFormat) : 0;
-                queue.add({
+                const childEdge: ConvertPathNode = {handler: handler, format: edge.to.format};
+                const childNode: QueueNode = {
                     index: edge.to.index,
-                    cost: gcost + hcost,
-                    gcost,
-                    path: path,
+                    cost: 0, // placeholder, set below
+                    gcost: 0, // placeholder, set below
+                    parent: current,
+                    edge: childEdge,
+                    depth: current.depth + 1,
                     visitedBorder: simpleMode ? 0 : visitedCount
-                });
+                };
+                const adaptiveCost = this.calculateAdaptiveCostFromNode(childNode);
+                const gcost = current.gcost + edge.cost + adaptiveCost;
+                const hcost = simpleMode ? this.heuristic(edge.to.format, toFormat) : 0;
+                childNode.gcost = gcost;
+                childNode.cost = gcost + hcost;
+                queue.add(childNode);
             });
             if (iterations % LOG_FREQUENCY === 0) {
                 console.log(`Still searching... Iterations: ${iterations}, Paths found: ${pathsFound}, Queue length: ${queue.size()}`);
@@ -455,42 +488,89 @@ export class TraversionGraph {
                 && a.format.format === b.format.format);
     }
 
-    private calculateAdaptiveCost(path: ConvertPathNode[]) : number {
+    /**
+     * Calculates adaptive cost by walking the parent-pointer chain of a QueueNode.
+     * Avoids allocating a full path array on every edge expansion.
+     */
+    private calculateAdaptiveCostFromNode(node: QueueNode): number {
+        const pathLength = node.depth + 1;
+
+        // --- Dead-end check: walk the parent chain and compare against each dead end ---
         for (const deadEnd of this.temporaryDeadEnds) {
-            if (path.length < deadEnd.length) continue; // path too short to match
+            if (pathLength < deadEnd.length) continue; // path too short to match
+            // We need to compare the FIRST deadEnd.length nodes of the path.
+            // Collect them by walking back from node and taking the first deadEnd.length elements.
+            // Since we walk back from the end, build a small temporary array of just the prefix we need.
             let isDeadEnd = true;
-            for (let i = 0; i < deadEnd.length; i ++) {
-                if (TraversionGraph.pathNodesMatch(path[i], deadEnd[i])) continue;
+            // Walk back to the start to get path in order for the prefix check
+            let current: QueueNode | null = node;
+            // Collect the full path into a reusable array (only the edges/ConvertPathNodes)
+            const pathNodes: ConvertPathNode[] = new Array(pathLength);
+            let idx = pathLength - 1;
+            while (current) {
+                pathNodes[idx--] = current.edge!;
+                current = current.parent;
+            }
+            for (let i = 0; i < deadEnd.length; i++) {
+                if (TraversionGraph.pathNodesMatch(pathNodes[i], deadEnd[i])) continue;
                 isDeadEnd = false;
                 break;
             }
             if (isDeadEnd) return Infinity;
         }
-        let cost = 0;
-        const categoriesInPath = path.map(p => {
-            const cat = p.format.category || p.format.mime.split("/")[0];
-            return Array.isArray(cat) ? cat : [cat];
-        });
-        this.categoryAdaptiveCosts.forEach(c => {
-            let pathPtr = categoriesInPath.length - 1, categoryPtr = c.categories.length - 1;
-            while (true) {
-                if (categoriesInPath[pathPtr].includes(c.categories[categoryPtr])) {
-                    categoryPtr--;
-                    pathPtr--;
 
-                    if (categoryPtr < 0) {
-                        cost += c.cost;
+        // --- Category adaptive cost: walk parent chain in reverse (already tail-first) ---
+        // Build categories array in reverse order from parent chain for backward matching
+        let cost = 0;
+        if (this.categoryAdaptiveCosts.length > 0) {
+            // Build categories in reverse (index 0 = last node in path, i.e. `node` itself)
+            const reversedCats: (string | string[])[] = new Array(pathLength);
+            let cur: QueueNode | null = node;
+            let ri = 0;
+            while (cur) {
+                const edge = cur.edge!;
+                const cat = edge.format.category || edge.format.mime.split("/")[0];
+                reversedCats[ri++] = cat;
+                cur = cur.parent;
+            }
+
+            this.categoryAdaptiveCosts.forEach(c => {
+                // pathPtr walks from 0 (last path node) upward = backward through path
+                // This mirrors the original: pathPtr starts at categoriesInPath.length - 1
+                let pathPtr = 0, categoryPtr = c.categories.length - 1;
+                while (true) {
+                    const cats = reversedCats[pathPtr];
+                    const includes = Array.isArray(cats)
+                        ? cats.includes(c.categories[categoryPtr])
+                        : cats === c.categories[categoryPtr];
+                    if (includes) {
+                        categoryPtr--;
+                        pathPtr++;
+
+                        if (categoryPtr < 0) {
+                            cost += c.cost;
+                            break;
+                        }
+                        if (pathPtr >= pathLength) break;
+                    }
+                    else {
+                        const nextCat = c.categories[categoryPtr + 1];
+                        if (categoryPtr + 1 < c.categories.length) {
+                            const nextIncludes = Array.isArray(cats)
+                                ? cats.includes(nextCat)
+                                : cats === nextCat;
+                            if (nextIncludes) {
+                                pathPtr++;
+                                if (pathPtr >= pathLength) break;
+                                continue;
+                            }
+                        }
                         break;
                     }
-                    if (pathPtr < 0) break;
                 }
-                else if (categoryPtr + 1 < c.categories.length && categoriesInPath[pathPtr].includes(c.categories[categoryPtr + 1])) {
-                    pathPtr--;
-                    if (pathPtr < 0) break;
-                }
-                else break;
-            }
-        });
+            });
+        }
         return cost;
     }
+
 }

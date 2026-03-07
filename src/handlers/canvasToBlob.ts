@@ -1,5 +1,6 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import { imageToText, rgbaToGrayscale } from "./image-to-txt/src/convert.ts";
 
 class canvasToBlobHandler implements FormatHandler {
@@ -76,9 +77,19 @@ class canvasToBlobHandler implements FormatHandler {
 
         const blob = new Blob([inputFile.bytes as BlobPart], { type: inputFormat.mime });
         // For SVG, convert to data URL to avoid "Tainted canvases may not be exported" error
+        let base64 = '';
+        if (inputFormat.mime === "image/svg+xml") {
+          let binary = '';
+          const svgBytes = inputFile.bytes;
+          const chunkSize = 8192;
+          for (let i = 0; i < svgBytes.length; i += chunkSize) {
+            binary += String.fromCharCode(...svgBytes.subarray(i, i + chunkSize));
+          }
+          base64 = btoa(binary);
+        }
         const url =
           inputFormat.mime === "image/svg+xml"
-            ? `data:${inputFormat.mime};base64,${btoa(inputFile.bytes.reduce((str, byte) => str + String.fromCharCode(byte), ''))}`
+            ? `data:${inputFormat.mime};base64,${base64}`
             : URL.createObjectURL(blob);
 
         const image = new Image();
@@ -115,7 +126,7 @@ class canvasToBlobHandler implements FormatHandler {
         });
       }
 
-      const name = inputFile.name.split(".")[0] + "." + outputFormat.extension;
+      const name = getBaseName(inputFile.name) + "." + outputFormat.extension;
 
       outputFiles.push({ bytes, name });
 

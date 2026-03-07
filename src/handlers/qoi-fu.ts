@@ -1,5 +1,7 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { canvasToBytes } from "../utils/canvas-to-bytes.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 import { QOIDecoder, QOIEncoder } from "qoi-fu";
 
@@ -91,7 +93,7 @@ class qoiFuHandler implements FormatHandler {
     if (outputIsQOI) {
       for (const inputFile of inputFiles) {
 
-        this.#ctx.clearRect(0, 0, this.#canvas.width, this.#canvas.width);
+        this.#ctx.clearRect(0, 0, this.#canvas.width, this.#canvas.height);
 
         const blob = new Blob([inputFile.bytes as BlobPart], { type: inputFormat.mime });
         const url = URL.createObjectURL(blob);
@@ -102,6 +104,7 @@ class qoiFuHandler implements FormatHandler {
           image.addEventListener("error", reject);
           image.src = url;
         });
+        URL.revokeObjectURL(url);
 
         const width = image.naturalWidth;
         const height = image.naturalHeight;
@@ -120,7 +123,7 @@ class qoiFuHandler implements FormatHandler {
         const bytesSize = qoiEncoder.getEncodedSize();
         const bytes = new Uint8Array(qoiEncoder.getEncoded().slice(0, bytesSize));
 
-        const name = inputFile.name.split(".")[0] + "." + outputFormat.extension;
+        const name = getBaseName(inputFile.name) + "." + outputFormat.extension;
         outputFiles.push({ bytes, name });
 
       }
@@ -144,13 +147,8 @@ class qoiFuHandler implements FormatHandler {
         this.#canvas.height = height;
         this.#ctx.putImageData(imageData, 0, 0);
 
-        const bytes: Uint8Array = await new Promise((resolve, reject) => {
-          this.#canvas!.toBlob((blob) => {
-            if (!blob) return reject("Canvas output failed.");
-            blob.arrayBuffer().then(buf => resolve(new Uint8Array(buf)));
-          }, outputFormat.mime);
-        });
-        const name = inputFile.name.split(".")[0] + "." + outputFormat.extension;
+        const bytes = await canvasToBytes(this.#canvas!, outputFormat.mime);
+        const name = getBaseName(inputFile.name) + "." + outputFormat.extension;
         outputFiles.push({ bytes, name });
 
       }

@@ -1,4 +1,5 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import type { LogEvent } from "@ffmpeg/ffmpeg";
@@ -26,9 +27,10 @@ class FFmpegHandler implements FormatHandler {
   async getStdout (callback: () => void | Promise<void>) {
     if (!this.#ffmpeg) return "";
     this.clearStdout();
-    this.#ffmpeg.on("log", this.handleStdout.bind(this));
+    const boundHandler = this.handleStdout.bind(this);
+    this.#ffmpeg.on("log", boundHandler);
     await callback();
-    this.#ffmpeg.off("log", this.handleStdout.bind(this));
+    this.#ffmpeg.off("log", boundHandler);
     return this.#stdout;
   }
 
@@ -58,7 +60,7 @@ class FFmpegHandler implements FormatHandler {
    * @param attempts Amount of times to attempt execution. Default is 1.
    */
   async execSafe (args: string[], timeout: number = -1, attempts: number = 1): Promise<void> {
-    if (!this.#ffmpeg) throw "Handler not initialized.";
+    if (!this.#ffmpeg) throw new Error("Handler not initialized.");
     try {
       if (timeout === -1) {
         await this.#ffmpeg.exec(args);
@@ -106,12 +108,7 @@ class FFmpegHandler implements FormatHandler {
 
     for (let line of lines) {
 
-      let len;
-      do {
-        len = line.length;
-        line = line.replaceAll("  ", " ");
-      } while (len !== line.length);
-      line = line.trim();
+      line = line.replace(/\s+/g, " ").trim();
 
       const parts = line.split(" ");
       if (parts.length < 2) continue;
@@ -190,12 +187,14 @@ class FFmpegHandler implements FormatHandler {
     });
 
     // AV1 doesn't seem to be included in WASM FFmpeg
-    this.supportedFormats.splice(this.supportedFormats.findIndex(c => c.mime === "image/avif"), 1);
+    const avifIdx = this.supportedFormats.findIndex(c => c.mime === "image/avif");
+    if (avifIdx >= 0) this.supportedFormats.splice(avifIdx, 1);
     // HEVC encoding stalls in WASM FFmpeg, but decoding works fine
     const hevcIdx = this.supportedFormats.findIndex(c => c.internal === "hevc");
     if (hevcIdx !== -1) this.supportedFormats[hevcIdx].to = false;
     // RTSP stalls when attempted
-    this.supportedFormats.splice(this.supportedFormats.findIndex(c => c.internal === "rtsp"), 1);
+    const rtspIdx = this.supportedFormats.findIndex(c => c.internal === "rtsp");
+    if (rtspIdx >= 0) this.supportedFormats.splice(rtspIdx, 1);
 
     // Add .qta (QuickTime Audio) support - uses same mov demuxer
     this.supportedFormats.push({
@@ -225,7 +224,7 @@ class FFmpegHandler implements FormatHandler {
   ): Promise<FileData[]> {
 
     if (!this.#ffmpeg) {
-      throw "Handler not initialized.";
+      throw new Error("Handler not initialized.");
     }
 
     await this.reloadFFmpeg();
@@ -314,7 +313,7 @@ class FFmpegHandler implements FormatHandler {
     await this.#ffmpeg.deleteFile("output");
     await this.#ffmpeg.deleteFile("list.txt");
 
-    const baseName = inputFiles[0].name.split(".")[0];
+    const baseName = getBaseName(inputFiles[0].name);
     const name = baseName + "." + outputFormat.extension;
 
     return [{ bytes, name }];

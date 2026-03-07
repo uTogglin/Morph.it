@@ -1,5 +1,11 @@
-import { getKokoro, encodeWav, spokenWeight } from "./speech-tool.js";
+import { getKokoro, encodeWav } from "./speech-tool.js";
 import { getOcrWorker, setOcrProgress } from "./ocr-worker.js";
+import {
+  PLAY_SVG, PAUSE_SVG,
+  formatTime, buildWordSpans, buildTimings,
+  updateWordHighlight, buildSentenceTimings,
+  type WordTiming, type SentenceTiming, type HighlightState,
+} from "./utils/tts-player.ts";
 
 // ── PDF page-to-image helper ────────────────────────────────────────────────
 async function pdfToImages(bytes: Uint8Array): Promise<HTMLCanvasElement[]> {
@@ -223,161 +229,46 @@ export function initOcrTool() {
   const timeCurrent = document.getElementById("ocr-time-current") as HTMLSpanElement;
   const timeDuration = document.getElementById("ocr-time-duration") as HTMLSpanElement;
 
-  const PLAY_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
-  const PAUSE_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
   playBtn.innerHTML = PLAY_SVG;
 
-  interface WordTiming { word: string; start: number; end: number; el: HTMLSpanElement; }
-  interface SentenceTiming { text: string; start: number; end: number; }
   let wordTimings: WordTiming[] = [];
   let sentenceTimings: SentenceTiming[] = [];
   let activeWordIdx = -1;
   let activeSentenceIdx = -1;
   let ttsAudioUrl: string | null = null;
   let ttsGenerating = false;
-
-  function fmtTime(sec: number): string {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  }
-
-  function buildWordSpans(chunks: string[]): HTMLSpanElement[] {
-    wordDisplay.innerHTML = "";
-    const spans: HTMLSpanElement[] = [];
-    for (let c = 0; c < chunks.length; c++) {
-      if (c > 0) wordDisplay.appendChild(document.createTextNode(" "));
-      const tokens = chunks[c].split(/(\s+)/);
-      for (const tok of tokens) {
-        if (/^\s+$/.test(tok)) {
-          wordDisplay.appendChild(document.createTextNode(tok));
-        } else if (tok) {
-          const sp = document.createElement("span");
-          sp.className = "speech-word";
-          sp.textContent = tok;
-          wordDisplay.appendChild(sp);
-          spans.push(sp);
-        }
-      }
-    }
-    return spans;
-  }
-
-  function buildTimings(chunks: Array<{ text: string; samples: number }>, sr: number, spans: HTMLSpanElement[]): WordTiming[] {
-    const timings: WordTiming[] = [];
-    let sOff = 0, sIdx = 0;
-    for (const ch of chunks) {
-      const tStart = sOff / sr, tEnd = (sOff + ch.samples) / sr;
-      const words = ch.text.trim().split(/\s+/).filter(Boolean);
-      if (words.length === 0) { sOff += ch.samples; continue; }
-      const weights = words.map(spokenWeight);
-      const totalWeight = weights.reduce((a, b) => a + b, 0);
-      const chunkDur = tEnd - tStart;
-      let t = tStart;
-      for (let i = 0; i < words.length; i++) {
-        const el = spans[sIdx]; if (!el) break;
-        const dur = (weights[i] / totalWeight) * chunkDur;
-        timings.push({ word: words[i], start: t, end: t + dur, el });
-        t += dur;
-        sIdx++;
-      }
-      sOff += ch.samples;
-    }
-    return timings;
-  }
-
-  function findWordAtTime(t: number): number {
-    if (wordTimings.length === 0) return -1;
-    let lo = 0, hi = wordTimings.length - 1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (t < wordTimings[mid].start) hi = mid - 1;
-      else if (t >= wordTimings[mid].end) lo = mid + 1;
-      else return mid;
-    }
-    if (t >= wordTimings[wordTimings.length - 1]?.start) return wordTimings.length - 1;
-    return -1;
-  }
-
-  function findSentenceAtTime(t: number): number {
-    for (let i = 0; i < sentenceTimings.length; i++) {
-      if (t >= sentenceTimings[i].start && t < sentenceTimings[i].end) return i;
-    }
-    if (sentenceTimings.length && t >= sentenceTimings[sentenceTimings.length - 1].start) return sentenceTimings.length - 1;
-    return -1;
-  }
-
-  // Build sentence spans once when sentence changes, so we can highlight words by index
   let sentenceWordSpans: HTMLSpanElement[] = [];
   let sentenceActiveIdx = -1;
 
-  function buildSentenceSpans(text: string) {
-    ttsSentence.innerHTML = "";
-    sentenceWordSpans = [];
-    sentenceActiveIdx = -1;
-    const tokens = text.split(/(\s+)/);
-    for (const tok of tokens) {
-      if (/^\s+$/.test(tok)) {
-        ttsSentence.appendChild(document.createTextNode(tok));
-      } else {
-        const sp = document.createElement("span");
-        sp.textContent = tok;
-        ttsSentence.appendChild(sp);
-        sentenceWordSpans.push(sp);
-      }
-    }
-  }
+  // ── Highlight state for shared updateWordHighlight ─────────────────────
+  const hlState: HighlightState = {
+    wordTimings,
+    activeWordIdx,
+    wordDisplayEl: wordDisplay,
+    sentenceTimings,
+    activeSentenceIdx,
+    sentenceEl: ttsSentence,
+    sentenceWordSpans,
+    sentenceActiveIdx,
+  };
 
-  // Map a global word index to the local index within the current sentence
-  function globalToSentenceWordIdx(globalIdx: number, sIdx: number): number {
-    if (sIdx < 0 || globalIdx < 0) return -1;
-    // Count how many words are in sentences before sIdx
-    let count = 0;
-    for (let i = 0; i < sIdx; i++) {
-      count += sentenceTimings[i].text.trim().split(/\s+/).filter(Boolean).length;
-    }
-    return globalIdx - count;
-  }
+  function doUpdateHighlight() {
+    hlState.wordTimings = wordTimings;
+    hlState.activeWordIdx = activeWordIdx;
+    hlState.sentenceTimings = sentenceTimings;
+    hlState.activeSentenceIdx = activeSentenceIdx;
+    hlState.sentenceWordSpans = sentenceWordSpans;
+    hlState.sentenceActiveIdx = sentenceActiveIdx;
 
-  function updateHighlight() {
-    const newIdx = findWordAtTime(ttsAudio.currentTime);
-    if (newIdx !== activeWordIdx) {
-      if (activeWordIdx >= 0 && activeWordIdx < wordTimings.length) wordTimings[activeWordIdx].el.classList.remove("active");
-      if (newIdx >= 0) {
-        wordTimings[newIdx].el.classList.add("active");
-        const el = wordTimings[newIdx].el;
-        if (el.offsetTop < wordDisplay.scrollTop || el.offsetTop + el.offsetHeight > wordDisplay.scrollTop + wordDisplay.clientHeight) {
-          el.scrollIntoView({ block: "center", behavior: "smooth" });
-        }
-      }
-      activeWordIdx = newIdx;
-    }
-    // Update sentence teleprompter
-    const sIdx = findSentenceAtTime(ttsAudio.currentTime);
-    if (sIdx !== activeSentenceIdx) {
-      activeSentenceIdx = sIdx;
-      if (sIdx >= 0) {
-        buildSentenceSpans(sentenceTimings[sIdx].text);
-      } else {
-        ttsSentence.textContent = "";
-        sentenceWordSpans = [];
-      }
-    }
-    // Highlight current word in sentence
-    const localIdx = globalToSentenceWordIdx(newIdx, sIdx);
-    if (localIdx !== sentenceActiveIdx) {
-      if (sentenceActiveIdx >= 0 && sentenceActiveIdx < sentenceWordSpans.length) {
-        sentenceWordSpans[sentenceActiveIdx].classList.remove("ocr-sentence-hl");
-      }
-      if (localIdx >= 0 && localIdx < sentenceWordSpans.length) {
-        sentenceWordSpans[localIdx].classList.add("ocr-sentence-hl");
-      }
-      sentenceActiveIdx = localIdx;
-    }
+    const result = updateWordHighlight(ttsAudio.currentTime, hlState);
+    activeWordIdx = result.activeWordIdx;
+    activeSentenceIdx = result.activeSentenceIdx;
+    sentenceWordSpans = result.sentenceWordSpans;
+    sentenceActiveIdx = result.sentenceActiveIdx;
   }
 
   let hlRaf = 0;
-  function hlLoop() { updateHighlight(); hlRaf = requestAnimationFrame(hlLoop); }
+  function hlLoop() { doUpdateHighlight(); hlRaf = requestAnimationFrame(hlLoop); }
 
   playBtn.addEventListener("click", () => { ttsAudio.paused ? ttsAudio.play() : ttsAudio.pause(); });
   ttsAudio.addEventListener("play", () => { playBtn.innerHTML = PAUSE_SVG; cancelAnimationFrame(hlRaf); hlLoop(); });
@@ -397,13 +288,13 @@ export function initOcrTool() {
     const pct = (ttsAudio.currentTime / ttsAudio.duration) * 100;
     seekFill.style.width = `${pct}%`;
     seekThumb.style.left = `${pct}%`;
-    timeCurrent.textContent = fmtTime(ttsAudio.currentTime);
-    timeDuration.textContent = fmtTime(ttsAudio.duration);
-    if (ttsAudio.paused) updateHighlight();
+    timeCurrent.textContent = formatTime(ttsAudio.currentTime);
+    timeDuration.textContent = formatTime(ttsAudio.duration);
+    if (ttsAudio.paused) doUpdateHighlight();
   });
   ttsAudio.addEventListener("loadedmetadata", () => {
     timeCurrent.textContent = "0:00";
-    timeDuration.textContent = fmtTime(ttsAudio.duration);
+    timeDuration.textContent = formatTime(ttsAudio.duration);
   });
 
   let ttsSeeking = false;
@@ -455,7 +346,7 @@ export function initOcrTool() {
       }
       if (cur.trim()) chunks.push(cur.trim());
 
-      const wordSpans = buildWordSpans(chunks);
+      const wordSpans = buildWordSpans(wordDisplay, chunks);
 
       for (let i = 0; i < chunks.length; i++) {
         ttsProgressText.textContent = chunks.length > 1
@@ -487,14 +378,7 @@ export function initOcrTool() {
       activeSentenceIdx = -1;
 
       // Build sentence timings from chunks
-      sentenceTimings = [];
-      let sOff = 0;
-      for (const ch of chunkMeta) {
-        const tStart = sOff / sampleRate;
-        const tEnd = (sOff + ch.samples) / sampleRate;
-        sentenceTimings.push({ text: ch.text, start: tStart, end: tEnd });
-        sOff += ch.samples;
-      }
+      sentenceTimings = buildSentenceTimings(chunkMeta, sampleRate);
 
       const wavBlob = encodeWav(full, sampleRate);
       if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);

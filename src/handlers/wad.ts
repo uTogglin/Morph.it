@@ -1,5 +1,6 @@
 import { FormatDefinition } from "../FormatHandler.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import CommonFormats from "src/CommonFormats.ts";
 import JSZip from "jszip";
 
@@ -118,7 +119,7 @@ class wadHandler implements FormatHandler {
         if (inputFormat.internal === "wad") {
             for (const file of inputFiles) {
                 const { type, lumps } = this.parseWAD(file.bytes);
-                const baseName = file.name.replace(/\.wad$/i, "");
+                const baseName = getBaseName(file.name);
 
                 if (outputFormat.internal === "zip") {
                     // WAD → ZIP: each lump becomes a file
@@ -175,7 +176,7 @@ class wadHandler implements FormatHandler {
         } else if (inputFormat.internal === "zip") {
             // ZIP → WAD: each zip entry becomes a lump
             for (const file of inputFiles) {
-                const baseName = file.name.replace(/\.zip$/i, "");
+                const baseName = getBaseName(file.name);
                 const zip = await JSZip.loadAsync(file.bytes);
                 
                 // Check for metadata file for lossless conversion
@@ -217,8 +218,7 @@ class wadHandler implements FormatHandler {
                         if (entry.dir) continue;
                         const data = await entry.async("uint8array");
                         // Use filename without extension as lump name (max 8 chars)
-                        const lumpName = filePath.split("/").pop()!
-                            .replace(/\.[^.]*$/, "")
+                        const lumpName = getBaseName(filePath.split("/").pop()!)
                             .substring(0, 8);
                         lumps.push({ name: lumpName, data });
                     }

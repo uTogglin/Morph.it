@@ -1,5 +1,7 @@
 // Web Worker for BART/DistilBART summarization inference
 
+import { detectDevice, getDefaultDtype } from "./utils/worker-gpu-utils";
+
 const ctx = self as unknown as Worker;
 
 const MODELS: Record<string, { id: string; label: string }> = {
@@ -27,11 +29,8 @@ ctx.onmessage = async (e: MessageEvent) => {
     try {
       const { pipeline } = await import("@huggingface/transformers");
 
-      const forceDevice: string | undefined = e.data.forceDevice;
-      const hasWebGPU = !forceDevice && "gpu" in navigator &&
-        !!(await (navigator as any).gpu?.requestAdapter().catch(() => null));
-      const device = hasWebGPU ? "webgpu" : "wasm";
-      const dtype = hasWebGPU ? "fp32" : "q8";
+      const device = await detectDevice(e.data.forceDevice);
+      const dtype = getDefaultDtype(device);
 
       console.log(`[Summarize Worker] device=${device}, dtype=${dtype}`);
       ctx.postMessage({ type: "progress", pct: 0, msg: `Loading ${modelInfo.label} (${device})...` });

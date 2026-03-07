@@ -1,5 +1,6 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import { SimpleTTS } from "./espeakng.js/js/espeakng-simple.js";
 import { WaveFile } from "wavefile";
 
@@ -53,7 +54,7 @@ export class espeakngHandler implements FormatHandler {
       // decrease playback rate and increase playback sample rate
       wav.fromScratch(1, tts.sampleRate * 1.4, "32f", samples);
       return {
-        name: file.name.split(".")[0]+".wav",
+        name: getBaseName(file.name)+".wav",
         bytes: wav.toBuffer()
       }
     }))

@@ -1,5 +1,6 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 import { pdfToImg } from "pdftoimg-js/browser";
 
@@ -50,8 +51,9 @@ class pdftoimgHandler implements FormatHandler {
         imgType: outputFormat.format,
         pages: "all"
       });
+      URL.revokeObjectURL(url);
 
-      const baseName = inputFile.name.split(".")[0];
+      const baseName = getBaseName(inputFile.name);
 
       for (let i = 0; i < images.length; i++) {
         const base64 = images[i].slice(images[i].indexOf(";base64,") + 8);

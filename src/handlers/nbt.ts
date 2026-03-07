@@ -1,4 +1,5 @@
 import type { FileData, FileFormat, FormatHandler } from "src/FormatHandler";
+import { getBaseName } from "../utils/file-utils.ts";
 import * as NBT from "nbtify";
 import CommonFormats from "src/CommonFormats";
 
@@ -54,7 +55,7 @@ class nbtHandler implements FormatHandler {
                 const nbt = await NBT.read(file.bytes);
                 const j = JSON.stringify(nbt.data, null, this.indent)
                 outputFiles.push({
-                    name: file.name.split(".")[0] + ".json",
+                    name: getBaseName(file.name) + ".json",
                     bytes: encoder.encode(j)
                 })
             }
@@ -65,7 +66,7 @@ class nbtHandler implements FormatHandler {
                 const obj = JSON.parse(text)
                 const bd = await NBT.write(obj)
                 outputFiles.push({
-                    name: file.name.split(".")[0] + ".nbt",
+                    name: getBaseName(file.name) + ".nbt",
                     bytes: bd
                 })
             }
@@ -78,7 +79,7 @@ class nbtHandler implements FormatHandler {
                 const nbt = NBT.parse(text)
                 const bd = await NBT.write(nbt)
                 outputFiles.push({
-                    name: file.name.split(".")[0] + ".nbt",
+                    name: getBaseName(file.name) + ".nbt",
                     bytes: bd
                 })
             }
@@ -90,7 +91,7 @@ class nbtHandler implements FormatHandler {
                     space: this.indent
                 })
                 outputFiles.push({
-                    name: file.name.split(".")[0] + ".snbt",
+                    name: getBaseName(file.name) + ".snbt",
                     bytes: encoder.encode(text)
                 })
             }
@@ -103,7 +104,7 @@ class nbtHandler implements FormatHandler {
                 const nbt = NBT.parse(snbt)
                 const text = JSON.stringify(nbt, null, this.indent)
                 outputFiles.push({
-                    name: file.name.split(".")[0] + ".json",
+                    name: getBaseName(file.name) + ".json",
                     bytes: encoder.encode(text)
                 })
             }
@@ -116,7 +117,7 @@ class nbtHandler implements FormatHandler {
                     space: this.indent
                 })
                 outputFiles.push({
-                    name: file.name.split(".")[0] + ".snbt",
+                    name: getBaseName(file.name) + ".snbt",
                     bytes: encoder.encode(snbt)
                 })
             }

@@ -1,5 +1,6 @@
 import pako from "pako";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import CommonFormats from "src/CommonFormats.ts";
 
 async function revertCgBIBuffer(input: Uint8Array | ArrayBuffer): Promise<Uint8Array> {
@@ -48,7 +49,7 @@ async function revertCgBIBuffer(input: Uint8Array | ArrayBuffer): Promise<Uint8A
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
   let isIphoneCompressed = false;
-  let idatCgbiData = new Uint8Array(0);
+  const idatChunks: Uint8Array[] = [];
   let width = 0, height = 0;
 
   while (offset < buffer.length) {
@@ -80,11 +81,12 @@ async function revertCgBIBuffer(input: Uint8Array | ArrayBuffer): Promise<Uint8A
     }
 
     if (type === "IDAT" && isIphoneCompressed) {
-      idatCgbiData = concat([idatCgbiData, data]);
+      idatChunks.push(data);
       continue;
     }
 
     if (type === "IEND" && isIphoneCompressed) {
+      const idatCgbiData = concat(idatChunks);
       const uncompressed = pako.inflateRaw(idatCgbiData);
 
       const newData = new Uint8Array(uncompressed.length);
@@ -181,8 +183,7 @@ class cgbiToPngHandler implements FormatHandler {
       try {
         const standardPng = await revertCgBIBuffer(inputFile.bytes);
         
-        const dotIndex = inputFile.name.lastIndexOf('.');
-        const baseName = dotIndex !== -1 ? inputFile.name.substring(0, dotIndex) : inputFile.name;
+        const baseName = getBaseName(inputFile.name);
         const outputName = `${baseName}.${outputFormat.extension}`;
 
         outputFiles.push({
@@ -190,7 +191,7 @@ class cgbiToPngHandler implements FormatHandler {
           name: outputName
         });
       } catch (error) {
-        throw `Failed to convert ${inputFile.name}: ${(error as Error).message}`;
+        throw `Failed to convert ${inputFile.name}: ${error instanceof Error ? error.message : String(error)}`;
       }
     }
 

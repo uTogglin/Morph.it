@@ -34,6 +34,7 @@ function _appendAppLog(level: AppLogEntry["level"], args: unknown[]) {
     .map(n => n.toString().padStart(2, "0")).join(":");
   const entry: AppLogEntry = { level, msg, time };
   appLogBuffer.push(entry);
+  if (appLogBuffer.length > 1000) appLogBuffer.splice(0, appLogBuffer.length - 1000);
   if (level === "error") _errorCount++;
   const badge = document.getElementById("log-badge");
   if (badge) {
@@ -281,12 +282,12 @@ function getMediaCategory(file: File): string {
   return file.type.split("/")[0] || "unknown";
 }
 
-/** Finds the matching allOptions entry for a file */
+/** Finds the matching allOptions entry for a file (O(1) MIME lookup via Map) */
 function findInputOption(file: File): { format: FileFormat; handler: FormatHandler } | null {
   const mime = normalizeMimeType(file.type);
   const ext = file.name.split(".").pop()?.toLowerCase();
-  const matches = allOptions.filter(o => o.format.from && o.format.mime === mime);
-  if (matches.length === 0) {
+  const matches = mimeToOptions.get(mime);
+  if (!matches || matches.length === 0) {
     // Fall back to extension match
     return allOptions.find(o => o.format.from && o.format.extension?.toLowerCase() === ext) || null;
   }
@@ -1087,7 +1088,7 @@ const renderFilePreviews = (files: File[]) => {
   if (activeFolderName) {
     const indicator = document.createElement("div");
     indicator.className = "folder-indicator";
-    indicator.innerHTML = `&#128193; <strong>${activeFolderName}</strong> &mdash; ${allUploadedFiles.length} file${allUploadedFiles.length !== 1 ? "s" : ""}`;
+    indicator.innerHTML = `&#128193; <strong>${escapeHtml(activeFolderName)}</strong> &mdash; ${allUploadedFiles.length} file${allUploadedFiles.length !== 1 ? "s" : ""}`;
     header.insertBefore(indicator, header.firstChild);
   }
 };
@@ -1334,6 +1335,8 @@ window.hidePopup = function () {
 }
 
 const allOptions: Array<{ format: FileFormat, handler: FormatHandler }> = [];
+/** Map from normalized MIME type to matching allOptions entries (built in buildOptionList) */
+let mimeToOptions = new Map<string, Array<{ format: FileFormat, handler: FormatHandler }>>();
 
 window.supportedFormatCache = new Map();
 window.traversionGraph = new TraversionGraph();
@@ -1496,6 +1499,16 @@ async function buildOptionList () {
     }
   }
   window.traversionGraph.init(window.supportedFormatCache, handlers);
+
+  // Build MIME lookup map for O(1) findInputOption
+  mimeToOptions = new Map();
+  for (const opt of allOptions) {
+    if (!opt.format.from || !opt.format.mime) continue;
+    const key = opt.format.mime;
+    const arr = mimeToOptions.get(key);
+    if (arr) arr.push(opt);
+    else mimeToOptions.set(key, [opt]);
+  }
 
   // Render category filters above each format list
   const inputContainer = ui.inputList.parentElement as HTMLDivElement;
@@ -2607,31 +2620,47 @@ async function runInpainting(imageBytes: Uint8Array, ext: string, maskImageData:
     : runMiganInpainting(imageBytes, ext, maskImageData);
 }
 
-/** Simple box-blur approximation of Gaussian blur on ImageData alpha channel */
+/** Separable box-blur approximation of Gaussian blur on ImageData alpha channel (O(n·r) per pass) */
 function applyGaussianBlur(data: ImageData, w: number, h: number, radius: number) {
   const pixels = data.data;
-  const alphas = new Float32Array(w * h);
-  for (let i = 0; i < w * h; i++) alphas[i] = pixels[i * 4 + 3];
+  const size = w * h;
+  const alphas = new Float32Array(size);
+  for (let i = 0; i < size; i++) alphas[i] = pixels[i * 4 + 3];
 
+  const tmp = new Float32Array(size);
+
+  // 3-pass box blur approximates Gaussian
+  let src = alphas, dst = tmp;
   for (let pass = 0; pass < 3; pass++) {
-    const temp = new Float32Array(alphas);
+    // Horizontal pass
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let sum = 0, count = 0;
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = Math.min(w - 1, Math.max(0, x + dx));
+          sum += src[y * w + nx];
+          count++;
+        }
+        dst[y * w + x] = sum / count;
+      }
+    }
+    // Vertical pass
+    const src2 = dst, dst2 = (pass < 2) ? (dst === tmp ? alphas : tmp) : alphas;
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         let sum = 0, count = 0;
         for (let dy = -radius; dy <= radius; dy++) {
-          for (let dx = -radius; dx <= radius; dx++) {
-            const nx = x + dx, ny = y + dy;
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-              sum += temp[ny * w + nx];
-              count++;
-            }
-          }
+          const ny = Math.min(h - 1, Math.max(0, y + dy));
+          sum += src2[ny * w + x];
+          count++;
         }
-        alphas[y * w + x] = sum / count;
+        dst2[y * w + x] = sum / count;
       }
     }
+    src = dst2;
+    dst = dst2 === tmp ? alphas : tmp;
   }
-  for (let i = 0; i < w * h; i++) pixels[i * 4 + 3] = Math.round(alphas[i]);
+  for (let i = 0; i < size; i++) pixels[i * 4 + 3] = Math.round(alphas[i]);
 }
 
 /** Apply inpainting to files — now a no-op since inpainting is done interactively in miniPaint */
@@ -3337,7 +3366,7 @@ async function loadBytesIntoMiniPaint(bytes: Uint8Array, name: string): Promise<
 }
 
 /** Get composited image from all miniPaint layers as PNG bytes */
-function getImageFromMiniPaint(): Uint8Array | null {
+async function getImageFromMiniPaint(): Promise<Uint8Array | null> {
   if (!miniPaintReady) return null;
   const win = ui.imgFrame.contentWindow as any;
   if (!win?.Layers) return null;
@@ -3349,13 +3378,11 @@ function getImageFromMiniPaint(): Uint8Array | null {
   const ctx = tempCanvas.getContext("2d")!;
   win.Layers.convert_layers_to_canvas(ctx);
 
-  // Convert canvas to PNG bytes synchronously via data URL
-  const dataUrl = tempCanvas.toDataURL("image/png");
-  const base64 = dataUrl.split(",")[1];
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+  // Convert canvas to PNG bytes via toBlob (avoids base64 round-trip)
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    tempCanvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas export failed")), "image/png");
+  });
+  return new Uint8Array(await blob.arrayBuffer());
 }
 
 /** Extract the "Mask" layer as ImageData for inpainting, or null if none exists */
@@ -3464,6 +3491,7 @@ ui.imgFileInput?.addEventListener("change", () => {
 
 // Bridge: iframe inpaint tool → parent runInpainting() → iframe result
 window.addEventListener("message", async (e) => {
+  if (e.origin !== window.location.origin) return;
   if (e.data?.type !== "inpaint-request") return;
   const iframe = ui.imgFrame;
   if (!iframe?.contentWindow) return;
@@ -3502,6 +3530,7 @@ window.addEventListener("message", async (e) => {
 // Bridge: iframe remove-bg tool → parent removeBgLocal/Api() → iframe result
 // Calls the removal functions directly (not applyBgRemoval which shows its own popup).
 window.addEventListener("message", async (e) => {
+  if (e.origin !== window.location.origin) return;
   if (e.data?.type !== "removebg-request") return;
   const iframe = ui.imgFrame;
   if (!iframe?.contentWindow) return;
@@ -3648,6 +3677,7 @@ async function generateImageViaOpenRouter(
 
 // Bridge: iframe aigen tool → parent OpenRouter API → iframe result
 window.addEventListener("message", async (e) => {
+  if (e.origin !== window.location.origin) return;
   if (e.data?.type !== "aigen-request") return;
   const iframe = ui.imgFrame;
   if (!iframe?.contentWindow) return;
@@ -3674,6 +3704,7 @@ window.addEventListener("message", async (e) => {
 
 // Bridge: iframe fullscreen button → parent Fullscreen API toggle
 window.addEventListener("message", (e) => {
+  if (e.origin !== window.location.origin) return;
   if (e.data?.type !== "fullscreen-toggle") return;
   const container = ui.imgEditorContainer;
   if (!container) return;

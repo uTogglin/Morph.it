@@ -1,5 +1,7 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { canvasToBytes } from "../utils/canvas-to-bytes.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 const TEXTUREFLAGS_ENVMAP = 0x00004000;
 const RESOURCE_HIGH_RES_IMAGE = 0x30;
@@ -842,13 +844,8 @@ class vtfHandler implements FormatHandler {
       const imageData = new ImageData(new Uint8ClampedArray(decoded.pixels), decoded.width, decoded.height);
       this.#ctx.putImageData(imageData, 0, 0);
 
-      const bytes: Uint8Array = await new Promise((resolve, reject) => {
-        this.#canvas!.toBlob((blob) => {
-          if (!blob) return reject("Canvas output failed");
-          blob.arrayBuffer().then(buf => resolve(new Uint8Array(buf)));
-        }, outputFormat.mime);
-      });
-      const name = inputFile.name.split(".")[0] + "." + outputFormat.extension;
+      const bytes = await canvasToBytes(this.#canvas!, outputFormat.mime);
+      const name = getBaseName(inputFile.name) + "." + outputFormat.extension;
       outputFiles.push({ bytes, name });
     }
     return outputFiles;

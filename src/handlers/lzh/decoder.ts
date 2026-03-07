@@ -46,7 +46,7 @@ export class LZHDecoder {
     if (this.offset + length > this.data.length) {
       throw new Error("Unexpected end of file");
     }
-    const result = this.data.slice(this.offset, this.offset + length);
+    const result = this.data.subarray(this.offset, this.offset + length);
     this.offset += length;
     return result;
   }

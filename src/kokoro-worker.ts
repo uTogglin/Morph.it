@@ -1,5 +1,7 @@
 // Web Worker for Kokoro TTS — runs model loading and inference off the main thread
 
+import { detectDevice, getDefaultDtype, patchWebGPUReadback } from "./utils/worker-gpu-utils";
+
 const ctx = self as unknown as Worker;
 
 let tts: any = null;
@@ -12,11 +14,8 @@ ctx.onmessage = async (e: MessageEvent) => {
     try {
       const { KokoroTTS } = await import("kokoro-js");
 
-      const forceDevice: string | undefined = e.data.forceDevice;
-      const hasWebGPU = !forceDevice && "gpu" in navigator &&
-        !!(await (navigator as any).gpu?.requestAdapter().catch(() => null));
-      const device = hasWebGPU ? "webgpu" : "wasm";
-      const dtype = hasWebGPU ? "fp32" : "q8";
+      const device = await detectDevice(e.data.forceDevice);
+      const dtype = getDefaultDtype(device);
 
       console.log(`[Kokoro Worker] device=${device}, dtype=${dtype}`);
       ctx.postMessage({ type: "progress", pct: 0, msg: `Loading Kokoro model (${device})...` });
@@ -39,18 +38,7 @@ ctx.onmessage = async (e: MessageEvent) => {
       });
 
       // WebGPU fix: patch model.__call__ to force tensor readback to CPU
-      if (device === "webgpu" && tts.model?.__call__) {
-        const origCall = tts.model.__call__.bind(tts.model);
-        tts.model.__call__ = async function (...args: any[]) {
-          const output = await origCall(...args);
-          for (const key of Object.keys(output)) {
-            const tensor = output[key];
-            if (tensor && typeof tensor.getData === "function") await tensor.getData();
-          }
-          return output;
-        };
-        console.log("[Kokoro Worker] Patched __call__ for WebGPU tensor readback");
-      }
+      patchWebGPUReadback(tts.model, device, "Kokoro Worker");
 
       console.log("[Kokoro Worker] Model loaded");
       ctx.postMessage({ type: "ready" });

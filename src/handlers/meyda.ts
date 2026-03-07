@@ -1,4 +1,6 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { canvasToBytes } from "../utils/canvas-to-bytes.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 import Meyda from "meyda";
 import CommonFormats from "src/CommonFormats.ts";
@@ -81,7 +83,7 @@ class meydaHandler implements FormatHandler {
     if (inputIsImage) {
       for (const inputFile of inputFiles) {
 
-        this.#ctx.clearRect(0, 0, this.#canvas.width, this.#canvas.width);
+        this.#ctx.clearRect(0, 0, this.#canvas.width, this.#canvas.height);
 
         const blob = new Blob([inputFile.bytes as BlobPart], { type: inputFormat.mime });
         const url = URL.createObjectURL(blob);
@@ -92,6 +94,7 @@ class meydaHandler implements FormatHandler {
           image.addEventListener("error", reject);
           image.src = url;
         });
+        URL.revokeObjectURL(url);
 
         const imageWidth = image.naturalWidth;
         const imageHeight = image.naturalHeight;
@@ -161,7 +164,7 @@ class meydaHandler implements FormatHandler {
         wav.fromScratch(1, sampleRate, "32f", audioData);
 
         const bytes = wav.toBuffer();
-        const name = inputFile.name.split(".")[0] + "." + outputFormat.extension;
+        const name = getBaseName(inputFile.name) + "." + outputFormat.extension;
         outputFiles.push({ bytes, name });
 
       }
@@ -214,13 +217,8 @@ class meydaHandler implements FormatHandler {
 
         }
 
-        const bytes: Uint8Array = await new Promise((resolve, reject) => {
-          this.#canvas!.toBlob((blob) => {
-            if (!blob) return reject("Canvas output failed.");
-            blob.arrayBuffer().then(buf => resolve(new Uint8Array(buf)));
-          }, outputFormat.mime);
-        });
-        const name = inputFile.name.split(".")[0] + "." + outputFormat.extension;
+        const bytes = await canvasToBytes(this.#canvas!, outputFormat.mime);
+        const name = getBaseName(inputFile.name) + "." + outputFormat.extension;
         outputFiles.push({ bytes, name });
 
       }

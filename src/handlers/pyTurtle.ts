@@ -1,5 +1,6 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 // hardcoded limits to prevent big SVG crash
 const MAX_ELEMENTS = 750;
@@ -21,7 +22,8 @@ function createContainer(svg:string){
     // Create a div within the shadow DOM to act as
     // a container for our HTML payload.
     const container = document.createElement("div");
-    container.innerHTML = svg;
+    const sanitized = svg.replace(/<script[\s\S]*?<\/script>/gi, '');
+    container.innerHTML = sanitized;
     shadow.appendChild(container);
     return container
 }
@@ -49,26 +51,6 @@ class pyTurtleHandler implements FormatHandler {
     ];
     this.ready = true;
   }
-  createContainer(svg:string){
-    // stolen from svg Foreign object convert. we need the browser to render the svg:
-
-    const dummy = document.createElement("div");
-    dummy.style.all = "initial";
-    dummy.style.visibility = "hidden";
-    dummy.style.position = "fixed";
-    document.body.appendChild(dummy);
-
-    // Add a DOM shadow to the dummy to "sterilize" it.
-    const shadow = dummy.attachShadow({ mode: "closed" });
-
-    // Create a div within the shadow DOM to act as
-    // a container for our HTML payload.
-    const container = document.createElement("div");
-    container.innerHTML = svg;
-    shadow.appendChild(container);
-    return container
-}
-
   async doConvert (
     inputFiles: FileData[],
     inputFormat: FileFormat,
@@ -92,7 +74,7 @@ class pyTurtleHandler implements FormatHandler {
 
 
       const outputBytes = encoder.encode(python_code);
-      const newName = name.split(".")[0] + ".py";
+      const newName = getBaseName(name) + ".py";
       outputFiles.push({ name: newName, bytes: outputBytes });
     }
 
@@ -178,6 +160,7 @@ class pyTurtleHandler implements FormatHandler {
 
                 if (tagName === 'path' || tagName === 'polyline' || tagName === 'polygon') {
                     document.body.appendChild(tempP);
+                    try {
                     const len = tempP.getTotalLength();
                     const step = Math.max(len / MAX_POINTS_PER_PATH, 0.5);
                     for (let i = 0; i <= len; i += step) {
@@ -186,7 +169,9 @@ class pyTurtleHandler implements FormatHandler {
                         const trans = pt.matrixTransform(ctm);
                         pts.push({ x: trans.x, y: -trans.y });
                     }
-                    if (tagName === 'path') document.body.removeChild(tempP);
+                    } finally {
+                    document.body.removeChild(tempP);
+                    }
                 } else {
                     const b = el.getBBox();
                     const corners = [{x:b.x, y:b.y}, {x:b.x+b.width, y:b.y}, {x:b.x+b.width, y:b.y+b.height}, {x:b.x, y:b.y+b.height}];

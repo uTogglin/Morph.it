@@ -105,7 +105,7 @@ class PriorityQueue<T extends object> {
 
       if (
         right < this._size &&
-        object!.toString().localeCompare(this._queue[right]!.toString())
+        object!.toString().localeCompare(this._queue[right]!.toString()) > 0
       ) {
         object = this._queue[(child = right)];
       }
@@ -189,7 +189,7 @@ class PriorityQueue<T extends object> {
     return {
       next: () => {
         return {
-          done: i == this._size,
+          done: i === this._size,
           value: <T>this._queue[i++]
         };
       }

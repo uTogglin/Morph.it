@@ -2,6 +2,7 @@
 // npm install ts-flp buffer
 
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 import { Buffer } from "buffer";
 import CommonFormats from "src/CommonFormats.ts";
 
@@ -107,7 +108,7 @@ class flptojsonHandler implements FormatHandler {
         const encoder = new TextEncoder();
         const outputBytes = encoder.encode(jsonString);
 
-        const baseName = inputFile.name.split(".")[0];
+        const baseName = getBaseName(inputFile.name);
         const newName = `${baseName}.json`;
 
         outputFiles.push({

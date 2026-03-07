@@ -1,5 +1,7 @@
 // Web Worker for Whisper STT — runs model loading and transcription off the main thread
 
+import { detectDevice, patchWebGPUReadback } from "./utils/worker-gpu-utils";
+
 const ctx = self as unknown as Worker;
 
 const pipelines: Map<string, any> = new Map();
@@ -13,11 +15,8 @@ const MODELS: Record<string, { id: string; label: string }> = {
 };
 
 async function getDevice(forceDevice?: string): Promise<"webgpu" | "wasm"> {
-  if (forceDevice === "wasm") { detectedDevice = "wasm"; return "wasm"; }
-  if (detectedDevice) return detectedDevice;
-  const hasWebGPU = "gpu" in navigator &&
-    !!(await (navigator as any).gpu?.requestAdapter().catch(() => null));
-  detectedDevice = hasWebGPU ? "webgpu" : "wasm";
+  if (detectedDevice && forceDevice !== "wasm") return detectedDevice;
+  detectedDevice = await detectDevice(forceDevice);
   console.log(`[Whisper Worker] device=${detectedDevice}`);
   return detectedDevice;
 }
@@ -82,19 +81,7 @@ ctx.onmessage = async (e: MessageEvent) => {
       });
 
       // WebGPU fix: patch model.__call__ to force tensor readback to CPU
-      const model = pipe.model as any;
-      if (device === "webgpu" && model?.__call__) {
-        const origCall = model.__call__.bind(model);
-        model.__call__ = async function (...args: any[]) {
-          const output = await origCall(...args);
-          for (const key of Object.keys(output)) {
-            const tensor = output[key];
-            if (tensor && typeof tensor.getData === "function") await tensor.getData();
-          }
-          return output;
-        };
-        console.log("[Whisper Worker] Patched __call__ for WebGPU tensor readback");
-      }
+      patchWebGPUReadback(pipe.model, device, "Whisper Worker");
 
       pipelines.set(modelKey, pipe);
       ctx.postMessage({ type: "loaded" });

@@ -1,5 +1,6 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 class htmlEmbedHandler implements FormatHandler {
 
@@ -52,19 +53,20 @@ class htmlEmbedHandler implements FormatHandler {
         html += `<p>${text}</p>`;
       }
     } else {
+      const escapedMime = inputFormat.mime.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       for (const inputFile of inputFiles) {
 
         const base64 = htmlEmbedHandler.bytesToBase64(inputFile.bytes);
 
         if (inputFormat.mime.startsWith("image/")) {
-          html += `<image src="data:${inputFormat.mime};base64,${base64}"><br>`;
+          html += `<img src="data:${escapedMime};base64,${base64}"><br>`;
         } else if (inputFormat.mime.startsWith("audio/")) {
           html += `<audio controls>
-            <source src="data:${inputFormat.mime};base64,${base64}" type="${inputFormat.mime}"></source>
+            <source src="data:${escapedMime};base64,${base64}" type="${escapedMime}"></source>
           </audio><br>`;
         } else {
           html += `<video controls>
-            <source src="data:${inputFormat.mime};base64,${base64}" type="${inputFormat.mime}"></source>
+            <source src="data:${escapedMime};base64,${base64}" type="${escapedMime}"></source>
           </video><br>`;
         }
 
@@ -72,7 +74,7 @@ class htmlEmbedHandler implements FormatHandler {
     }
 
     const bytes = encoder.encode(html);
-    const name = inputFiles[0].name.split(".").slice(0, -1).join(".") + "." + outputFormat.extension;
+    const name = getBaseName(inputFiles[0].name) + "." + outputFormat.extension;
     return [{ bytes, name }];
 
   }

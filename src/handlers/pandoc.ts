@@ -200,7 +200,7 @@ class pandocHandler implements FormatHandler {
       this.supportedFormats.push({
         name, format, extension,
         mime: mimeType,
-        from: inputFormats.includes(format),
+        from: inputFormats.includes(format) || (format === "text" && inputFormats.includes("plain")),
         to: outputFormats.includes(format),
         internal: format,
         category: categories.length === 1 ? categories[0] : categories,

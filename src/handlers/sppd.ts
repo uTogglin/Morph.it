@@ -1,4 +1,6 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { canvasToBytes } from "../utils/canvas-to-bytes.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 import * as THREE from "three";
 import * as CSG from "three-bvh-csg";
@@ -475,11 +477,10 @@ class sppdHandler implements FormatHandler {
           const geometry = new THREE.BoxGeometry(size.y, size.z, size.x);
           const offset = toThreeVector(center.Sub(pos));
           geometry.translate(offset.x, offset.y, offset.z);
-          object.renderable = new THREE.Mesh(geometry, isBrush ? brushMaterial : propMaterial);
-
           if (object.renderable) {
             this.scene.remove(object.renderable);
           }
+          object.renderable = new THREE.Mesh(geometry, isBrush ? brushMaterial : propMaterial);
           this.scene.add(object.renderable);
         }
       }
@@ -535,7 +536,7 @@ class sppdHandler implements FormatHandler {
         const encoder = new TextEncoder();
         const string = JSON.stringify(demo, getJsonReplacer(), 2);
         const bytes = encoder.encode(string);
-        const name = inputFile.name.split(".")[0] + ".json";
+        const name = getBaseName(inputFile.name) + ".json";
         outputFiles.push({ bytes, name });
         continue;
       }
@@ -549,13 +550,8 @@ class sppdHandler implements FormatHandler {
             await this.playbackTickHandler(demo);
             this.renderer.render(this.scene, this.camera);
 
-            const bytes: Uint8Array = await new Promise((resolve, reject) => {
-              this.renderer.domElement.toBlob((blob) => {
-                if (!blob) return reject("Canvas output failed");
-                blob.arrayBuffer().then(buf => resolve(new Uint8Array(buf)));
-              }, outputFormat.mime);
-            });
-            const name = inputFile.name.split(".")[0] + "_" + frameIndex + "." + outputFormat.extension;
+            const bytes = await canvasToBytes(this.renderer.domElement, outputFormat.mime);
+            const name = getBaseName(inputFile.name) + "_" + frameIndex + "." + outputFormat.extension;
             outputFiles.push({ bytes, name });
 
             frameIndex ++;

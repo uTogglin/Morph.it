@@ -1,5 +1,7 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import CommonFormats from "src/CommonFormats.ts";
+import { canvasToBytes } from "../utils/canvas-to-bytes.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 import pako from "pako";
 import * as NBT from "nbtify";
@@ -140,7 +142,7 @@ class mcMapHandler implements FormatHandler {
 
             for (const file of inputFiles) {
 
-                const fileName = file.name.split('.')[0]
+                const fileName = getBaseName(file.name)
 
                 let startDigit = 0
 
@@ -251,12 +253,7 @@ class mcMapHandler implements FormatHandler {
 
                         this.#ctx.putImageData(image_data, 0, 0)
 
-                        const bytes: Uint8Array = await new Promise((resolve, reject) => {
-                            this.#canvas!.toBlob((blob) => {
-                                if (!blob) return reject("Canvas output failed");
-                                blob.arrayBuffer().then(buf => resolve(new Uint8Array(buf)));
-                            }, outputFormat.mime);
-                        });
+                        const bytes = await canvasToBytes(this.#canvas!, outputFormat.mime);
 
                         outputFiles.push({
                             name: file.name,
@@ -335,17 +332,18 @@ function map2rgba(colors: Uint8Array, width: number, height: number): number[] {
     return out;
 }
 
+// Pre-compute shades array once at module level
+const precomputedShades = getShades();
+
 function mapRGBA2ColourIDs(data: Uint8ClampedArray): Uint8Array {
 
-    let colourIDs: Uint8Array = new Uint8Array(data.length / 4);
-
-    let shades = getShades();
+    const colourIDs = new Uint8Array(data.length / 4);
 
     for (let cursor = 0; cursor < data.length / 4; cursor++) {
 
-        const closest_colour_match = getClosestColor({ R: data[cursor * 4], G: data[cursor * 4 + 1], B: data[cursor * 4 + 2], A: data[cursor * 4 + 3] }, shades)
+        const { index } = getClosestColor({ R: data[cursor * 4], G: data[cursor * 4 + 1], B: data[cursor * 4 + 2], A: data[cursor * 4 + 3] }, precomputedShades);
 
-        colourIDs[cursor] = shades.indexOf(closest_colour_match)
+        colourIDs[cursor] = index;
     }
 
     return colourIDs;
@@ -388,20 +386,21 @@ function getShades() {
     return shadeArray;
 }
 
-function getClosestColor(to_check: any, available_colours: any) {
-    return available_colours.reduce((previous: any, current: any) => {
-        const previousDistance = Math.sqrt(
-            (previous.R - to_check.R) ** 2 +
-            (previous.G - to_check.G) ** 2 +
-            (previous.B - to_check.B) ** 2
-        );
-        const currentDistance = Math.sqrt(
-            (current.R - to_check.R) ** 2 +
-            (current.G - to_check.G) ** 2 +
-            (current.B - to_check.B) ** 2
-        );
-        return (currentDistance < previousDistance) ? current : previous;
-    });
+function getClosestColor(to_check: any, available_colours: any): { color: any; index: number } {
+    let bestIndex = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < available_colours.length; i++) {
+        const c = available_colours[i];
+        const dist =
+            (c.R - to_check.R) ** 2 +
+            (c.G - to_check.G) ** 2 +
+            (c.B - to_check.B) ** 2;
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestIndex = i;
+        }
+    }
+    return { color: available_colours[bestIndex], index: bestIndex };
 }
 
 function formatMapNBT(colours: Uint8Array, dataVersion: number = 4671) {

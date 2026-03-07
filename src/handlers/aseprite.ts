@@ -1,6 +1,8 @@
 import pako from "pako";
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { canvasToBytes } from "../utils/canvas-to-bytes.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 const ASEPRITE_HEADER_MAGIC = 0xA5E0;
 const ASEPRITE_FRAME_MAGIC = 0xF1FA;
@@ -454,16 +456,9 @@ class asepriteHandler implements FormatHandler {
       const imageData = new ImageData(imagePixels, decoded.width, decoded.height);
       this.#ctx.putImageData(imageData, 0, 0);
 
-      const bytes = await new Promise<Uint8Array>((resolve, reject) => {
-        this.#canvas!.toBlob(blob => {
-          if (!blob) return reject("Canvas failed to encode output image.");
-          blob.arrayBuffer().then(buf => resolve(new Uint8Array(buf)));
-        }, outputFormat.mime);
-      });
+      const bytes = await canvasToBytes(this.#canvas!, outputFormat.mime);
 
-      const baseName = inputFile.name.includes(".")
-        ? inputFile.name.slice(0, inputFile.name.lastIndexOf("."))
-        : inputFile.name;
+      const baseName = getBaseName(inputFile.name);
       outputs.push({
         bytes,
         name: `${baseName}.${outputFormat.extension}`

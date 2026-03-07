@@ -1,5 +1,11 @@
 import JSZip from "jszip";
-import { getKokoro, encodeWav, spokenWeight } from "./speech-tool.js";
+import { getKokoro, encodeWav } from "./speech-tool.js";
+import {
+  PLAY_SVG, PAUSE_SVG,
+  formatTime, buildWordSpans, buildTimings,
+  updateWordHighlight,
+  type WordTiming, type HighlightState,
+} from "./utils/tts-player.ts";
 
 // ── Model options ───────────────────────────────────────────────────────────
 const SUM_MODELS: Record<string, { id: string; label: string }> = {
@@ -413,98 +419,31 @@ export function initSummarizeTool() {
   const timeCurrent = document.getElementById("sum-time-current") as HTMLSpanElement;
   const timeDuration = document.getElementById("sum-time-duration") as HTMLSpanElement;
 
-  const PLAY_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
-  const PAUSE_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
   playBtn.innerHTML = PLAY_SVG;
 
-  interface WordTiming { word: string; start: number; end: number; el: HTMLSpanElement; }
   let wordTimings: WordTiming[] = [];
   let activeWordIdx = -1;
   let ttsAudioUrl: string | null = null;
   let ttsGenerating = false;
 
-  function fmtTime(sec: number): string {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  }
+  // ── Highlight state for shared updateWordHighlight (no sentence teleprompter) ──
+  const hlState: HighlightState = {
+    wordTimings,
+    activeWordIdx,
+    wordDisplayEl: wordDisplay,
+  };
 
-  function buildWordSpans(chunks: string[]): HTMLSpanElement[] {
-    wordDisplay.innerHTML = "";
-    const spans: HTMLSpanElement[] = [];
-    for (let c = 0; c < chunks.length; c++) {
-      if (c > 0) wordDisplay.appendChild(document.createTextNode(" "));
-      const tokens = chunks[c].split(/(\s+)/);
-      for (const tok of tokens) {
-        if (/^\s+$/.test(tok)) {
-          wordDisplay.appendChild(document.createTextNode(tok));
-        } else if (tok) {
-          const sp = document.createElement("span");
-          sp.className = "speech-word";
-          sp.textContent = tok;
-          wordDisplay.appendChild(sp);
-          spans.push(sp);
-        }
-      }
-    }
-    return spans;
-  }
+  function doUpdateHighlight() {
+    hlState.wordTimings = wordTimings;
+    hlState.activeWordIdx = activeWordIdx;
 
-  function buildTimings(chunks: Array<{ text: string; samples: number }>, sr: number, spans: HTMLSpanElement[]): WordTiming[] {
-    const timings: WordTiming[] = [];
-    let sOff = 0, sIdx = 0;
-    for (const ch of chunks) {
-      const tStart = sOff / sr, tEnd = (sOff + ch.samples) / sr;
-      const words = ch.text.trim().split(/\s+/).filter(Boolean);
-      if (words.length === 0) { sOff += ch.samples; continue; }
-      // Weight each word's duration by estimated spoken length
-      const weights = words.map(spokenWeight);
-      const totalWeight = weights.reduce((a, b) => a + b, 0);
-      const chunkDur = tEnd - tStart;
-      let t = tStart;
-      for (let i = 0; i < words.length; i++) {
-        const el = spans[sIdx]; if (!el) break;
-        const dur = (weights[i] / totalWeight) * chunkDur;
-        timings.push({ word: words[i], start: t, end: t + dur, el });
-        t += dur;
-        sIdx++;
-      }
-      sOff += ch.samples;
-    }
-    return timings;
-  }
-
-  function findWordAtTime(t: number): number {
-    if (wordTimings.length === 0) return -1;
-    let lo = 0, hi = wordTimings.length - 1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (t < wordTimings[mid].start) hi = mid - 1;
-      else if (t >= wordTimings[mid].end) lo = mid + 1;
-      else return mid;
-    }
-    if (t >= wordTimings[wordTimings.length - 1]?.start) return wordTimings.length - 1;
-    return -1;
-  }
-
-  function updateHighlight() {
-    const newIdx = findWordAtTime(ttsAudio.currentTime);
-    if (newIdx !== activeWordIdx) {
-      if (activeWordIdx >= 0 && activeWordIdx < wordTimings.length) wordTimings[activeWordIdx].el.classList.remove("active");
-      if (newIdx >= 0) {
-        wordTimings[newIdx].el.classList.add("active");
-        const el = wordTimings[newIdx].el;
-        if (el.offsetTop < wordDisplay.scrollTop || el.offsetTop + el.offsetHeight > wordDisplay.scrollTop + wordDisplay.clientHeight) {
-          el.scrollIntoView({ block: "center", behavior: "smooth" });
-        }
-      }
-      activeWordIdx = newIdx;
-    }
+    const result = updateWordHighlight(ttsAudio.currentTime, hlState);
+    activeWordIdx = result.activeWordIdx;
   }
 
   // 60fps highlight loop
   let hlRaf = 0;
-  function hlLoop() { updateHighlight(); hlRaf = requestAnimationFrame(hlLoop); }
+  function hlLoop() { doUpdateHighlight(); hlRaf = requestAnimationFrame(hlLoop); }
 
   // Playback controls
   playBtn.addEventListener("click", () => { ttsAudio.paused ? ttsAudio.play() : ttsAudio.pause(); });
@@ -524,13 +463,13 @@ export function initSummarizeTool() {
     const pct = (ttsAudio.currentTime / ttsAudio.duration) * 100;
     seekFill.style.width = `${pct}%`;
     seekThumb.style.left = `${pct}%`;
-    timeCurrent.textContent = fmtTime(ttsAudio.currentTime);
-    timeDuration.textContent = fmtTime(ttsAudio.duration);
-    if (ttsAudio.paused) updateHighlight();
+    timeCurrent.textContent = formatTime(ttsAudio.currentTime);
+    timeDuration.textContent = formatTime(ttsAudio.duration);
+    if (ttsAudio.paused) doUpdateHighlight();
   });
   ttsAudio.addEventListener("loadedmetadata", () => {
     timeCurrent.textContent = "0:00";
-    timeDuration.textContent = fmtTime(ttsAudio.duration);
+    timeDuration.textContent = formatTime(ttsAudio.duration);
   });
 
   // Seek
@@ -586,7 +525,7 @@ export function initSummarizeTool() {
       }
       if (cur.trim()) chunks.push(cur.trim());
 
-      const wordSpans = buildWordSpans(chunks);
+      const wordSpans = buildWordSpans(wordDisplay, chunks);
 
       for (let i = 0; i < chunks.length; i++) {
         ttsProgressText.textContent = chunks.length > 1

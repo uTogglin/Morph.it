@@ -1,5 +1,11 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { cdnUrl } from "./cdn.ts";
+import {
+  PLAY_SVG, PAUSE_SVG,
+  formatTime, buildWordSpans, buildTimings,
+  updateWordHighlight, buildSentenceTimings,
+  type WordTiming, type SentenceTiming, type HighlightState,
+} from "./utils/tts-player.ts";
 
 // ── FFmpeg instance for WAV→MP3 ────────────────────────────────────────────
 let speechFFmpeg: FFmpeg | null = null;
@@ -95,10 +101,6 @@ export async function getKokoro(onProgress?: (pct: number, msg: string) => void)
   return kokoroProxy;
 }
 
-// ── SVG icons ──────────────────────────────────────────────────────────────
-const PLAY_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
-const PAUSE_SVG = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
-
 // ── Spoken-weight: estimate how long TTS takes to say a word ────────────────
 // CJK characters are single chars but full syllables; digits expand to words;
 // punctuation is near-silent; Latin length roughly maps to duration.
@@ -176,12 +178,6 @@ function writeString(view: DataView, offset: number, str: string) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-function formatTime(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -191,14 +187,6 @@ function downloadBlob(blob: Blob, filename: string) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-}
-
-// ── Word timing structure ──────────────────────────────────────────────────
-interface WordTiming {
-  word: string;
-  start: number;
-  end: number;
-  el: HTMLSpanElement;
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
@@ -346,7 +334,6 @@ export function initSpeechTool() {
   let isRecording = false;
 
   // Sentence teleprompter state
-  interface SentenceTiming { text: string; start: number; end: number; }
   let sentenceTimings: SentenceTiming[] = [];
   let activeSentenceIdx = -1;
   let sentenceWordSpans: HTMLSpanElement[] = [];
@@ -388,164 +375,38 @@ export function initSpeechTool() {
     if (speedDisplay) speedDisplay.textContent = val;
   });
 
-  // ── Build word display with spans ──────────────────────────────────────
-  function buildWordDisplay(chunks: string[]): HTMLSpanElement[] {
-    wordDisplay.innerHTML = "";
-    const spans: HTMLSpanElement[] = [];
-    for (let c = 0; c < chunks.length; c++) {
-      if (c > 0) wordDisplay.appendChild(document.createTextNode(" "));
-      const tokens = chunks[c].split(/(\s+)/);
-      for (const tok of tokens) {
-        if (/^\s+$/.test(tok)) {
-          wordDisplay.appendChild(document.createTextNode(tok));
-        } else if (tok) {
-          const span = document.createElement("span");
-          span.className = "speech-word";
-          span.textContent = tok;
-          wordDisplay.appendChild(span);
-          spans.push(span);
-        }
-      }
-    }
-    return spans;
-  }
+  // ── Highlight state for shared updateWordHighlight ─────────────────────
+  const hlState: HighlightState = {
+    wordTimings,
+    activeWordIdx,
+    wordDisplayEl: wordDisplay,
+    sentenceTimings,
+    activeSentenceIdx,
+    sentenceEl: ttsSentenceEl,
+    sentenceWordSpans,
+    sentenceActiveIdx,
+  };
 
-  // ── Build timing map from stream chunks (character-weighted) ────────────
-  function buildTimings(
-    chunks: Array<{ text: string; samples: number }>,
-    sampleRate: number,
-    wordSpans: HTMLSpanElement[],
-  ): WordTiming[] {
-    const timings: WordTiming[] = [];
-    let sampleOffset = 0;
-    let spanIdx = 0;
+  function doUpdateHighlight() {
+    // Keep hlState refs in sync before calling
+    hlState.wordTimings = wordTimings;
+    hlState.activeWordIdx = activeWordIdx;
+    hlState.sentenceTimings = sentenceTimings;
+    hlState.activeSentenceIdx = activeSentenceIdx;
+    hlState.sentenceWordSpans = sentenceWordSpans;
+    hlState.sentenceActiveIdx = sentenceActiveIdx;
 
-    for (const chunk of chunks) {
-      const chunkStart = sampleOffset / sampleRate;
-      const chunkEnd = (sampleOffset + chunk.samples) / sampleRate;
-      const chunkWords = chunk.text.trim().split(/\s+/).filter(Boolean);
-
-      if (chunkWords.length === 0) {
-        sampleOffset += chunk.samples;
-        continue;
-      }
-
-      // Weight each word's duration by estimated spoken length
-      const weights = chunkWords.map(spokenWeight);
-      const totalWeight = weights.reduce((a, b) => a + b, 0);
-      const chunkDuration = chunkEnd - chunkStart;
-      let t = chunkStart;
-
-      for (let i = 0; i < chunkWords.length; i++) {
-        const el = wordSpans[spanIdx];
-        if (!el) break;
-        const dur = (weights[i] / totalWeight) * chunkDuration;
-        timings.push({
-          word: chunkWords[i],
-          start: t,
-          end: t + dur,
-          el,
-        });
-        t += dur;
-        spanIdx++;
-      }
-      sampleOffset += chunk.samples;
-    }
-    return timings;
-  }
-
-  // ── Highlight current word during playback (binary search + rAF) ─────
-  function findWordAtTime(t: number): number {
-    if (wordTimings.length === 0) return -1;
-    let lo = 0, hi = wordTimings.length - 1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (t < wordTimings[mid].start) hi = mid - 1;
-      else if (t >= wordTimings[mid].end) lo = mid + 1;
-      else return mid;
-    }
-    // Past all words — highlight last
-    if (t >= wordTimings[wordTimings.length - 1]?.start) return wordTimings.length - 1;
-    return -1;
-  }
-
-  function findSentenceAtTime(t: number): number {
-    for (let i = 0; i < sentenceTimings.length; i++) {
-      if (t >= sentenceTimings[i].start && t < sentenceTimings[i].end) return i;
-    }
-    if (sentenceTimings.length && t >= sentenceTimings[sentenceTimings.length - 1].start) return sentenceTimings.length - 1;
-    return -1;
-  }
-
-  function buildSentenceSpans(text: string) {
-    ttsSentenceEl.innerHTML = "";
-    sentenceWordSpans = [];
-    sentenceActiveIdx = -1;
-    const tokens = text.split(/(\s+)/);
-    for (const tok of tokens) {
-      if (/^\s+$/.test(tok)) {
-        ttsSentenceEl.appendChild(document.createTextNode(tok));
-      } else {
-        const sp = document.createElement("span");
-        sp.textContent = tok;
-        ttsSentenceEl.appendChild(sp);
-        sentenceWordSpans.push(sp);
-      }
-    }
-  }
-
-  function globalToSentenceWordIdx(globalIdx: number, sIdx: number): number {
-    if (sIdx < 0 || globalIdx < 0) return -1;
-    let count = 0;
-    for (let i = 0; i < sIdx; i++) {
-      count += sentenceTimings[i].text.trim().split(/\s+/).filter(Boolean).length;
-    }
-    return globalIdx - count;
-  }
-
-  function updateWordHighlight() {
-    const newIdx = findWordAtTime(audio.currentTime);
-    if (newIdx !== activeWordIdx) {
-      if (activeWordIdx >= 0 && activeWordIdx < wordTimings.length) {
-        wordTimings[activeWordIdx].el.classList.remove("active");
-      }
-      if (newIdx >= 0) {
-        wordTimings[newIdx].el.classList.add("active");
-        const el = wordTimings[newIdx].el;
-        if (el.offsetTop < wordDisplay.scrollTop || el.offsetTop + el.offsetHeight > wordDisplay.scrollTop + wordDisplay.clientHeight) {
-          el.scrollIntoView({ block: "center", behavior: "smooth" });
-        }
-      }
-      activeWordIdx = newIdx;
-    }
-    // Update sentence teleprompter
-    const sIdx = findSentenceAtTime(audio.currentTime);
-    if (sIdx !== activeSentenceIdx) {
-      activeSentenceIdx = sIdx;
-      if (sIdx >= 0) {
-        buildSentenceSpans(sentenceTimings[sIdx].text);
-      } else {
-        ttsSentenceEl.textContent = "";
-        sentenceWordSpans = [];
-      }
-    }
-    // Highlight current word in sentence
-    const localIdx = globalToSentenceWordIdx(newIdx, sIdx);
-    if (localIdx !== sentenceActiveIdx) {
-      if (sentenceActiveIdx >= 0 && sentenceActiveIdx < sentenceWordSpans.length) {
-        sentenceWordSpans[sentenceActiveIdx].classList.remove("ocr-sentence-hl");
-      }
-      if (localIdx >= 0 && localIdx < sentenceWordSpans.length) {
-        sentenceWordSpans[localIdx].classList.add("ocr-sentence-hl");
-      }
-      sentenceActiveIdx = localIdx;
-    }
+    const result = updateWordHighlight(audio.currentTime, hlState);
+    activeWordIdx = result.activeWordIdx;
+    activeSentenceIdx = result.activeSentenceIdx;
+    sentenceWordSpans = result.sentenceWordSpans;
+    sentenceActiveIdx = result.sentenceActiveIdx;
   }
 
   // 60fps highlight loop — runs while audio is playing
   let highlightRaf = 0;
   function highlightLoop() {
-    updateWordHighlight();
+    doUpdateHighlight();
     highlightRaf = requestAnimationFrame(highlightLoop);
   }
   audio.addEventListener("play", () => { cancelAnimationFrame(highlightRaf); highlightLoop(); });
@@ -602,7 +463,7 @@ export function initSpeechTool() {
       if (current.trim()) chunks.push(current.trim());
 
       // Build word display from chunks (same source as buildTimings)
-      const wordSpans = buildWordDisplay(chunks);
+      const wordSpans = buildWordSpans(wordDisplay, chunks);
 
       console.log(`[Kokoro TTS] Split into ${chunks.length} chunk(s)`);
 
@@ -661,14 +522,7 @@ export function initSpeechTool() {
       activeSentenceIdx = -1;
 
       // Build sentence timings from chunks
-      sentenceTimings = [];
-      let sOff2 = 0;
-      for (const ch of chunkMeta) {
-        const tStart = sOff2 / sampleRate;
-        const tEnd = (sOff2 + ch.samples) / sampleRate;
-        sentenceTimings.push({ text: ch.text, start: tStart, end: tEnd });
-        sOff2 += ch.samples;
-      }
+      sentenceTimings = buildSentenceTimings(chunkMeta, sampleRate);
 
       // Encode to WAV
       currentWavBlob = encodeWav(fullAudio, sampleRate);
@@ -748,7 +602,7 @@ export function initSpeechTool() {
     seekThumb.style.left = `${pct}%`;
     timeCurrent.textContent = formatTime(audio.currentTime);
     timeDuration.textContent = formatTime(audio.duration);
-    if (audio.paused) updateWordHighlight();
+    if (audio.paused) doUpdateHighlight();
   });
 
   audio.addEventListener("loadedmetadata", () => {

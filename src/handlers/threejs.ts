@@ -1,5 +1,7 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { canvasToBytes } from "../utils/canvas-to-bytes.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -50,6 +52,7 @@ class threejsHandler implements FormatHandler {
         const loader = new GLTFLoader();
         loader.load(url, resolve, undefined, reject);
       });
+      URL.revokeObjectURL(url);
 
       const bbox = new THREE.Box3().setFromObject(gltf.scene);
       bbox.getCenter(this.camera.position);
@@ -60,13 +63,8 @@ class threejsHandler implements FormatHandler {
       this.renderer.render(this.scene, this.camera);
       this.scene.remove(gltf.scene);
 
-      const bytes: Uint8Array = await new Promise((resolve, reject) => {
-        this.renderer.domElement.toBlob((blob) => {
-          if (!blob) return reject("Canvas output failed");
-          blob.arrayBuffer().then(buf => resolve(new Uint8Array(buf)));
-        }, outputFormat.mime);
-      });
-      const name = inputFile.name.split(".")[0] + "." + outputFormat.extension;
+      const bytes = await canvasToBytes(this.renderer.domElement, outputFormat.mime);
+      const name = getBaseName(inputFile.name) + "." + outputFormat.extension;
       outputFiles.push({ bytes, name });
 
     }

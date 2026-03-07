@@ -1,5 +1,6 @@
 import CommonFormats from "src/CommonFormats.ts";
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
+import { getBaseName } from "../utils/file-utils.ts";
 
 class textToShellHandler implements FormatHandler {
 
@@ -29,10 +30,10 @@ class textToShellHandler implements FormatHandler {
         throw new Error("Invalid output format.");
       }
 
-      let text = new TextDecoder().decode(file.bytes).replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+      let text = new TextDecoder().decode(file.bytes).replaceAll("\\", "\\\\").replaceAll("\"", "\\\"").replaceAll("`", "\\`").replaceAll("$", "\\$").replaceAll("!", "\\!");
 
       let newText = `#!/bin/sh\necho "${text}"`;
-      const name = file.name.split(".").slice(0, -1).join(".") +
+      const name = getBaseName(file.name) +
         "." +
         outputFormat.extension;
 
