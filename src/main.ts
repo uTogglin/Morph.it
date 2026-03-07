@@ -1,5 +1,6 @@
 import type { FileFormat, FileData, FormatHandler, ConvertPathNode } from "./FormatHandler.js";
 import normalizeMimeType from "./normalizeMimeType.js";
+import { prescanFiles, getCachedDetectedMime, isZipBasedExtension } from "./utils/detect-format.js";
 import handlers from "./handlers";
 import { TraversionGraph } from "./TraversionGraph.js";
 import JSZip from "jszip";
@@ -271,16 +272,41 @@ function vidInvalidateProcessed() {
   vidUpdateActionButton();
 }
 
-/** Returns the broad media category from a file's MIME type */
+/** Returns the broad media category from a file's MIME type.
+ *  Prefers magic-byte detected MIME when available. */
 function getMediaCategory(file: File): string {
-  return file.type.split("/")[0] || "unknown";
+  const detectedMime = getCachedDetectedMime(file);
+  const mime = detectedMime || file.type;
+  return mime.split("/")[0] || "unknown";
 }
 
-/** Finds the matching allOptions entry for a file (O(1) MIME lookup via Map) */
+/** Finds the matching allOptions entry for a file (O(1) MIME lookup via Map).
+ *  Prefers magic-byte detected MIME over browser-reported MIME for more
+ *  reliable detection of files with wrong or missing extensions. */
 function findInputOption(file: File): { format: FileFormat; handler: FormatHandler } | null {
-  const mime = normalizeMimeType(file.type);
+  const browserMime = normalizeMimeType(file.type);
   const ext = file.name.split(".").pop()?.toLowerCase();
-  const matches = mimeToOptions.get(mime);
+  const detectedMime = getCachedDetectedMime(file);
+
+  // Determine effective MIME: prefer magic bytes, but for ZIP-based
+  // containers (DOCX, XLSX, etc.) defer to extension-based detection
+  // since they all share the PK\x03\x04 signature.
+  let effectiveMime = browserMime;
+  if (detectedMime) {
+    const normalizedDetected = normalizeMimeType(detectedMime);
+    if (normalizedDetected === "application/zip" && isZipBasedExtension(ext)) {
+      // ZIP-based container: trust the extension / browser MIME instead
+      effectiveMime = browserMime;
+    } else if (normalizedDetected !== browserMime) {
+      console.info(
+        `[magic-bytes] Overriding MIME for "${file.name}": ` +
+        `browser="${browserMime}" → detected="${normalizedDetected}"`
+      );
+      effectiveMime = normalizedDetected;
+    }
+  }
+
+  const matches = mimeToOptions.get(effectiveMime);
   if (!matches || matches.length === 0) {
     // Fall back to extension match
     return allOptions.find(o => o.format.from && o.format.extension?.toLowerCase() === ext) || null;
@@ -1091,7 +1117,7 @@ const renderFilePreviews = (files: File[]) => {
  * @param event Either a file input element's "change" event,
  * or a "drop" event.
  */
-const fileSelectHandler = (event: Event) => {
+const fileSelectHandler = async (event: Event) => {
 
   let inputFiles;
 
@@ -1119,6 +1145,9 @@ const fileSelectHandler = (event: Event) => {
   merged.sort((a, b) => a.name === b.name ? 0 : (a.name < b.name ? -1 : 1));
   const files = merged;
   allUploadedFiles = files;
+
+  // Pre-scan files for magic-byte MIME detection before categorization
+  await prescanFiles(files);
 
   // Determine if all files share the same media category
   const categories = new Set(files.map(f => getMediaCategory(f)));
@@ -1149,10 +1178,20 @@ const fileSelectHandler = (event: Event) => {
   ui.fileInput.value = "";
 };
 
-/** Auto-select the input format button for a given file */
+/** Auto-select the input format button for a given file.
+ *  Prefers magic-byte detected MIME when available. */
 function autoSelectInputFormat(file: File) {
-  const mimeType = normalizeMimeType(file.type);
-  const fileExtension = file.name.split(".").pop()?.toLowerCase();
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  const detectedMime = getCachedDetectedMime(file);
+
+  // Prefer magic-byte MIME, but not for ZIP-based containers
+  let mimeType: string;
+  if (detectedMime && !(normalizeMimeType(detectedMime) === "application/zip" && isZipBasedExtension(ext))) {
+    mimeType = normalizeMimeType(detectedMime);
+  } else {
+    mimeType = normalizeMimeType(file.type);
+  }
+  const fileExtension = ext;
 
   const buttonsMatchingMime = Array.from(ui.inputList.children).filter(button => {
     if (!(button instanceof HTMLButtonElement)) return false;
@@ -1280,7 +1319,7 @@ folderInput.setAttribute("webkitdirectory", "");
 folderInput.style.display = "none";
 document.body.appendChild(folderInput);
 
-folderInput.addEventListener("change", () => {
+folderInput.addEventListener("change", async () => {
   const fileList = folderInput.files;
   if (!fileList || fileList.length === 0) return;
 
@@ -1308,6 +1347,9 @@ folderInput.addEventListener("change", () => {
 
   // Sort alphabetically for consistency
   files.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Pre-scan files for magic-byte MIME detection before categorization
+  await prescanFiles(files);
 
   // Feed into the existing pipeline
   allUploadedFiles = files;
