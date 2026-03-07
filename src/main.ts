@@ -5236,35 +5236,61 @@ ui.convertButton.onclick = async function () {
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       const allOutputFiles: FileData[] = [];
+      const batchFailures: string[] = [];
 
+      // Flatten all files across groups for individual processing with progress
+      const allFileEntries: { file: File; inputOption: { format: FileFormat; handler: FormatHandler } }[] = [];
       for (const group of groups.values()) {
-        const { files: groupFiles, inputOption } = group;
+        for (const f of group.files) {
+          allFileEntries.push({ file: f, inputOption: group.inputOption });
+        }
+      }
+      const totalFileCount = allFileEntries.length;
+
+      for (let i = 0; i < allFileEntries.length; i++) {
+        const { file, inputOption } = allFileEntries[i];
+
+        // Update progress indicator
+        window.showPopup(
+          `<h2>Converting file ${i + 1} of ${totalFileCount}...</h2>` +
+          `<p>${file.name}</p>`
+        );
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         // If input and output are the same format, pass through
         if (inputOption.format.mime === outputFormat.mime && inputOption.format.format === outputFormat.format) {
-          for (const f of groupFiles) {
-            const buf = await f.arrayBuffer();
-            allOutputFiles.push({ name: f.name, bytes: new Uint8Array(buf) });
-          }
+          const buf = await file.arrayBuffer();
+          allOutputFiles.push({ name: file.name, bytes: new Uint8Array(buf) });
           continue;
         }
 
-        const fileData: FileData[] = [];
-        for (const f of groupFiles) {
-          const buf = await f.arrayBuffer();
-          fileData.push({ name: f.name, bytes: new Uint8Array(buf) });
-        }
+        const buf = await file.arrayBuffer();
+        const singleFile: FileData = { name: file.name, bytes: new Uint8Array(buf) };
 
-        const output = await window.tryConvertByTraversing(fileData, inputOption, outputOption);
-        if (!output) {
-          showConversionFailedPopup(inputOption.format.format, outputFormat.format);
-          return;
+        try {
+          const output = await window.tryConvertByTraversing([singleFile], inputOption, outputOption);
+          if (output) {
+            allOutputFiles.push(...output.files);
+          } else {
+            batchFailures.push(singleFile.name);
+          }
+        } catch (e) {
+          console.error(`Failed to convert ${singleFile.name}:`, e);
+          batchFailures.push(singleFile.name);
         }
-        allOutputFiles.push(...output.files);
       }
 
       if (allOutputFiles.length === 0) {
-        window.hidePopup();
+        if (batchFailures.length > 0) {
+          window.showPopup(
+            `<h2>Conversion failed</h2>` +
+            `<p>All ${batchFailures.length} file${batchFailures.length !== 1 ? "s" : ""} failed to convert.</p>` +
+            `<p style="opacity:0.7;font-size:0.9em">${batchFailures.join(", ")}</p>` +
+            `<button onclick="window.hidePopup()">OK</button>`
+          );
+        } else {
+          window.hidePopup();
+        }
         return;
       }
 
@@ -5285,10 +5311,14 @@ ui.convertButton.onclick = async function () {
       const compressionHtml = getVideoCompressionHtml(inputFiles, processedOutputFiles);
       lastConvertedFiles = processedOutputFiles;
       const redirectHtml1 = getRedirectSuggestionHtml(processedOutputFiles);
+      const failureHtml1 = batchFailures.length > 0
+        ? `<p style="color:#e74c3c"><b>${batchFailures.length} file${batchFailures.length !== 1 ? "s" : ""} failed:</b> ${batchFailures.join(", ")}</p>`
+        : ``;
       window.showPopup(
         `<h2>Converted ${processedOutputFiles.length} file${processedOutputFiles.length !== 1 ? "s" : ""} to ${outputFormat.format}!</h2>` +
         `<p>Total size: ${formatFileSize(totalSize)}</p>` +
         compressionHtml +
+        failureHtml1 +
         (processedOutputFiles.length > 1 && archiveMultiOutput ? `<p>Results delivered as a ZIP archive.</p>` : ``) +
         `<button onclick="window.hidePopup()">OK</button>` +
         redirectHtml1
@@ -5313,28 +5343,64 @@ ui.convertButton.onclick = async function () {
         inputFileData.push({ name: inputFile.name, bytes: inputBytes });
       }
 
+      const queueSuccessFiles: FileData[] = [];
+      const queueFailures: string[] = [];
+
       if (inputFileData.length > 0) {
         window.showPopup("<h2>Finding conversion route...</h2>");
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-        const output = await window.tryConvertByTraversing(inputFileData, inputOption, outputOption);
-        if (!output) {
-          showConversionFailedPopup(inputOption.format.format, outputFormat.format);
-          return;
+        // Process each file individually so one failure doesn't kill the batch
+        for (let i = 0; i < inputFileData.length; i++) {
+          const singleFile = inputFileData[i];
+
+          // Update progress indicator
+          window.showPopup(
+            `<h2>Converting file ${i + 1} of ${inputFileData.length}...</h2>` +
+            `<p>${singleFile.name}</p>`
+          );
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+          try {
+            const output = await window.tryConvertByTraversing([singleFile], inputOption, outputOption);
+            if (output) {
+              queueSuccessFiles.push(...output.files);
+            } else {
+              queueFailures.push(singleFile.name);
+            }
+          } catch (e) {
+            console.error(`Failed to convert ${singleFile.name}:`, e);
+            queueFailures.push(singleFile.name);
+          }
         }
 
-        const processedQueueFiles = await applyToolProcessing(output.files);
-        for (const file of processedQueueFiles) {
-          downloadFile(file.bytes, file.name);
+        if (queueSuccessFiles.length > 0) {
+          const processedQueueFiles = await applyToolProcessing(queueSuccessFiles);
+          for (const file of processedQueueFiles) {
+            downloadFile(file.bytes, file.name);
+          }
+        } else if (queueFailures.length > 0) {
+          // All files in this queue group failed
+          window.showPopup(
+            `<h2>Conversion failed</h2>` +
+            `<p>All ${queueFailures.length} file${queueFailures.length !== 1 ? "s" : ""} in this group failed to convert.</p>` +
+            `<p style="opacity:0.7;font-size:0.9em">${queueFailures.join(", ")}</p>` +
+            `<button onclick="window.hidePopup()">OK</button>`
+          );
+          return;
         }
       }
 
       // Advance to next queue group
       currentQueueIndex++;
       if (currentQueueIndex < conversionQueue.length) {
+        const queueFailureHtml = queueFailures.length > 0
+          ? `<p style="color:#e74c3c"><b>${queueFailures.length} file${queueFailures.length !== 1 ? "s" : ""} failed:</b> ${queueFailures.join(", ")}</p>`
+          : ``;
         window.showPopup(
           `<h2>Group ${currentQueueIndex} of ${conversionQueue.length} done!</h2>` +
           `<p>Advancing to next group...</p>` +
+          queueFailureHtml +
           `<button onclick="window.hidePopup()">OK</button>`
         );
         // Present next group after a short delay
@@ -5346,9 +5412,13 @@ ui.convertButton.onclick = async function () {
         // All groups done
         conversionQueue = [];
         currentQueueIndex = 0;
+        const queueFailureHtml = queueFailures.length > 0
+          ? `<p style="color:#e74c3c"><b>${queueFailures.length} file${queueFailures.length !== 1 ? "s" : ""} failed:</b> ${queueFailures.join(", ")}</p>`
+          : ``;
         window.showPopup(
           `<h2>All conversions complete!</h2>` +
           `<p>All ${allUploadedFiles.length} files have been converted.</p>` +
+          queueFailureHtml +
           `<button onclick="window.hidePopup()">OK</button>`
         );
       }
@@ -5371,16 +5441,62 @@ ui.convertButton.onclick = async function () {
         inputFileData.push({ name: inputFile.name, bytes: inputBytes });
       }
 
-      window.showPopup("<h2>Finding conversion route...</h2>");
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      // Process each file individually so one failure doesn't kill the batch
+      const singleResults: FileData[] = [];
+      const singleFailures: string[] = [];
 
-      const output = await window.tryConvertByTraversing(inputFileData, inputOption, outputOption);
-      if (!output) {
-        showConversionFailedPopup(inputOption.format.format, outputOption.format.format);
+      if (inputFileData.length === 0) {
+        // All files were same-format pass-through, already downloaded above
         return;
       }
 
-      const processedSingleFiles = await applyToolProcessing(output.files);
+      window.showPopup("<h2>Finding conversion route...</h2>");
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      for (let i = 0; i < inputFileData.length; i++) {
+        const singleFile = inputFileData[i];
+
+        // Update progress indicator for multi-file cases
+        if (inputFileData.length > 1) {
+          window.showPopup(
+            `<h2>Converting file ${i + 1} of ${inputFileData.length}...</h2>` +
+            `<p>${singleFile.name}</p>`
+          );
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        }
+
+        try {
+          const output = await window.tryConvertByTraversing([singleFile], inputOption, outputOption);
+          if (output) {
+            singleResults.push(...output.files);
+          } else {
+            singleFailures.push(singleFile.name);
+          }
+        } catch (e) {
+          console.error(`Failed to convert ${singleFile.name}:`, e);
+          singleFailures.push(singleFile.name);
+        }
+      }
+
+      if (singleResults.length === 0) {
+        if (singleFailures.length > 0) {
+          if (singleFailures.length === 1) {
+            showConversionFailedPopup(inputOption.format.format, outputOption.format.format);
+          } else {
+            window.showPopup(
+              `<h2>Conversion failed</h2>` +
+              `<p>All ${singleFailures.length} files failed to convert.</p>` +
+              `<p style="opacity:0.7;font-size:0.9em">${singleFailures.join(", ")}</p>` +
+              `<button onclick="window.hidePopup()">OK</button>`
+            );
+          }
+        } else {
+          showConversionFailedPopup(inputOption.format.format, outputOption.format.format);
+        }
+        return;
+      }
+
+      const processedSingleFiles = await applyToolProcessing(singleResults);
       for (const file of processedSingleFiles) {
         downloadFile(file.bytes, file.name);
       }
@@ -5389,11 +5505,14 @@ ui.convertButton.onclick = async function () {
       const compressionHtml = getVideoCompressionHtml(inputFiles, processedSingleFiles);
       lastConvertedFiles = processedSingleFiles;
       const redirectHtml3 = getRedirectSuggestionHtml(processedSingleFiles);
+      const singleFailureHtml = singleFailures.length > 0
+        ? `<p style="color:#e74c3c"><b>${singleFailures.length} file${singleFailures.length !== 1 ? "s" : ""} failed:</b> ${singleFailures.join(", ")}</p>`
+        : ``;
       window.showPopup(
-        `<h2>Converted ${inputOption.format.format} to ${outputOption.format.format}!</h2>` +
+        `<h2>Converted ${processedSingleFiles.length} file${processedSingleFiles.length !== 1 ? "s" : ""} to ${outputOption.format.format}!</h2>` +
         `<p>Size: ${formatFileSize(singleTotalSize)}</p>` +
         compressionHtml +
-        `<p>Path used: <b>${output.path.map(c => c.format.format).join(" → ")}</b>.</p>\n` +
+        singleFailureHtml +
         `<button onclick="window.hidePopup()">OK</button>` +
         redirectHtml3
       );
