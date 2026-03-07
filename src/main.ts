@@ -3038,6 +3038,36 @@ async function copyToClipboard(bytes: Uint8Array, mime: string): Promise<boolean
   }
 }
 
+// Expose for popup onclick handlers
+(window as any)._copyToClipboard = copyToClipboard;
+
+/** Image MIME prefixes eligible for clipboard copy */
+const clipboardImageMimes = new Set([
+  "image/png", "image/jpeg", "image/webp", "image/gif", "image/bmp",
+  "image/avif", "image/svg+xml", "image/tiff"
+]);
+
+/**
+ * Build "Copy to Clipboard" button HTML for success popups.
+ * Only returns markup when there's a single image output and the API is available.
+ * Stores the bytes in a temporary window slot so the onclick can access them.
+ */
+function getClipboardCopyHtml(files: FileData[], mime: string): string {
+  if (files.length !== 1) return "";
+  if (!clipboardImageMimes.has(mime)) return "";
+  if (typeof navigator.clipboard?.write !== "function") return "";
+  // Stash bytes so the inline onclick can reach them
+  (window as any)._clipboardBytes = files[0].bytes;
+  (window as any)._clipboardMime = mime;
+  return `<button id="popup-copy-btn" onclick="(async()=>{` +
+    `const btn=document.getElementById('popup-copy-btn');` +
+    `btn.disabled=true;btn.textContent='Copying...';` +
+    `const ok=await window._copyToClipboard(window._clipboardBytes,window._clipboardMime);` +
+    `btn.textContent=ok?'Copied!':'Failed';` +
+    `setTimeout(()=>{btn.disabled=false;btn.textContent='Copy to Clipboard'},1500)` +
+    `})()">Copy to Clipboard</button>`;
+}
+
 /** Add a converted file to the output tray */
 function addToOutputTray(bytes: Uint8Array, name: string) {
   const blob = new Blob([bytes as BlobPart], { type: "application/octet-stream" });
@@ -5456,6 +5486,7 @@ ui.convertButton.onclick = async function () {
         compressionHtml +
         failureHtml1 +
         (processedOutputFiles.length > 1 && archiveMultiOutput ? `<p>Results delivered as a ZIP archive.</p>` : ``) +
+        getClipboardCopyHtml(processedOutputFiles, outputFormat.mime) +
         `<button onclick="window.hidePopup()">OK</button>` +
         redirectHtml1
       );
@@ -5649,6 +5680,7 @@ ui.convertButton.onclick = async function () {
         `<p>Size: ${formatFileSize(singleTotalSize)}</p>` +
         compressionHtml +
         singleFailureHtml +
+        getClipboardCopyHtml(processedSingleFiles, outputOption.format.mime) +
         `<button onclick="window.hidePopup()">OK</button>` +
         redirectHtml3
       );
