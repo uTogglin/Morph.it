@@ -2158,7 +2158,7 @@ window.tryConvertByTraversing = async function (
   // dead-end list is preserved so the same broken route is never tried
   // twice.  This is critical in simple (A*) mode where the visited set
   // blocks alternative paths after the first result is yielded.
-  const MAX_RETRIES = 10;
+  const MAX_RETRIES = 25;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let foundAny = false;
     for await (const path of window.traversionGraph.searchPath(from, to, simpleMode)) {
