@@ -3059,7 +3059,7 @@ function getClipboardCopyHtml(files: FileData[], mime: string): string {
   // Stash bytes so the inline onclick can reach them
   (window as any)._clipboardBytes = files[0].bytes;
   (window as any)._clipboardMime = mime;
-  return `<button id="popup-copy-btn" onclick="(async()=>{` +
+  return `<button id="popup-copy-btn" class="popup-secondary-btn" onclick="(async()=>{` +
     `const btn=document.getElementById('popup-copy-btn');` +
     `btn.disabled=true;btn.textContent='Copying...';` +
     `const ok=await window._copyToClipboard(window._clipboardBytes,window._clipboardMime);` +
@@ -5486,8 +5486,10 @@ ui.convertButton.onclick = async function () {
         compressionHtml +
         failureHtml1 +
         (processedOutputFiles.length > 1 && archiveMultiOutput ? `<p>Results delivered as a ZIP archive.</p>` : ``) +
+        `<div class="popup-actions">` +
         getClipboardCopyHtml(processedOutputFiles, outputFormat.mime) +
         `<button onclick="window.hidePopup()">OK</button>` +
+        `</div>` +
         redirectHtml1
       );
       attachRedirectHandlers();
@@ -5680,8 +5682,10 @@ ui.convertButton.onclick = async function () {
         `<p>Size: ${formatFileSize(singleTotalSize)}</p>` +
         compressionHtml +
         singleFailureHtml +
+        `<div class="popup-actions">` +
         getClipboardCopyHtml(processedSingleFiles, outputOption.format.mime) +
         `<button onclick="window.hidePopup()">OK</button>` +
+        `</div>` +
         redirectHtml3
       );
       attachRedirectHandlers();
