@@ -302,10 +302,12 @@ class FFmpegHandler implements FormatHandler {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const onProgress = (e: any) => {
       const raw = e.progress ?? 0;
-      if (raw < 0 || raw > 1 || !isFinite(raw)) return; // ignore bogus values
+      if (raw <= 0 || raw > 1 || !isFinite(raw)) return; // ignore bogus values
       const pct = Math.min(Math.round(raw * 100), 99);
+      const wrap = document.getElementById("convert-progress-wrap");
       const bar = document.getElementById("convert-progress-bar");
       const label = document.getElementById("convert-progress-pct");
+      if (wrap) wrap.style.display = "";
       if (bar) bar.style.width = pct + "%";
       if (label) label.textContent = pct + "%";
     };

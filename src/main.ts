@@ -2168,10 +2168,12 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
   const convertStartTime = Date.now();
   ui.popupBox.innerHTML = `<h2>Converting...</h2>
     <p>Trying <b>${pathString}</b>...</p>
-    <div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">
-      <div id="convert-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>
+    <div id="convert-progress-wrap" style="display:none">
+      <div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">
+        <div id="convert-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>
+      </div>
+      <p id="convert-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem"></p>
     </div>
-    <p id="convert-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>
     <p id="convert-elapsed" class="search-status"></p>
     <button onclick="window._cancelActiveConversion()">Cancel</button>`;
 
