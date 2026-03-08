@@ -118,17 +118,11 @@ function makeTiff() {
 }
 const tiff = makeTiff();
 
-// Minimal WebP (1x1 red, lossy VP8)
-// VP8 bitstream for 1x1 pixel
-const vp8Data = u8(
-  0x30,0x01,0x00,0x9D,0x01,0x2A,0x01,0x00,0x01,0x00,0x01,0x40,
-  0x25,0xA4,0x00,0x03,0x70,0x00,0xFE,0xFB,0x94,0x00,0x00
-);
-const webpPayloadSize = 12 + vp8Data.length;
-const webp = concat(
-  str("RIFF"), u32le(4 + 8 + vp8Data.length), str("WEBP"),
-  str("VP8 "), u32le(vp8Data.length),
-  vp8Data
+// 1x1 red WebP — known-good lossy VP8 from validated test suites
+// Hand-crafting VP8 bitstreams is error-prone, so use a base64-encoded real file
+const webp = Uint8Array.from(
+  atob("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA"),
+  c => c.charCodeAt(0)
 );
 
 // SVG 10x10 red square
