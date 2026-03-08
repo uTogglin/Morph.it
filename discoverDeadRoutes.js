@@ -229,6 +229,10 @@ const deadRoutes = await page.evaluate(
           "Could not decode",             // generic decode failure
           "Invalid image data",           // bad fixture pixels
           "bad string length in bson",    // minimal BSON not complex enough
+          "pandoc-api-version",           // generic JSON ≠ Pandoc JSON AST
+          "unexpected element",           // generic XML ≠ DocBook XML
+          "No valid cmap sub-tables",     // minimal TTF missing font tables
+          "Invalid SVG font format",      // SVG image ≠ SVG font
         ].some(p => msg.includes(p));
         if (fixtureIssue) {
           console.log(`${label} — skipped (fixture issue: ${msg.slice(0, 80)})`);
