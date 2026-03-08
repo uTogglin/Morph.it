@@ -95,9 +95,20 @@ const server = Bun.serve({
 
 const browser = await puppeteer.launch({
   headless: true,
+  protocolTimeout: 0, // disable CDP timeout — the edge loop can run for hours
   args: ["--no-sandbox", "--disable-setuid-sandbox"],
 });
 const page = await browser.newPage();
+page.setDefaultTimeout(0); // no timeout on page-level operations either
+
+// Forward ALL browser console messages to stdout so CI can see progress
+page.on("console", (msg) => {
+  const type = msg.type();
+  const text = msg.text();
+  if (type === "error") console.error(`[browser] ${text}`);
+  else if (type === "warning") console.warn(`[browser] ${text}`);
+  else console.log(`[browser] ${text}`);
+});
 
 // Wait for the app to be fully ready
 await Promise.all([
@@ -111,23 +122,21 @@ await Promise.all([
 
 console.log("App loaded. Discovering dead routes...");
 
-// Prefetch fixture file bytes into the browser context (skip missing files)
-const fixtureBytes = {};
+// Build a map of nodeId → fixture server URL (fetched inside browser, avoids
+// serialising large binary blobs through page.evaluate which hangs on big files).
+const fixtureUrls = {};
 for (const [nodeId, info] of Object.entries(FIXTURES)) {
   const file = Bun.file(`${__dirname}/test/resources/${info.file}`);
   if (!(await file.exists())) {
     console.warn(`Fixture missing, skipping: ${info.file}`);
     continue;
   }
-  fixtureBytes[nodeId] = {
-    bytes: Array.from(await file.bytes()),
-    ext: info.ext,
-  };
+  fixtureUrls[nodeId] = { url: `/test/${info.file}`, ext: info.ext };
 }
-console.log(`Loaded ${Object.keys(fixtureBytes).length} fixture files.`);
+console.log(`Registered ${Object.keys(fixtureUrls).length} fixture files.`);
 
 const deadRoutes = await page.evaluate(
-  async (fixtureBytes, perEdgeTimeout) => {
+  async (fixtureUrls, perEdgeTimeout) => {
     const graphData = window.traversionGraph.getData();
     const handlers = window._handlers;
 
@@ -137,9 +146,18 @@ const deadRoutes = await page.evaluate(
 
     // Build a secondary lookup by format name for fuzzy matching
     const fixtureByFormat = {};
-    for (const [nodeId, data] of Object.entries(fixtureBytes)) {
+    for (const [nodeId, data] of Object.entries(fixtureUrls)) {
       const fmt = nodeId.match(/\(([^)]+)\)$/)?.[1];
       if (fmt && !fixtureByFormat[fmt]) fixtureByFormat[fmt] = data;
+    }
+
+    // Cache fetched fixture bytes so each file is only downloaded once
+    const bytesCache = new Map();
+    async function getFixtureBytes(info) {
+      if (bytesCache.has(info.url)) return bytesCache.get(info.url);
+      const bytes = new Uint8Array(await fetch(info.url).then(r => r.arrayBuffer()));
+      bytesCache.set(info.url, bytes);
+      return bytes;
     }
 
     const edges = graphData.edges;
@@ -147,12 +165,14 @@ const deadRoutes = await page.evaluate(
     let tested = 0;
     let skipped = 0;
 
+    console.log(`Total edges in graph: ${edges.length}`);
+
     for (const edge of edges) {
       const fromId = `${edge.from.format.mime}(${edge.from.format.format})`;
       const toId = `${edge.to.format.mime}(${edge.to.format.format})`;
       // Try exact MIME match first, then fall back to format-name match
-      const fixture = fixtureBytes[fromId] || fixtureByFormat[edge.from.format.format];
-      if (!fixture) {
+      const fixtureInfo = fixtureUrls[fromId] || fixtureByFormat[edge.from.format.format];
+      if (!fixtureInfo) {
         skipped++;
         continue;
       }
@@ -161,19 +181,21 @@ const deadRoutes = await page.evaluate(
       if (!handler) continue;
 
       tested++;
-      if (tested % 50 === 0) console.log(`Tested ${tested} edges so far, ${dead.length} dead...`);
+      const label = `[${tested}] ${edge.handler}: ${edge.from.format.format} -> ${edge.to.format.format}`;
 
       try {
         // Init handler if needed
         if (!handler.ready) {
-          await handler.init();
+          console.log(`${label} — initializing handler...`);
+          await Promise.race([
+            handler.init(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error("init timeout")), perEdgeTimeout)),
+          ]);
           if (!handler.ready) throw new Error(`Handler "${handler.name}" not ready after init`);
         }
 
-        const fileData = [{
-          bytes: new Uint8Array(fixture.bytes),
-          name: `test.${fixture.ext}`,
-        }];
+        const bytes = await getFixtureBytes(fixtureInfo);
+        const fileData = [{ bytes: new Uint8Array(bytes), name: `test.${fixtureInfo.ext}` }];
 
         // Run conversion with a timeout
         const result = await Promise.race([
@@ -184,22 +206,27 @@ const deadRoutes = await page.evaluate(
         ]);
 
         if (!result || !result.length || result.some((f) => !f.bytes || !f.bytes.length)) {
+          console.log(`${label} — DEAD (empty output)`);
           dead.push({ handler: edge.handler, from: fromId, to: toId });
+        } else {
+          if (tested % 25 === 0) console.log(`${label} — ok`);
         }
       } catch (e) {
         const msg = String(e && e.message ? e.message : e);
         // Don't count timeouts or OOM as dead routes — they're resource-dependent
-        if (msg === "timeout" || msg.includes("out of memory") || msg.includes("OOM")) {
+        if (msg === "timeout" || msg === "init timeout" || msg.includes("out of memory") || msg.includes("OOM")) {
+          console.log(`${label} — skipped (${msg})`);
           continue;
         }
+        console.log(`${label} — DEAD (${msg.slice(0, 120)})`);
         dead.push({ handler: edge.handler, from: fromId, to: toId });
       }
     }
 
-    console.log(`Done. Tested: ${tested}, Skipped (no fixture): ${skipped}, Dead: ${dead.length}`);
+    console.log(`\nDone. Tested: ${tested}, Skipped (no fixture): ${skipped}, Dead: ${dead.length}`);
     return dead;
   },
-  fixtureBytes,
+  fixtureUrls,
   perEdgeTimeout
 );
 
