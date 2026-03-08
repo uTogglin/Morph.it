@@ -298,9 +298,22 @@ class FFmpegHandler implements FormatHandler {
     if (args) command.push(...args);
     command.push("output");
 
+    // Hook progress events to update the conversion popup's progress bar
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const onProgress = (e: any) => {
+      const pct = Math.min(Math.round((e.progress ?? 0) * 100), 99);
+      const bar = document.getElementById("convert-progress-bar");
+      const label = document.getElementById("convert-progress-pct");
+      if (bar) bar.style.width = pct + "%";
+      if (label) label.textContent = pct + "%";
+    };
+    this.#ffmpeg.on("progress", onProgress);
+
     const stdout = await this.getStdout(async () => {
       await this.#ffmpeg!.exec(command);
     });
+
+    this.#ffmpeg.off("progress", onProgress);
 
     for (let i = 0; i < fileIndex; i ++) {
       const entryName = `file_${i}.${inputFormat.extension}`;

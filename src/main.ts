@@ -869,6 +869,15 @@ window.addEventListener("keydown", e => {
     // Priority 3: go back to home from any tool page
     if (activeTool !== null) { showHomePage(); return; }
   }
+  // Enter key triggers Convert button (unless typing in an input/textarea)
+  if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (activeTool !== null) return; // don't trigger on tool pages
+    if (!ui.convertButton.className.includes("disabled")) {
+      ui.convertButton.click();
+    }
+  }
 });
 
 // "Configure settings" links on tool pages
@@ -2155,10 +2164,14 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
     }
   }
 
-  // Show conversion popup with elapsed timer and cancel button
+  // Show conversion popup with progress bar, elapsed timer, and cancel button
   const convertStartTime = Date.now();
   ui.popupBox.innerHTML = `<h2>Converting...</h2>
     <p>Trying <b>${pathString}</b>...</p>
+    <div style="background:var(--input-border);border-radius:8px;height:18px;margin:12px 0;overflow:hidden">
+      <div id="convert-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);border-radius:8px"></div>
+    </div>
+    <p id="convert-progress-pct" style="text-align:center;color:var(--text-muted);font-size:0.85rem">0%</p>
     <p id="convert-elapsed" class="search-status"></p>
     <button onclick="window._cancelActiveConversion()">Cancel</button>`;
 
@@ -3052,6 +3065,43 @@ function formatElapsed(ms: number): string {
   const min = Math.floor(seconds / 60);
   const sec = seconds % 60;
   return `${min}m ${sec}s`;
+}
+
+/** Play a short chime via Web Audio API to signal conversion completion */
+function playCompletionChime() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1108.73, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.3);
+    osc.onended = () => ctx.close();
+  } catch { /* audio not available */ }
+}
+
+/** Send a browser notification if the tab is in the background */
+function notifyIfBackground(title: string, body: string) {
+  if (!document.hidden) return;
+  if (Notification.permission === "granted") {
+    new Notification(title, { body });
+  } else if (Notification.permission !== "denied") {
+    Notification.requestPermission().then(p => {
+      if (p === "granted") new Notification(title, { body });
+    });
+  }
+}
+
+/** Notify + chime on conversion completion */
+function onConversionComplete(summary: string) {
+  playCompletionChime();
+  notifyIfBackground("Conversion complete", summary);
 }
 
 /** Copy file bytes to clipboard (images only — converts to PNG for clipboard compat) */
@@ -5598,6 +5648,7 @@ ui.convertButton.onclick = async function () {
         redirectHtml1
       );
       attachRedirectHandlers();
+      onConversionComplete(`${processedOutputFiles.length} file${processedOutputFiles.length !== 1 ? "s" : ""} converted to ${outputFormat.format}`);
 
     } else if (conversionQueue.length > 1) {
       // ── Mixed-category queue: convert current group, advance queue ──
@@ -5695,6 +5746,7 @@ ui.convertButton.onclick = async function () {
           queueFailureHtml +
           `<button onclick="window.hidePopup()">OK</button>`
         );
+        onConversionComplete(`All ${allUploadedFiles.length} files converted`);
       }
 
     } else {
@@ -5794,6 +5846,7 @@ ui.convertButton.onclick = async function () {
         redirectHtml3
       );
       attachRedirectHandlers();
+      onConversionComplete(`${processedSingleFiles.length} file${processedSingleFiles.length !== 1 ? "s" : ""} converted to ${outputOption.format.format}`);
     }
 
   } catch (e) {
