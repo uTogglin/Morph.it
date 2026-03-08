@@ -5954,7 +5954,7 @@ ui.convertButton.onclick = async function () {
       if (inputFileData.length > 0) {
         // Build batch states for per-file cancel UI
         const queueBatchStates: BatchFileState[] = inputFileData.map(fd => ({
-          file: new File([fd.bytes], fd.name),
+          file: new File([fd.bytes as BlobPart], fd.name),
           inputOption,
           status: "queued" as const,
           result: null,
@@ -6111,7 +6111,7 @@ ui.convertButton.onclick = async function () {
 
       // Build batch states for multi-file per-file cancel UI
       const singleBatchStates: BatchFileState[] = inputFileData.map(fd => ({
-        file: new File([fd.bytes], fd.name),
+        file: new File([fd.bytes as BlobPart], fd.name),
         inputOption,
         status: "queued" as const,
         result: null,
