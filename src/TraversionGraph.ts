@@ -54,6 +54,12 @@ export interface Edge {
     cost: number;
 };
 
+export interface DeadRoute {
+    handler: string;
+    from: string;
+    to: string;
+}
+
 export class TraversionGraph {
     private handlers: FormatHandler[] = [];
     private nodes: Node[] = [];
@@ -201,7 +207,7 @@ export class TraversionGraph {
         return path;
     }
 
-    public init(supportedFormatCache: Map<string, FileFormat[]>, handlers: FormatHandler[], strictCategories: boolean = false) {
+    public init(supportedFormatCache: Map<string, FileFormat[]>, handlers: FormatHandler[], strictCategories: boolean = false, deadRoutes?: DeadRoute[]) {
         this.handlers = handlers;
         this.nodes.length = 0;
         this.edges.length = 0;
@@ -258,6 +264,20 @@ export class TraversionGraph {
         }
         if (this.categoryChangeCosts.length > 0) {
             this.minCategoryChangeCost = this.categoryChangeCosts.reduce((min, c) => Math.min(min, c.cost), Infinity);
+        }
+        // Mark known-dead edges with Infinity cost so the pathfinder never selects them
+        if (deadRoutes && deadRoutes.length > 0) {
+            const deadSet = new Set(deadRoutes.map(r => `${r.handler}\0${r.from}\0${r.to}`));
+            let pruned = 0;
+            for (const e of this.edges) {
+                const fromId = `${e.from.format.mime}(${e.from.format.format})`;
+                const toId = `${e.to.format.mime}(${e.to.format.format})`;
+                if (deadSet.has(`${e.handler}\0${fromId}\0${toId}`)) {
+                    e.cost = Infinity;
+                    pruned++;
+                }
+            }
+            if (pruned > 0) console.log(`Pruned ${pruned} known-dead edges from ${deadRoutes.length} dead route entries.`);
         }
         const endTime = performance.now();
         console.log(`Traversion graph initialized in ${(endTime - startTime).toFixed(2)} ms with ${this.nodes.length} nodes and ${this.edges.length} edges.`);

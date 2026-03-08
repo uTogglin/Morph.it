@@ -2,7 +2,7 @@ import type { FileFormat, FileData, FormatHandler, ConvertPathNode } from "./For
 import normalizeMimeType from "./normalizeMimeType.js";
 import { prescanFiles, getCachedDetectedMime, isZipBasedExtension } from "./utils/detect-format.js";
 import handlers from "./handlers";
-import { TraversionGraph } from "./TraversionGraph.js";
+import { TraversionGraph, type DeadRoute } from "./TraversionGraph.js";
 import JSZip from "jszip";
 import { gzip as pakoGzip } from "pako";
 import { createTar } from "./handlers/archive.js";
@@ -1580,7 +1580,7 @@ async function buildOptionList () {
 
     }
   }
-  window.traversionGraph.init(window.supportedFormatCache, handlers);
+  window.traversionGraph.init(window.supportedFormatCache, handlers, false, _deadRoutes);
 
   // Build MIME lookup map for O(1) findInputOption
   mimeToOptions = new Map();
@@ -1609,15 +1609,21 @@ async function buildOptionList () {
 
 }
 
+// Expose handlers for the dead-route discovery script
+(window as any)._handlers = handlers;
+
+let _deadRoutes: DeadRoute[] | undefined;
 (async () => {
   try {
-    const cacheJSON = await fetch("cache.json").then(r => r.json());
-    window.supportedFormatCache = new Map(cacheJSON);
+    const [cacheRes, deadRes] = await Promise.all([
+      fetch("cache.json").then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch("dead-routes.json").then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    if (cacheRes) window.supportedFormatCache = new Map(cacheRes);
+    else console.warn("Missing supported format precache.\n\nConsider saving the output of printSupportedFormatCache() to cache.json.");
+    if (deadRes) _deadRoutes = deadRes as DeadRoute[];
   } catch {
-    console.warn(
-      "Missing supported format precache.\n\n" +
-      "Consider saving the output of printSupportedFormatCache() to cache.json."
-    );
+    console.warn("Error loading precache files.");
   } finally {
     await buildOptionList();
     console.log("Built initial format list.");

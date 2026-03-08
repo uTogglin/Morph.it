@@ -1,0 +1,61 @@
+name: Discover Dead Routes
+
+on:
+  schedule:
+    - cron: "0 4 * * 0" # Weekly on Sunday at 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+          cache: true
+
+      - name: Install dependencies
+        run: bun i --frozen-lockfile
+
+      - name: Build
+        run: |
+          export VITE_COMMIT_SHA=${{ github.sha }}
+          bun run build
+
+      - name: Generate cache
+        run: bun run cache:build
+
+      - name: Generate test fixtures
+        run: bun test/generateFixtures.js
+
+      - name: Discover dead routes
+        run: bun run discoverDeadRoutes.js dist/dead-routes.json --timeout=30000
+        timeout-minutes: 90
+
+      - name: Copy dead-routes.json to repo root for next build
+        run: cp dist/dead-routes.json dead-routes.json
+
+      - name: Check for changes
+        id: diff
+        run: |
+          git diff --quiet dead-routes.json && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit dead-routes.json
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dead-routes.json
+          git commit -m "Update dead-routes.json from automated edge testing"
+          git push
