@@ -2269,6 +2269,7 @@ window.tryConvertByTraversing = async function (
 
 /** Track blob URLs for cleanup */
 const outputTrayUrls: string[] = [];
+const OUTPUT_TRAY_MAX = 100;
 
 /** Image extensions eligible for background removal */
 const bgRemovalExts = new Set(["png", "webp", "avif", "tiff", "tif", "gif", "jpg", "jpeg", "bmp"]);
@@ -3070,6 +3071,13 @@ function getClipboardCopyHtml(files: FileData[], mime: string): string {
 
 /** Add a converted file to the output tray */
 function addToOutputTray(bytes: Uint8Array, name: string) {
+  // Evict oldest items when the tray is at capacity (FIFO)
+  while (outputTrayUrls.length >= OUTPUT_TRAY_MAX) {
+    const oldUrl = outputTrayUrls.shift();
+    if (oldUrl) URL.revokeObjectURL(oldUrl);
+    ui.outputTrayGrid.firstElementChild?.remove();
+  }
+
   const blob = new Blob([bytes as BlobPart], { type: "application/octet-stream" });
   const blobUrl = URL.createObjectURL(blob);
   outputTrayUrls.push(blobUrl);
