@@ -156,6 +156,23 @@ export class TraversionGraph {
     /** Cached map of handler-specific category change pairs */
     private handlerPairsCache: Map<string, string> | null = null;
 
+    /**
+     * Indexed category-change cost lookup.
+     * Key: "fromCat->toCat", Value: array of {cost, handler?} entries.
+     * Built once in init() to replace linear scans of categoryChangeCosts.
+     */
+    private categoryCostIndex: Map<string, Array<{cost: number, handler?: string}>> = new Map();
+
+    private buildCategoryCostIndex(): void {
+        this.categoryCostIndex.clear();
+        for (const c of this.categoryChangeCosts) {
+            const key = `${c.from}->${c.to}`;
+            let arr = this.categoryCostIndex.get(key);
+            if (!arr) { arr = []; this.categoryCostIndex.set(key, arr); }
+            arr.push({ cost: c.cost, handler: c.handler });
+        }
+    }
+
     private getHandlerPairs(): Map<string, string> {
         if (!this.handlerPairsCache) {
             this.handlerPairsCache = new Map<string, string>(
@@ -233,6 +250,8 @@ export class TraversionGraph {
             });
             handlerIndex++;
         });
+        // Build the indexed category cost map for O(1) lookups in costFunction
+        this.buildCategoryCostIndex();
         // Precompute minimum costs for a tighter A* heuristic
         if (this.edges.length > 0) {
             this.minEdgeCost = this.edges.reduce((min, e) => Math.min(min, e.cost), Infinity);
@@ -256,39 +275,53 @@ export class TraversionGraph {
         let cost = DEPTH_COST; // Base cost for each conversion step
 
         const handlerPairs = this.getHandlerPairs();
-        // Calculate category change cost
+        const handlerLower = handler.toLowerCase();
+        // Calculate category change cost using indexed map
         const fromCategory = from.format.category || from.format.mime.split("/")[0];
         const toCategory = to.format.category || to.format.mime.split("/")[0];
         if (fromCategory && toCategory) {
             const fromCategories = Array.isArray(fromCategory) ? fromCategory : [fromCategory];
             const toCategories = Array.isArray(toCategory) ? toCategory : [toCategory];
             if (strictCategories) {
-                cost += this.categoryChangeCosts.reduce((totalCost, c) => {
-                    // If the category change defined in CATEGORY_CHANGE_COSTS matches the categories of the formats, add the specified cost. Otherwise, if the categories are the same, add no cost. If the categories differ but no specific cost is defined for that change, add a default cost.
-                    if (fromCategories.includes(c.from)
-                        && toCategories.includes(c.to)
-                        && (!c.handler || c.handler === handler.toLowerCase())
-                    )
-                        return totalCost + c.cost;
-                    return totalCost + DEFAULT_CATEGORY_CHANGE_COST;
-                }, 0);
+                // Strict mode: penalise each hop proportionally to the number
+                // of category-change rules so the algorithm strongly prefers
+                // shorter paths.  Matching rules substitute their specific cost
+                // for the default, keeping category-aware weighting intact.
+                let totalCost = this.categoryChangeCosts.length * DEFAULT_CATEGORY_CHANGE_COST;
+                for (const fc of fromCategories) {
+                    for (const tc of toCategories) {
+                        const entries = this.categoryCostIndex.get(`${fc}->${tc}`);
+                        if (!entries) continue;
+                        for (const e of entries) {
+                            if (!e.handler || e.handler === handlerLower) {
+                                totalCost += e.cost - DEFAULT_CATEGORY_CHANGE_COST;
+                                break;
+                            }
+                        }
+                    }
+                }
+                cost += totalCost;
             }
             else if (!fromCategories.some(c => toCategories.includes(c))) {
-                let costs = this.categoryChangeCosts.filter(c =>
-                    fromCategories.includes(c.from)
-                    && toCategories.includes(c.to)
-                    && (
-                        (!c.handler && handlerPairs.get(`${c.from}->${c.to}`) !== handler.toLowerCase())
-                        || c.handler === handler.toLowerCase()
-                    )
-                );
-                if (costs.length === 0) cost += DEFAULT_CATEGORY_CHANGE_COST; // If no specific cost is defined for this category change, use the default cost
-                else cost += Math.min(...costs.map(c => c.cost)); // If multiple category changes are involved, use the lowest cost defined for those changes. This allows for more nuanced cost calculations when formats belong to multiple categories.
+                // Non-strict mode: find the minimum matching cost via indexed lookup
+                let minCost = Infinity;
+                for (const fc of fromCategories) {
+                    for (const tc of toCategories) {
+                        const entries = this.categoryCostIndex.get(`${fc}->${tc}`);
+                        if (!entries) continue;
+                        for (const e of entries) {
+                            if ((!e.handler && handlerPairs.get(`${fc}->${tc}`) !== handlerLower)
+                                || e.handler === handlerLower) {
+                                if (e.cost < minCost) minCost = e.cost;
+                            }
+                        }
+                    }
+                }
+                cost += minCost === Infinity ? DEFAULT_CATEGORY_CHANGE_COST : minCost;
             }
         }
         else if (fromCategory || toCategory) {
             // If one format has a category and the other doesn't, consider it a category change
-            // Should theoretically never be encountered, unless the MIME type is misspecified
             cost += DEFAULT_CATEGORY_CHANGE_COST;
         }
 

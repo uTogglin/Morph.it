@@ -2099,9 +2099,20 @@ if (ui.clearOutputBtn) {
   });
 }
 
-let deadEndAttempts: ConvertPathNode[][];
+let deadEndHashes: Set<string>;
 /** Number of routes tried in the last search — used for failure UI */
 let _lastSearchRoutesTried = 0;
+
+/** Hash a path prefix for O(1) dead-end lookups */
+function hashPath(path: ConvertPathNode[], len: number): string {
+  let h = "";
+  for (let i = 0; i < len; i++) {
+    const p = path[i];
+    if (i > 0) h += "|";
+    h += p.handler.name + ":" + p.format.mime + ":" + p.format.format;
+  }
+  return h;
+}
 
 function showConversionFailedPopup(fromFmt: string, toFmt: string) {
   const routes = _lastSearchRoutesTried;
@@ -2120,20 +2131,10 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
 
   const pathString = path.map(c => c.format.format).join(" → ");
 
-  // Exit early if we've encountered a known dead end
-  for (const deadEnd of deadEndAttempts) {
-    let isDeadEnd = true;
-    for (let i = 0; i < deadEnd.length; i++) {
-      const a = path[i], b = deadEnd[i];
-      if (a === b || (a.handler.name === b.handler.name
-        && a.format.mime === b.format.mime
-        && a.format.format === b.format.format)) continue;
-      isDeadEnd = false;
-      break;
-    }
-    if (isDeadEnd) {
-      const deadEndString = deadEnd.slice(-2).map(c => c.format.format).join(" → ");
-      console.warn(`Skipping ${pathString} due to dead end near ${deadEndString}.`);
+  // Exit early if any prefix of this path is a known dead end (O(1) per prefix length)
+  for (let len = 2; len <= path.length; len++) {
+    if (deadEndHashes.has(hashPath(path, len))) {
+      console.warn(`Skipping ${pathString} due to known dead-end prefix.`);
       return null;
     }
   }
@@ -2176,8 +2177,8 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
       // The graph may still have old paths queued from before they were
       // marked as dead ends, so we catch that here.
       const deadEndPath = path.slice(0, i + 2);
-      deadEndAttempts.push(deadEndPath);
-      window.traversionGraph.addDeadEndPath(path.slice(0, i + 2));
+      deadEndHashes.add(hashPath(deadEndPath, deadEndPath.length));
+      window.traversionGraph.addDeadEndPath(deadEndPath);
 
       ui.popupBox.innerHTML = `<h2>Finding conversion route...</h2>
         <p id="convert-search-status" class="search-status">Looking for a valid path...</p>
@@ -2198,7 +2199,7 @@ window.tryConvertByTraversing = async function (
   from: ConvertPathNode,
   to: ConvertPathNode
 ) {
-  deadEndAttempts = [];
+  deadEndHashes = new Set();
   window.traversionGraph.clearDeadEndPaths();
 
   // Show initial search popup with cancel button
@@ -4314,13 +4315,21 @@ ui.vidPreview?.addEventListener("loadedmetadata", () => {
   vidUpdateActionButton();
 });
 
-// Video timeupdate: update playhead and time display
-ui.vidPreview?.addEventListener("timeupdate", () => {
-  vidUpdatePlayhead();
-  if (ui.vidTimeDisplay) {
-    ui.vidTimeDisplay.textContent = `${vidFormatTimeShort(ui.vidPreview.currentTime)} / ${vidFormatTimeShort(vidDuration)}`;
-  }
-});
+// Video timeupdate: update playhead and time display (throttled to rAF)
+{
+  let timeupdateScheduled = false;
+  ui.vidPreview?.addEventListener("timeupdate", () => {
+    if (timeupdateScheduled) return;
+    timeupdateScheduled = true;
+    requestAnimationFrame(() => {
+      timeupdateScheduled = false;
+      vidUpdatePlayhead();
+      if (ui.vidTimeDisplay) {
+        ui.vidTimeDisplay.textContent = `${vidFormatTimeShort(ui.vidPreview.currentTime)} / ${vidFormatTimeShort(vidDuration)}`;
+      }
+    });
+  });
+}
 
 // Play/pause button
 ui.vidPlayBtn?.addEventListener("click", () => {
@@ -4785,14 +4794,21 @@ ui.vidCropReset?.addEventListener("click", () => {
     document.addEventListener("pointerup", onPointerUp);
   }
 
+  let cropMoveRafId = 0;
   function onPointerMove(e: PointerEvent) {
     if (!dragType) return;
+    // Coalesce rapid pointermove events into a single rAF
+    if (cropMoveRafId) cancelAnimationFrame(cropMoveRafId);
+    const clientX = e.clientX, clientY = e.clientY;
+    cropMoveRafId = requestAnimationFrame(() => {
+      cropMoveRafId = 0;
+      if (!dragType) return;
     const rect = vidGetVideoRect();
     if (!rect) return;
     const scaleX = vidOrigWidth / rect.vw;
     const scaleY = vidOrigHeight / rect.vh;
-    const dx = (e.clientX - startMX) * scaleX;
-    const dy = (e.clientY - startMY) * scaleY;
+    const dx = (clientX - startMX) * scaleX;
+    const dy = (clientY - startMY) * scaleY;
 
     if (dragType === "move") {
       let nx = vidEven(Math.round(startCropX + dx));
@@ -4852,6 +4868,7 @@ ui.vidCropReset?.addEventListener("click", () => {
     vidUpdateCropInputs();
     vidUpdateCropOverlay();
     vidUpdateCropInfo();
+    }); // end rAF
   }
 
   function onPointerUp() {
@@ -4867,8 +4884,17 @@ ui.vidCropReset?.addEventListener("click", () => {
   });
 })();
 
-// Update crop overlay on window resize
-window.addEventListener("resize", vidUpdateCropOverlay);
+// Update crop overlay on window resize (throttled to rAF)
+{
+  let resizeRafId = 0;
+  window.addEventListener("resize", () => {
+    if (resizeRafId) return;
+    resizeRafId = requestAnimationFrame(() => {
+      resizeRafId = 0;
+      vidUpdateCropOverlay();
+    });
+  });
+}
 
 // ── Merge handlers ──────────────────────────────────────────────────────────
 

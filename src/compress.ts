@@ -383,48 +383,72 @@ async function compressGif(file: FileData, targetBytes: number): Promise<FileDat
 
   await ff.writeFile(inputName, file.bytes);
 
-  const scales = [1, 0.75, 0.5, 0.35];
   const fpsOptions = [15, 10, 8];
+  let bestBytes: Uint8Array | null = null;
+  let totalAttempts = 0;
+  const maxAttempts = fpsOptions.length * 4; // rough estimate for progress
 
-  const totalAttempts = fpsOptions.length * scales.length;
-  let attempt = 0;
+  async function tryEncode(fps: number, scale: number): Promise<Uint8Array | null> {
+    totalAttempts++;
+    updateProgressBar(Math.min(Math.round((totalAttempts / maxAttempts) * 100), 99));
+    const vf = scale < 1
+      ? `fps=${fps},scale=iw*${scale}:ih*${scale}:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse`
+      : `fps=${fps},split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse`;
+    try {
+      await ffExec(["-hide_banner", "-y", "-i", inputName, "-vf", vf, ...privacyArgs(), outputName]);
+      const data = await ff.readFile(outputName);
+      return ensureUint8Array(data);
+    } catch { return null; }
+  }
 
+  // For each fps tier, binary-search the scale factor (most impactful parameter)
   for (const fps of fpsOptions) {
-    for (const scale of scales) {
-      attempt++;
-      const pct = Math.min(Math.round((attempt / totalAttempts) * 100), 99);
-      updateProgressBar(pct);
+    let lo = 0.25, hi = 1.0;
 
-      const vf = scale < 1
-        ? `fps=${fps},scale=iw*${scale}:ih*${scale}:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse`
-        : `fps=${fps},split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse`;
-
-      try {
-        await ffExec(["-hide_banner", "-y", "-i", inputName, "-vf", vf, ...privacyArgs(), outputName]);
-        const data = await ff.readFile(outputName);
-        const bytes = ensureUint8Array(data);
-
-        if (bytes.length <= targetBytes) {
-          await ff.deleteFile(inputName).catch(() => {});
-          await ff.deleteFile(outputName).catch(() => {});
-          return { name: file.name, bytes };
-        }
-      } catch { /* try next */ }
+    // Quick check: does full scale already fit?
+    const fullScaleBytes = await tryEncode(fps, 1.0);
+    if (fullScaleBytes) {
+      bestBytes = fullScaleBytes;
+      if (fullScaleBytes.length <= targetBytes) {
+        await ff.deleteFile(inputName).catch(() => {});
+        await ff.deleteFile(outputName).catch(() => {});
+        return { name: file.name, bytes: fullScaleBytes };
+      }
     }
+
+    // Quick check: does minimum scale fit?
+    const minScaleBytes = await tryEncode(fps, lo);
+    if (minScaleBytes) {
+      if (minScaleBytes.length <= targetBytes) {
+        bestBytes = minScaleBytes;
+        // Binary search for the largest scale that still fits
+        for (let step = 0; step < 3; step++) {
+          const mid = (lo + hi) / 2;
+          const midBytes = await tryEncode(fps, mid);
+          if (midBytes && midBytes.length <= targetBytes) {
+            bestBytes = midBytes;
+            lo = mid;
+          } else {
+            hi = mid;
+          }
+        }
+        await ff.deleteFile(inputName).catch(() => {});
+        await ff.deleteFile(outputName).catch(() => {});
+        return { name: file.name, bytes: bestBytes };
+      }
+      bestBytes = minScaleBytes;
+    }
+    // This fps tier can't hit target even at min scale — try lower fps
   }
 
   // Return best effort
-  try {
-    const data = await ff.readFile(outputName);
-    const bytes = ensureUint8Array(data);
-    await ff.deleteFile(inputName).catch(() => {});
-    await ff.deleteFile(outputName).catch(() => {});
+  await ff.deleteFile(inputName).catch(() => {});
+  await ff.deleteFile(outputName).catch(() => {});
+  if (bestBytes) {
     console.warn(`Could not compress GIF "${file.name}" to target size.`);
-    return { name: file.name, bytes };
-  } catch {
-    await ff.deleteFile(inputName).catch(() => {});
-    return file;
+    return { name: file.name, bytes: bestBytes };
   }
+  return file;
 }
 
 // ── Video compression ──
