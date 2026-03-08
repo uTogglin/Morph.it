@@ -1478,17 +1478,24 @@ async function buildOptionList () {
   const seenInputs = new Set<string>();
   const seenOutputs = new Set<string>();
 
-  for (const handler of handlers) {
-    if (!window.supportedFormatCache.has(handler.name)) {
+  // Parallel init: initialize all uncached handlers concurrently
+  const uninitializedHandlers = handlers.filter(h => !window.supportedFormatCache.has(h.name));
+  if (uninitializedHandlers.length > 0) {
+    await Promise.all(uninitializedHandlers.map(async (handler) => {
       console.warn(`Cache miss for formats of handler "${handler.name}".`);
       try {
         await handler.init();
-      } catch (_) { continue; }
-      if (handler.supportedFormats) {
-        window.supportedFormatCache.set(handler.name, handler.supportedFormats);
-        console.info(`Updated supported format cache for "${handler.name}".`);
+        if (handler.supportedFormats) {
+          window.supportedFormatCache.set(handler.name, handler.supportedFormats);
+          console.info(`Updated supported format cache for "${handler.name}".`);
+        }
+      } catch (e) {
+        console.warn(`Handler "${handler.name}" init failed:`, e);
       }
-    }
+    }));
+  }
+
+  for (const handler of handlers) {
     const supportedFormats = window.supportedFormatCache.get(handler.name);
     if (!supportedFormats) {
       console.warn(`Handler "${handler.name}" doesn't support any formats.`);
