@@ -3045,6 +3045,15 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
 }
 
+/** Format elapsed milliseconds as human-readable duration */
+function formatElapsed(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const min = Math.floor(seconds / 60);
+  const sec = seconds % 60;
+  return `${min}m ${sec}s`;
+}
+
 /** Copy file bytes to clipboard (images only — converts to PNG for clipboard compat) */
 async function copyToClipboard(bytes: Uint8Array, mime: string): Promise<boolean> {
   try {
@@ -5471,6 +5480,7 @@ ui.convertButton.onclick = async function () {
   if (!outputButton) return alert("Specify output file format.");
   const outputOption = allOptions[Number(outputButton.getAttribute("format-index"))];
   const outputFormat = outputOption.format;
+  const _convertStartTime = Date.now();
 
   try {
 
@@ -5577,7 +5587,7 @@ ui.convertButton.onclick = async function () {
         : ``;
       window.showPopup(
         `<h2>Converted ${processedOutputFiles.length} file${processedOutputFiles.length !== 1 ? "s" : ""} to ${outputFormat.format}!</h2>` +
-        `<p>Total size: ${formatFileSize(totalSize)}</p>` +
+        `<p>Total size: ${formatFileSize(totalSize)} — took ${formatElapsed(Date.now() - _convertStartTime)}</p>` +
         compressionHtml +
         failureHtml1 +
         (processedOutputFiles.length > 1 && archiveMultiOutput ? `<p>Results delivered as a ZIP archive.</p>` : ``) +
@@ -5681,7 +5691,7 @@ ui.convertButton.onclick = async function () {
           : ``;
         window.showPopup(
           `<h2>All conversions complete!</h2>` +
-          `<p>All ${allUploadedFiles.length} files have been converted.</p>` +
+          `<p>All ${allUploadedFiles.length} files have been converted — took ${formatElapsed(Date.now() - _convertStartTime)}</p>` +
           queueFailureHtml +
           `<button onclick="window.hidePopup()">OK</button>`
         );
@@ -5774,7 +5784,7 @@ ui.convertButton.onclick = async function () {
         : ``;
       window.showPopup(
         `<h2>Converted ${processedSingleFiles.length} file${processedSingleFiles.length !== 1 ? "s" : ""} to ${outputOption.format.format}!</h2>` +
-        `<p>Size: ${formatFileSize(singleTotalSize)}</p>` +
+        `<p>Size: ${formatFileSize(singleTotalSize)} — took ${formatElapsed(Date.now() - _convertStartTime)}</p>` +
         compressionHtml +
         singleFailureHtml +
         `<div class="popup-actions">` +
