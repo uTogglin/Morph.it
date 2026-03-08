@@ -49,13 +49,14 @@ test('should find the optimal path from image to audio\n', async () => {
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedPaths = [];
-  for await (const path of paths)
-    extractedPaths.push(path);
-  expect(extractedPaths.length).toBeGreaterThan(0);
-  const optimalPath = extractedPaths[0];
-  expect(optimalPath[0].handler.name).toBe("canvasToBlob");
-  expect(optimalPath[optimalPath.length - 1].handler.name).toBe("ffmpeg");
+  let optimalPath: ConvertPathNode[] | null = null;
+  for await (const path of paths) {
+    optimalPath = path;
+    break;
+  }
+  expect(optimalPath).not.toBeNull();
+  expect(optimalPath![0].handler.name).toBe("canvasToBlob");
+  expect(optimalPath![optimalPath!.length - 1].handler.name).toBe("ffmpeg");
 });
 
 test('should find the optimal path from image to audio in strict graph\n', async () => {
@@ -66,13 +67,14 @@ test('should find the optimal path from image to audio in strict graph\n', async
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedPaths = [];
-  for await (const path of paths)
-    extractedPaths.push(path);
-  expect(extractedPaths.length).toBeGreaterThan(0);
-  const optimalPath = extractedPaths[0];
-  expect(optimalPath[0].handler.name).toBe("canvasToBlob");
-  expect(optimalPath[optimalPath.length - 1].handler.name).toBe("ffmpeg");
+  let optimalPath: ConvertPathNode[] | null = null;
+  for await (const path of paths) {
+    optimalPath = path;
+    break;
+  }
+  expect(optimalPath).not.toBeNull();
+  expect(optimalPath![0].handler.name).toBe("canvasToBlob");
+  expect(optimalPath![optimalPath!.length - 1].handler.name).toBe("ffmpeg");
 });
 
 
@@ -84,10 +86,11 @@ test('add category change costs should affect pathfinding\n', async () => {
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedPaths = [];
-  for await (const path of paths)
-    extractedPaths.push(path);
-
+  let firstPath: ConvertPathNode[] | null = null;
+  for await (const path of paths) {
+    firstPath = path;
+    break;
+  }
 
   graph.addCategoryChangeCost("image", "audio", 100);
   graph.init(supportedFormatCache, handlers);
@@ -95,12 +98,14 @@ test('add category change costs should affect pathfinding\n', async () => {
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedNewPaths = [];
-  for await (const path of newPaths)
-    extractedNewPaths.push(path);
-  expect(extractedPaths.length).toBeGreaterThan(0);
-  expect(extractedNewPaths.length).toBeGreaterThan(0);
-  expect(extractedNewPaths).not.toEqual(extractedPaths);
+  let newFirstPath: ConvertPathNode[] | null = null;
+  for await (const path of newPaths) {
+    newFirstPath = path;
+    break;
+  }
+  expect(firstPath).not.toBeNull();
+  expect(newFirstPath).not.toBeNull();
+  expect(newFirstPath!.map(p => p.format.mime)).not.toEqual(firstPath!.map(p => p.format.mime));
 });
 
 test('remove category change costs should affect pathfinding\n', async () => {
@@ -112,10 +117,11 @@ test('remove category change costs should affect pathfinding\n', async () => {
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedPaths = [];
-  for await (const path of paths)
-    extractedPaths.push(path);
-
+  let firstPath: ConvertPathNode[] | null = null;
+  for await (const path of paths) {
+    firstPath = path;
+    break;
+  }
 
   graph.removeCategoryChangeCost("image", "audio");
   graph.init(supportedFormatCache, handlers);
@@ -123,12 +129,14 @@ test('remove category change costs should affect pathfinding\n', async () => {
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedNewPaths = [];
-  for await (const path of newPaths)
-    extractedNewPaths.push(path);
-  expect(extractedPaths.length).toBeGreaterThan(0);
-  expect(extractedNewPaths.length).toBeGreaterThan(0);
-  expect(extractedNewPaths).not.toEqual(extractedPaths);
+  let newFirstPath: ConvertPathNode[] | null = null;
+  for await (const path of newPaths) {
+    newFirstPath = path;
+    break;
+  }
+  expect(firstPath).not.toBeNull();
+  expect(newFirstPath).not.toBeNull();
+  expect(newFirstPath!.map(p => p.format.mime)).not.toEqual(firstPath!.map(p => p.format.mime));
 });
 
 test('add adaptive category costs should affect pathfinding\n', async () => {
@@ -139,10 +147,11 @@ test('add adaptive category costs should affect pathfinding\n', async () => {
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedPaths = [];
-  for await (const path of paths)
-    extractedPaths.push(path);
-
+  let firstPath: ConvertPathNode[] | null = null;
+  for await (const path of paths) {
+    firstPath = path;
+    break;
+  }
 
   graph.addCategoryAdaptiveCost(["image", "audio"], 20000);
   graph.init(supportedFormatCache, handlers);
@@ -150,12 +159,14 @@ test('add adaptive category costs should affect pathfinding\n', async () => {
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedNewPaths = [];
-  for await (const path of newPaths)
-    extractedNewPaths.push(path);
-  expect(extractedPaths.length).toBeGreaterThan(0);
-  expect(extractedNewPaths.length).toBeGreaterThan(0);
-  expect(extractedNewPaths).not.toEqual(extractedPaths);
+  let newFirstPath: ConvertPathNode[] | null = null;
+  for await (const path of newPaths) {
+    newFirstPath = path;
+    break;
+  }
+  expect(firstPath).not.toBeNull();
+  expect(newFirstPath).not.toBeNull();
+  expect(newFirstPath!.map(p => p.format.mime)).not.toEqual(firstPath!.map(p => p.format.mime));
 });
 
 test('remove adaptive category costs should affect pathfinding\n', async () => {
@@ -166,10 +177,11 @@ test('remove adaptive category costs should affect pathfinding\n', async () => {
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedPaths = [];
-  for await (const path of paths)
-    extractedPaths.push(path);
-
+  let firstPath: ConvertPathNode[] | null = null;
+  for await (const path of paths) {
+    firstPath = path;
+    break;
+  }
 
   graph.removeCategoryAdaptiveCost(["image", "video", "audio"]);
   graph.init(supportedFormatCache, handlers);
@@ -177,12 +189,14 @@ test('remove adaptive category costs should affect pathfinding\n', async () => {
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedNewPaths = [];
-  for await (const path of newPaths)
-    extractedNewPaths.push(path);
-  expect(extractedPaths.length).toBeGreaterThan(0);
-  expect(extractedNewPaths.length).toBeGreaterThan(0);
-  expect(extractedNewPaths[0]).not.toEqual(extractedPaths[0]);
+  let newFirstPath: ConvertPathNode[] | null = null;
+  for await (const path of newPaths) {
+    newFirstPath = path;
+    break;
+  }
+  expect(firstPath).not.toBeNull();
+  expect(newFirstPath).not.toBeNull();
+  expect(newFirstPath!.map(p => p.format.mime)).not.toEqual(firstPath!.map(p => p.format.mime));
 });
 
 test('abortSearch should stop path search early\n', async () => {
@@ -195,11 +209,13 @@ test('abortSearch should stop path search early\n', async () => {
     new ConvertPathNode(handlers.find(h => h.name === "canvasToBlob")!, CommonFormats.PNG.supported("png", true, true, true)),
     new ConvertPathNode(handlers.find(h => h.name === "ffmpeg")!, CommonFormats.MP3.supported("mp3", true, true, true)),
   );
-  let extractedPaths = [];
-  for await (const path of paths)
-    extractedPaths.push(path);
+  let foundPath = false;
+  for await (const path of paths) {
+    foundPath = true;
+    break;
+  }
   // abortSearch is reset at the start of searchPath, so it should still find paths
-  expect(extractedPaths.length).toBeGreaterThan(0);
+  expect(foundPath).toBe(true);
 
   // Now abort mid-search by aborting after first yield
   const paths2 = graph.searchPath(
