@@ -13,7 +13,7 @@ interface QueueNode {
     edge: ConvertPathNode | null;
     /** Depth of this node in the search tree (0 for start) — avoids walking parent chain to get length */
     depth: number;
-    /** Only used in multi-path (simple=false) mode */
+    /** Position in visit order when this node was enqueued — used to allow re-visiting */
     visitedBorder: number;
 };
 interface CategoryChangeCost {
@@ -40,7 +40,7 @@ const LOG_FREQUENCY = 5000;
 /** Yield to the browser event loop every this many iterations to stay responsive */
 const YIELD_EVERY = 4000;
 /** Hard cap on search iterations — avoids infinite hang when no route exists. */
-const MAX_SEARCH_ITERATIONS = 2_000_000;
+const MAX_SEARCH_ITERATIONS = 100_000;
 
 export interface Node {
     identifier: string;
@@ -423,15 +423,13 @@ export class TraversionGraph {
         return this.minEdgeCost + this.minCategoryChangeCost;
     }
 
-    public async* searchPath(from: ConvertPathNode, to: ConvertPathNode, simpleMode: boolean) : AsyncGenerator<ConvertPathNode[]> {
-        // A* search (simpleMode=true) or Dijkstra multi-path (simpleMode=false)
+    public async* searchPath(from: ConvertPathNode, to: ConvertPathNode) : AsyncGenerator<ConvertPathNode[]> {
+        // A* multi-path: uses heuristic for efficiency + visitedBorder for yielding multiple paths
         let queue: PriorityQueue<QueueNode> = new PriorityQueue<QueueNode>(
             1000,
             (a: QueueNode, b: QueueNode) => a.cost - b.cost
         );
-        // O(1) visited set for simple mode (A* / standard Dijkstra)
-        let visitedSet = new Set<number>();
-        // Map from node index → position in visit order for multi-path mode
+        // Map from node index → position in visit order (allows re-visiting via visitedBorder)
         let visitedMap = new Map<number, number>();
         let visitedCount = 0;
         const fromIdentifier = from.format.mime + `(${from.format.format})`;
@@ -440,9 +438,9 @@ export class TraversionGraph {
         let toIndex = this.nodeIndexMap.get(toIdentifier);
         if (fromIndex === undefined || toIndex === undefined) return []; // If either format is not in the graph, return empty array
         const toFormat = to.format;
-        const h0 = simpleMode ? this.heuristic(from.format, toFormat) : 0;
+        const h0 = this.heuristic(from.format, toFormat);
         queue.add({index: fromIndex, cost: h0, gcost: 0, parent: null, edge: from, depth: 0, visitedBorder: 0});
-        console.log(`Starting path search from ${from.format.mime}(${from.handler?.name}) to ${to.format.mime}(${to.handler?.name}) (simple mode: ${simpleMode})`);
+        console.log(`Starting path search from ${from.format.mime}(${from.handler?.name}) to ${to.format.mime}(${to.handler?.name})`);
         let iterations = 0;
         let pathsFound = 0;
         this._searchAborted = false; // reset from any previous call
@@ -469,17 +467,11 @@ export class TraversionGraph {
             // Skip nodes with Infinity cost (known dead-end descendants)
             if (!isFinite(current.cost)) continue;
 
-            // --- Visited check ---
-            if (simpleMode) {
-                // Standard A* / Dijkstra: each node processed at most once
-                if (visitedSet.has(current.index)) continue;
-            } else {
-                // Multi-path mode: allow re-visiting if node was queued before it was first visited
-                const visitPos = visitedMap.get(current.index);
-                if (visitPos !== undefined && visitPos < current.visitedBorder) {
-                    this.dispatchEvent("skipped", TraversionGraph.reconstructPath(current));
-                    continue;
-                }
+            // --- Visited check: allow re-visiting if node was queued before it was first visited ---
+            const visitPos = visitedMap.get(current.index);
+            if (visitPos !== undefined && visitPos < current.visitedBorder) {
+                this.dispatchEvent("skipped", TraversionGraph.reconstructPath(current));
+                continue;
             }
 
             if (current.index === toIndex) {
@@ -487,39 +479,23 @@ export class TraversionGraph {
                 const path = TraversionGraph.reconstructPath(current);
                 // Return the path of handlers and formats to get from the input format to the output format
                 const logString = `${iterations} with cost ${current.gcost.toFixed(3)}: ${path.map(p => p.handler.name + "(" + p.format.mime + ")").join(" → ")}`;
-                const foundPathLast = path.at(-1);
-                if (simpleMode || !to.handler || to.handler.name === foundPathLast?.handler.name) {
-                    console.log(`Found path at iteration ${logString}`);
-                    this.dispatchEvent("found", path);
-                    yield path;
-                    pathsFound++;
-                }
-                else {
-                    console.log(`Invalid path at iteration ${logString}`);
-                    this.dispatchEvent("skipped", path);
-                }
+                console.log(`Found path at iteration ${logString}`);
+                this.dispatchEvent("found", path);
+                yield path;
+                pathsFound++;
                 continue;
             }
 
             // Mark current node as visited
-            if (simpleMode) {
-                visitedSet.add(current.index);
-            } else {
-                visitedMap.set(current.index, visitedCount++);
-            }
+            visitedMap.set(current.index, visitedCount++);
             this.dispatchEvent("searching", TraversionGraph.reconstructPath(current));
 
             this.nodes[current.index].edges.forEach(edgeIndex => {
                 let edge = this.edges[edgeIndex];
 
-                if (simpleMode) {
-                    // A*: never enqueue already-visited nodes — keeps queue small
-                    if (visitedSet.has(edge.to.index)) return;
-                } else {
-                    // Multi-path: visited border check
-                    const visitPos = visitedMap.get(edge.to.index);
-                    if (visitPos !== undefined && visitPos < current.visitedBorder) return;
-                }
+                // Multi-path: visited border check
+                const visitPos = visitedMap.get(edge.to.index);
+                if (visitPos !== undefined && visitPos < current.visitedBorder) return;
 
                 const handler = this.handlerMap.get(edge.handler);
                 if (!handler) return; // If the handler for this edge is not found, skip it
@@ -532,11 +508,11 @@ export class TraversionGraph {
                     parent: current,
                     edge: childEdge,
                     depth: current.depth + 1,
-                    visitedBorder: simpleMode ? 0 : visitedCount
+                    visitedBorder: visitedCount
                 };
                 const adaptiveCost = this.calculateAdaptiveCostFromNode(childNode);
                 const gcost = current.gcost + edge.cost + adaptiveCost;
-                const hcost = simpleMode ? this.heuristic(edge.to.format, toFormat) : 0;
+                const hcost = this.heuristic(edge.to.format, toFormat);
                 childNode.gcost = gcost;
                 childNode.cost = gcost + hcost;
                 queue.add(childNode);

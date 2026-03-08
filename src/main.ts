@@ -2250,31 +2250,19 @@ window.tryConvertByTraversing = async function (
 
   let result = null;
   _lastSearchRoutesTried = 0;
-  // Retry limit: restart the search up to this many times when a route
-  // fails at runtime.  Each restart gets a fresh visited set but the
-  // dead-end list is preserved so the same broken route is never tried
-  // twice.  This is critical in simple (A*) mode where the visited set
-  // blocks alternative paths after the first result is yielded.
-  const MAX_RETRIES = 25;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    let foundAny = false;
-    for await (const path of window.traversionGraph.searchPath(from, to, simpleMode)) {
-      foundAny = true;
-      _lastSearchRoutesTried++;
-      // Use exact output format if the target handler supports it
-      if (path.at(-1)?.handler === to.handler) {
-        path[path.length - 1] = to;
-      }
-      const convertResult = await attemptConvertPath(files, path);
-      if (convertResult) {
-        result = convertResult;
-        break;
-      }
-      // Path failed — in simple mode, restart the search so A* gets a
-      // clean visited set (dead ends are already registered).
-      if (simpleMode) break;
+  for await (const path of window.traversionGraph.searchPath(from, to)) {
+    _lastSearchRoutesTried++;
+    // Use exact output format if the target handler supports it
+    if (path.at(-1)?.handler === to.handler) {
+      path[path.length - 1] = to;
     }
-    if (result || !foundAny) break;
+    const convertResult = await attemptConvertPath(files, path);
+    if (convertResult) {
+      result = convertResult;
+      break;
+    }
+    // Path failed — dead end is already registered by attemptConvertPath,
+    // the running generator will respect it on subsequent expansions.
   }
 
   window.traversionGraph.removePathEventListener(searchListener);
