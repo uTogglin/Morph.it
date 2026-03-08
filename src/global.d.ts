@@ -13,6 +13,7 @@ declare global {
       path: ConvertPathNode[];
     } | null>;
     _cancelActiveConversion: () => void;
+    _skipCurrentFile: () => void;
     _activeConversionHandler: FormatHandler | null;
   }
 }

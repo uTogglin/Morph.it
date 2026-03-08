@@ -2222,6 +2222,58 @@ button.selected {
   min-height: 1.2em;
 }
 
+/* ──── Batch Progress UI ──── */
+.batch-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  font-size: 0.88rem;
+  border-radius: 6px;
+  transition: background var(--transition-fast);
+}
+.batch-file-row:hover { background: var(--list-hover); }
+.batch-file-icon {
+  font-weight: bold;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.batch-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.batch-file-status {
+  font-size: 0.8em;
+  flex-shrink: 0;
+}
+.batch-file-done .batch-file-icon,
+.batch-file-done .batch-file-status { color: var(--color-success); }
+.batch-file-failed .batch-file-icon,
+.batch-file-failed .batch-file-status { color: var(--color-danger); }
+.batch-file-skipped .batch-file-icon,
+.batch-file-skipped .batch-file-status { color: var(--text-muted); }
+.batch-file-converting .batch-file-icon,
+.batch-file-converting .batch-file-status { color: var(--accent); }
+.batch-file-queued .batch-file-icon,
+.batch-file-queued .batch-file-status { color: var(--text-muted); }
+.batch-skip-btn {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  cursor: pointer;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text-main);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.batch-skip-btn:hover {
+  border-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+}
+
 /* ──── Global themed scrollbars ──── */
 * {
   scrollbar-width: thin;

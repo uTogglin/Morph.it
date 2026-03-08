@@ -2143,10 +2143,201 @@ function showConversionFailedPopup(fromFmt: string, toFmt: string) {
 }
 
 let _conversionCancelled = false;
+let _batchCancelled = false;
+let _inBatchMode = false;
 
-/** Cancel an in-progress conversion from the UI. */
+// ── Dynamic Memory Detection ──────────────────────────────────────────────
+let _maxAllocSize: number | null = null;
+
+/** Detect the browser's maximum allocatable ArrayBuffer size via binary search */
+function detectMaxAllocSize(): number {
+  if (_maxAllocSize !== null) return _maxAllocSize;
+  let low = 1024 * 1024; // 1MB min
+  let high = 4 * 1024 * 1024 * 1024; // 4GB max
+  while (high - low > 1024 * 1024) {
+    const mid = Math.floor((low + high) / 2);
+    try {
+      new ArrayBuffer(mid);
+      low = mid;
+    } catch {
+      high = mid;
+    }
+  }
+  _maxAllocSize = low;
+  return low;
+}
+
+/** Check whether files might exceed available memory; returns false if user declines */
+function checkMemoryForFiles(files: File[]): boolean {
+  const totalSize = files.reduce((s, f) => s + f.size, 0);
+  const maxAlloc = detectMaxAllocSize();
+  // Conversion typically needs 2-3x the input size (input + output + intermediate)
+  if (totalSize > maxAlloc * 0.4) {
+    return confirm(
+      `Warning: These files total ${formatFileSize(totalSize)}, which approaches ` +
+      `your browser's memory limit (${formatFileSize(maxAlloc)}).\n\n` +
+      `Large files may cause the conversion to fail or crash the tab.\n\nContinue anyway?`
+    );
+  }
+  return true;
+}
+
+// ── Batch Progress UI ─────────────────────────────────────────────────────
+interface BatchFileState {
+  file: File;
+  inputOption: { format: FileFormat; handler: FormatHandler };
+  status: "queued" | "converting" | "done" | "failed" | "skipped";
+  result: FileData[] | null;
+  cancelToken: { cancelled: boolean };
+}
+
+// ── Parallel Conversion Utilities ─────────────────────────────────────────
+
+/**
+ * Run async tasks with a concurrency limit.
+ * Returns when all tasks are settled (does not throw).
+ */
+async function runConcurrent(
+  tasks: (() => Promise<void>)[],
+  concurrency: number
+): Promise<void> {
+  let nextIdx = 0;
+  const worker = async () => {
+    while (nextIdx < tasks.length) {
+      const idx = nextIdx++;
+      try { await tasks[idx](); } catch { /* errors handled by task */ }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker())
+  );
+}
+
+/**
+ * Convert a single file through a pre-found route without touching popup or
+ * shared cancel state.  Each handler step is serialised per-handler so that
+ * handlers with shared WASM instances (e.g. FFmpeg) don't collide.
+ */
+const _handlerChain = new Map<string, Promise<any>>();
+
+async function convertFileDirectly(
+  fileData: FileData,
+  route: ConvertPathNode[],
+  cancelToken: { cancelled: boolean }
+): Promise<FileData[] | null> {
+  let files: FileData[] = [fileData];
+  for (let i = 0; i < route.length - 1; i++) {
+    if (cancelToken.cancelled || _batchCancelled) return null;
+    const handler = route[i + 1].handler;
+    if (!handler.ready) {
+      await handler.init();
+      if (!handler.ready) return null;
+    }
+    const supportedFormats = window.supportedFormatCache.get(handler.name);
+    if (!supportedFormats) return null;
+    const inputFormat = supportedFormats.find(c =>
+      c.from && c.mime === route[i].format.mime && c.format === route[i].format.format
+    );
+    if (!inputFormat) return null;
+
+    // Serialise calls to the same handler (e.g. FFmpeg shares a virtual FS)
+    const prev = _handlerChain.get(handler.name) ?? Promise.resolve();
+    const task = prev.catch(() => {}).then(async () => {
+      if (cancelToken.cancelled || _batchCancelled) return null as FileData[] | null;
+      return handler.doConvert(files, inputFormat!, route[i + 1].format);
+    });
+    _handlerChain.set(handler.name, task.catch(() => {}));
+
+    try {
+      const result = await task;
+      if (!result || result.some(c => !c.bytes.length)) return null;
+      files = result;
+    } catch (e) {
+      console.error(`[parallel] ${handler.name} error for ${fileData.name}:`, e);
+      return null;
+    }
+  }
+  return files;
+}
+
+function showBatchProgressPopup(states: BatchFileState[]) {
+  const done = states.filter(s => s.status === "done").length;
+  const failed = states.filter(s => s.status === "failed").length;
+  const skipped = states.filter(s => s.status === "skipped").length;
+  const total = states.length;
+
+  let html = `<h2>Converting ${total} files...</h2>`;
+  html += `<div class="batch-progress-list" style="max-height:220px;overflow-y:auto;margin:10px 0;text-align:left">`;
+
+  for (let i = 0; i < states.length; i++) {
+    const s = states[i];
+    const icon = s.status === "done" ? "\u2713"
+      : s.status === "failed" ? "\u2717"
+      : s.status === "skipped" ? "\u2014"
+      : s.status === "converting" ? "\u21BB"
+      : "\u25CB";
+    const statusClass = `batch-file-${s.status}`;
+
+    const label = s.status === "converting" ? "converting\u2026"
+      : s.status === "done" ? "done"
+      : s.status === "failed" ? "failed"
+      : s.status === "skipped" ? "skipped"
+      : "queued";
+
+    const skipBtn = (s.status === "queued" || s.status === "converting")
+      ? ` <button class="batch-skip-btn" data-batch-skip="${i}">Skip</button>`
+      : "";
+
+    html += `<div class="batch-file-row ${statusClass}">`;
+    html += `<span class="batch-file-icon">${icon}</span>`;
+    html += `<span class="batch-file-name" title="${s.file.name}">${s.file.name}</span>`;
+    html += `<span class="batch-file-status">${label}</span>`;
+    html += skipBtn;
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  html += `<p style="font-size:0.9em;opacity:0.8">${done} done`;
+  if (failed > 0) html += `, ${failed} failed`;
+  if (skipped > 0) html += `, ${skipped} skipped`;
+  html += ` / ${total} total</p>`;
+  html += `<button onclick="window._cancelActiveConversion()">Cancel All</button>`;
+
+  ui.popupBox.innerHTML = html;
+  ui.popupBox.style.display = "block";
+  ui.popupBackground.style.display = "block";
+
+  // Attach skip handlers via event delegation
+  ui.popupBox.querySelectorAll("[data-batch-skip]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = parseInt((btn as HTMLElement).getAttribute("data-batch-skip")!);
+      const state = states[idx];
+      state.cancelToken.cancelled = true;
+      if (state.status === "queued") {
+        state.status = "skipped";
+        showBatchProgressPopup(states);
+      }
+      // For "converting" status: the cancelToken will cause convertFileDirectly
+      // to bail out between handler steps; status updated when it returns.
+    });
+  });
+}
+
+// ── Cancel / Skip Handlers ────────────────────────────────────────────────
+
+/** Skip the current file in batch mode (cancel current conversion, continue batch) */
+window._skipCurrentFile = () => {
+  _conversionCancelled = true;
+  window.traversionGraph.abortSearch();
+  const handler = window._activeConversionHandler as any;
+  if (handler?.cancel) handler.cancel();
+};
+
+/** Cancel everything — current conversion and entire batch */
 window._cancelActiveConversion = () => {
   _conversionCancelled = true;
+  _batchCancelled = true;
   window.traversionGraph.abortSearch();
   const handler = window._activeConversionHandler as any;
   if (handler?.cancel) handler.cancel();
@@ -2166,10 +2357,13 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
 
   // Show conversion popup with progress bar, elapsed timer, and cancel button
   const convertStartTime = Date.now();
+  const cancelButtons = _inBatchMode
+    ? `<button onclick="window._skipCurrentFile()">Skip File</button> <button onclick="window._cancelActiveConversion()">Cancel All</button>`
+    : `<button onclick="window._cancelActiveConversion()">Cancel</button>`;
   ui.popupBox.innerHTML = `<h2>Converting...</h2>
     <p>Trying <b>${pathString}</b>...</p>
     <p id="convert-elapsed" class="search-status"></p>
-    <button onclick="window._cancelActiveConversion()">Cancel</button>`;
+    ${cancelButtons}`;
 
   const timerInterval = setInterval(() => {
     const el = document.getElementById("convert-elapsed");
@@ -2223,9 +2417,12 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
       deadEndHashes.add(hashPath(deadEndPath, deadEndPath.length));
       window.traversionGraph.addDeadEndPath(deadEndPath);
 
+      const retryButtons = _inBatchMode
+        ? `<button onclick="window._skipCurrentFile()">Skip File</button> <button onclick="window._cancelActiveConversion()">Cancel All</button>`
+        : `<button onclick="window._cancelActiveConversion()">Cancel</button>`;
       ui.popupBox.innerHTML = `<h2>Finding conversion route...</h2>
         <p id="convert-search-status" class="search-status">Looking for a valid path...</p>
-        <button onclick="window._cancelActiveConversion()">Cancel</button>`;
+        ${retryButtons}`;
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       return null;
@@ -2248,10 +2445,13 @@ window.tryConvertByTraversing = async function (
   _conversionCancelled = false;
 
   // Show initial search popup with cancel button
+  const searchCancelButtons = _inBatchMode
+    ? `<button onclick="window._skipCurrentFile()">Skip File</button> <button onclick="window._cancelActiveConversion()">Cancel All</button>`
+    : `<button onclick="window._cancelActiveConversion()">Cancel</button>`;
   ui.popupBox.innerHTML = `<h2>Finding conversion route...</h2>
     <p id="convert-search-status" class="search-status">Searching\u2026</p>
     <p id="convert-search-path" class="search-path"></p>
-    <button onclick="window._cancelActiveConversion()">Cancel</button>`;
+    ${searchCancelButtons}`;
   ui.popupBox.style.display = "block";
   ui.popupBackground.style.display = "block";
 
@@ -5485,6 +5685,9 @@ ui.convertButton.onclick = async function () {
     return alert("Select an input file.");
   }
 
+  // ── Memory safety check ──
+  if (!checkMemoryForFiles(inputFiles)) return;
+
   // ── Process mode: resize / remove background without conversion ──
   if (ui.convertButton.hasAttribute("data-process-mode")) {
     try {
@@ -5544,51 +5747,122 @@ ui.convertButton.onclick = async function () {
         groups.get(key)!.files.push(file);
       }
 
-      window.showPopup("<h2>Finding conversion route...</h2>");
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-      const allOutputFiles: FileData[] = [];
-      const batchFailures: string[] = [];
-
-      // Flatten all files across groups for individual processing with progress
+      // Flatten all files across groups for individual processing
       const allFileEntries: { file: File; inputOption: { format: FileFormat; handler: FormatHandler } }[] = [];
       for (const group of groups.values()) {
         for (const f of group.files) {
           allFileEntries.push({ file: f, inputOption: group.inputOption });
         }
       }
-      const totalFileCount = allFileEntries.length;
 
-      for (let i = 0; i < allFileEntries.length; i++) {
-        const { file, inputOption } = allFileEntries[i];
-
-        // Update progress indicator
-        window.showPopup(
-          `<h2>Converting file ${i + 1} of ${totalFileCount}...</h2>` +
-          `<p>${file.name}</p>`
-        );
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-        // If input and output are the same format, pass through
-        if (inputOption.format.mime === outputFormat.mime && inputOption.format.format === outputFormat.format) {
-          const buf = await file.arrayBuffer();
-          allOutputFiles.push({ name: file.name, bytes: new Uint8Array(buf) });
-          continue;
-        }
-
+      // Pre-read all files into memory in parallel
+      window.showPopup("<h2>Loading files...</h2>");
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const fileDataMap = new Map<File, FileData>();
+      await Promise.all(allFileEntries.map(async ({ file }) => {
         const buf = await file.arrayBuffer();
-        const singleFile: FileData = { name: file.name, bytes: new Uint8Array(buf) };
+        fileDataMap.set(file, { name: file.name, bytes: new Uint8Array(buf) });
+      }));
 
-        try {
-          const output = await window.tryConvertByTraversing([singleFile], inputOption, outputOption);
-          if (output) {
-            allOutputFiles.push(...output.files);
-          } else {
-            batchFailures.push(singleFile.name);
+      // Batch state for progress tracking and per-file cancel
+      const batchStates: BatchFileState[] = allFileEntries.map(({ file, inputOption }) => ({
+        file,
+        inputOption,
+        status: "queued" as const,
+        result: null,
+        cancelToken: { cancelled: false },
+      }));
+
+      _batchCancelled = false;
+      _inBatchMode = true;
+
+      // ── Step 1: find the conversion route using the first non-passthrough file ──
+      let cachedRoute: ConvertPathNode[] | null = null;
+      const firstConvertable = batchStates.find(s =>
+        s.inputOption.format.mime !== outputFormat.mime || s.inputOption.format.format !== outputFormat.format
+      );
+
+      if (firstConvertable) {
+        firstConvertable.status = "converting";
+        showBatchProgressPopup(batchStates);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        const fd = fileDataMap.get(firstConvertable.file)!;
+        const output = await window.tryConvertByTraversing([fd], firstConvertable.inputOption, outputOption);
+        if (output) {
+          cachedRoute = output.path;
+          firstConvertable.result = output.files;
+          firstConvertable.status = "done";
+        } else {
+          firstConvertable.status = _conversionCancelled ? "skipped" : "failed";
+        }
+      }
+
+      // ── Step 2: convert remaining files in parallel using cached route ──
+      const concurrency = Math.min(navigator.hardwareConcurrency || 4, 6);
+
+      // Handle same-format pass-throughs immediately
+      for (const state of batchStates) {
+        if (state.status !== "queued") continue;
+        if (state.inputOption.format.mime === outputFormat.mime && state.inputOption.format.format === outputFormat.format) {
+          state.result = [fileDataMap.get(state.file)!];
+          state.status = "done";
+        }
+      }
+
+      showBatchProgressPopup(batchStates);
+
+      if (cachedRoute && !_batchCancelled) {
+        const remaining = batchStates.filter(s => s.status === "queued");
+
+        const tasks = remaining.map(state => async () => {
+          if (_batchCancelled || state.cancelToken.cancelled) {
+            state.status = "skipped";
+            showBatchProgressPopup(batchStates);
+            return;
           }
-        } catch (e) {
-          console.error(`Failed to convert ${singleFile.name}:`, e);
-          batchFailures.push(singleFile.name);
+
+          state.status = "converting";
+          showBatchProgressPopup(batchStates);
+
+          const fd = fileDataMap.get(state.file)!;
+          try {
+            const result = await convertFileDirectly(fd, cachedRoute!, state.cancelToken);
+            if (result) {
+              state.result = result;
+              state.status = "done";
+            } else {
+              state.status = state.cancelToken.cancelled ? "skipped" : "failed";
+            }
+          } catch (e) {
+            console.error(`Failed to convert ${fd.name}:`, e);
+            state.status = "failed";
+          }
+
+          showBatchProgressPopup(batchStates);
+        });
+
+        await runConcurrent(tasks, concurrency);
+      }
+
+      // Mark any still-queued files as skipped (e.g. if route was never found)
+      for (const state of batchStates) {
+        if (state.status === "queued") state.status = "skipped";
+      }
+
+      _inBatchMode = false;
+
+      // Collect results
+      const allOutputFiles: FileData[] = [];
+      const batchFailures: string[] = [];
+      const batchSkipped: string[] = [];
+      for (const state of batchStates) {
+        if (state.status === "done" && state.result) {
+          allOutputFiles.push(...state.result);
+        } else if (state.status === "failed") {
+          batchFailures.push(state.file.name);
+        } else if (state.status === "skipped") {
+          batchSkipped.push(state.file.name);
         }
       }
 
@@ -5631,11 +5905,15 @@ ui.convertButton.onclick = async function () {
       const failureHtml1 = batchFailures.length > 0
         ? `<p style="color:#e74c3c"><b>${batchFailures.length} file${batchFailures.length !== 1 ? "s" : ""} failed:</b> ${batchFailures.join(", ")}</p>`
         : ``;
+      const skippedHtml1 = batchSkipped.length > 0
+        ? `<p style="opacity:0.7"><b>${batchSkipped.length} file${batchSkipped.length !== 1 ? "s" : ""} skipped</b></p>`
+        : ``;
       window.showPopup(
         `<h2>Converted ${processedOutputFiles.length} file${processedOutputFiles.length !== 1 ? "s" : ""} to ${outputFormat.format}!</h2>` +
         `<p>Total size: ${formatFileSize(totalSize)} — took ${formatElapsed(Date.now() - _convertStartTime)}</p>` +
         compressionHtml +
         failureHtml1 +
+        skippedHtml1 +
         (processedOutputFiles.length > 1 && archiveMultiOutput ? `<p>Results delivered as a ZIP archive.</p>` : ``) +
         `<div class="popup-actions">` +
         getClipboardCopyHtml(processedOutputFiles, outputFormat.mime) +
@@ -5653,47 +5931,107 @@ ui.convertButton.onclick = async function () {
       const inputOption = allOptions[Number(inputButton.getAttribute("format-index"))];
       const inputFormat = inputOption.format;
 
+      // Pre-read files in parallel
       const inputFileData: FileData[] = [];
-      for (const inputFile of inputFiles) {
+      const passThroughFiles: { name: string; bytes: Uint8Array }[] = [];
+      const readResults = await Promise.all(inputFiles.map(async (inputFile) => {
         const inputBuffer = await inputFile.arrayBuffer();
-        const inputBytes = new Uint8Array(inputBuffer);
+        return { file: inputFile, bytes: new Uint8Array(inputBuffer) };
+      }));
+      for (const { file, bytes } of readResults) {
         if (inputFormat.mime === outputFormat.mime && inputFormat.format === outputFormat.format) {
-          downloadFile(inputBytes, inputFile.name);
-          continue;
+          downloadFile(bytes, file.name);
+          passThroughFiles.push({ name: file.name, bytes });
+        } else {
+          inputFileData.push({ name: file.name, bytes });
         }
-        inputFileData.push({ name: inputFile.name, bytes: inputBytes });
       }
 
       const queueSuccessFiles: FileData[] = [];
       const queueFailures: string[] = [];
+      const queueSkipped: string[] = [];
 
       if (inputFileData.length > 0) {
-        window.showPopup("<h2>Finding conversion route...</h2>");
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        // Build batch states for per-file cancel UI
+        const queueBatchStates: BatchFileState[] = inputFileData.map(fd => ({
+          file: new File([fd.bytes], fd.name),
+          inputOption,
+          status: "queued" as const,
+          result: null,
+          cancelToken: { cancelled: false },
+        }));
 
-        // Process each file individually so one failure doesn't kill the batch
-        for (let i = 0; i < inputFileData.length; i++) {
-          const singleFile = inputFileData[i];
+        _batchCancelled = false;
+        _inBatchMode = true;
 
-          // Update progress indicator
-          window.showPopup(
-            `<h2>Converting file ${i + 1} of ${inputFileData.length}...</h2>` +
-            `<p>${singleFile.name}</p>`
-          );
-          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        // Step 1: find route with first file
+        let cachedRoute: ConvertPathNode[] | null = null;
+        const firstState = queueBatchStates[0];
+        firstState.status = "converting";
+        if (inputFileData.length > 1) showBatchProgressPopup(queueBatchStates);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-          try {
-            const output = await window.tryConvertByTraversing([singleFile], inputOption, outputOption);
-            if (output) {
-              queueSuccessFiles.push(...output.files);
-            } else {
-              queueFailures.push(singleFile.name);
+        const firstFile = inputFileData[0];
+        const firstOutput = await window.tryConvertByTraversing([firstFile], inputOption, outputOption);
+        if (firstOutput) {
+          cachedRoute = firstOutput.path;
+          queueSuccessFiles.push(...firstOutput.files);
+          firstState.status = "done";
+        } else {
+          firstState.status = _conversionCancelled ? "skipped" : "failed";
+          (_conversionCancelled ? queueSkipped : queueFailures).push(firstFile.name);
+        }
+
+        // Step 2: convert remaining files in parallel
+        if (cachedRoute && !_batchCancelled && inputFileData.length > 1) {
+          const concurrency = Math.min(navigator.hardwareConcurrency || 4, 6);
+          const remaining = queueBatchStates.filter(s => s.status === "queued");
+          const remainingData = inputFileData.filter((_, idx) => queueBatchStates[idx].status === "queued");
+
+          showBatchProgressPopup(queueBatchStates);
+
+          const tasks = remaining.map((state, taskIdx) => async () => {
+            if (_batchCancelled || state.cancelToken.cancelled) {
+              state.status = "skipped";
+              queueSkipped.push(remainingData[taskIdx].name);
+              showBatchProgressPopup(queueBatchStates);
+              return;
             }
-          } catch (e) {
-            console.error(`Failed to convert ${singleFile.name}:`, e);
-            queueFailures.push(singleFile.name);
+
+            state.status = "converting";
+            showBatchProgressPopup(queueBatchStates);
+
+            const fd = remainingData[taskIdx];
+            try {
+              const result = await convertFileDirectly(fd, cachedRoute!, state.cancelToken);
+              if (result) {
+                queueSuccessFiles.push(...result);
+                state.status = "done";
+              } else {
+                state.status = state.cancelToken.cancelled ? "skipped" : "failed";
+                (state.cancelToken.cancelled ? queueSkipped : queueFailures).push(fd.name);
+              }
+            } catch (e) {
+              console.error(`Failed to convert ${fd.name}:`, e);
+              state.status = "failed";
+              queueFailures.push(fd.name);
+            }
+
+            showBatchProgressPopup(queueBatchStates);
+          });
+
+          await runConcurrent(tasks, concurrency);
+        }
+
+        // Mark any still-queued as skipped
+        for (const state of queueBatchStates) {
+          if (state.status === "queued") {
+            state.status = "skipped";
+            queueSkipped.push(state.file.name);
           }
         }
+
+        _inBatchMode = false;
 
         if (queueSuccessFiles.length > 0) {
           const processedQueueFiles = await applyToolProcessing(queueSuccessFiles);
@@ -5701,7 +6039,6 @@ ui.convertButton.onclick = async function () {
             downloadFile(file.bytes, file.name);
           }
         } else if (queueFailures.length > 0) {
-          // All files in this queue group failed
           window.showPopup(
             `<h2>Conversion failed</h2>` +
             `<p>All ${queueFailures.length} file${queueFailures.length !== 1 ? "s" : ""} in this group failed to convert.</p>` +
@@ -5724,13 +6061,11 @@ ui.convertButton.onclick = async function () {
           queueFailureHtml +
           `<button onclick="window.hidePopup()">OK</button>`
         );
-        // Present next group after a short delay
         setTimeout(() => {
           window.hidePopup();
           presentQueueGroup(currentQueueIndex);
         }, 1000);
       } else {
-        // All groups done
         conversionQueue = [];
         currentQueueIndex = 0;
         const queueFailureHtml = queueFailures.length > 0
@@ -5746,63 +6081,144 @@ ui.convertButton.onclick = async function () {
       }
 
     } else {
-      // ── Single file or single-type group: original behavior ──
+      // ── Single file or single-type group ──
       const inputButton = document.querySelector("#from-list .selected");
       if (!inputButton) return alert("Specify input file format.");
       const inputOption = allOptions[Number(inputButton.getAttribute("format-index"))];
       const inputFormat = inputOption.format;
 
-      const inputFileData: FileData[] = [];
-      for (const inputFile of inputFiles) {
+      // Pre-read all files in parallel
+      const readResults = await Promise.all(inputFiles.map(async (inputFile) => {
         const inputBuffer = await inputFile.arrayBuffer();
-        const inputBytes = new Uint8Array(inputBuffer);
+        return { file: inputFile, bytes: new Uint8Array(inputBuffer) };
+      }));
+
+      const inputFileData: FileData[] = [];
+      for (const { file, bytes } of readResults) {
         if (inputFormat.mime === outputFormat.mime && inputFormat.format === outputFormat.format) {
-          downloadFile(inputBytes, inputFile.name);
-          continue;
+          downloadFile(bytes, file.name);
+        } else {
+          inputFileData.push({ name: file.name, bytes });
         }
-        inputFileData.push({ name: inputFile.name, bytes: inputBytes });
       }
 
-      // Process each file individually so one failure doesn't kill the batch
+      if (inputFileData.length === 0) return;
+
       const singleResults: FileData[] = [];
       const singleFailures: string[] = [];
+      const singleSkipped: string[] = [];
+      const isMultiFile = inputFileData.length > 1;
 
-      if (inputFileData.length === 0) {
-        // All files were same-format pass-through, already downloaded above
-        return;
-      }
+      // Build batch states for multi-file per-file cancel UI
+      const singleBatchStates: BatchFileState[] = inputFileData.map(fd => ({
+        file: new File([fd.bytes], fd.name),
+        inputOption,
+        status: "queued" as const,
+        result: null,
+        cancelToken: { cancelled: false },
+      }));
 
-      window.showPopup("<h2>Finding conversion route...</h2>");
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      _batchCancelled = false;
+      _inBatchMode = isMultiFile;
 
-      for (let i = 0; i < inputFileData.length; i++) {
-        const singleFile = inputFileData[i];
+      if (!isMultiFile) {
+        // Single file — use existing sequential approach
+        window.showPopup("<h2>Finding conversion route...</h2>");
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-        // Update progress indicator for multi-file cases
-        if (inputFileData.length > 1) {
-          window.showPopup(
-            `<h2>Converting file ${i + 1} of ${inputFileData.length}...</h2>` +
-            `<p>${singleFile.name}</p>`
-          );
-          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        }
-
+        const singleFile = inputFileData[0];
+        const state = singleBatchStates[0];
+        state.status = "converting";
         try {
           const output = await window.tryConvertByTraversing([singleFile], inputOption, outputOption);
           if (output) {
             singleResults.push(...output.files);
+            state.status = "done";
           } else {
+            state.status = "failed";
             singleFailures.push(singleFile.name);
           }
         } catch (e) {
           console.error(`Failed to convert ${singleFile.name}:`, e);
+          state.status = "failed";
           singleFailures.push(singleFile.name);
+        }
+      } else {
+        // Multi-file — parallel conversion with route caching
+
+        // Step 1: find route with first file
+        let cachedRoute: ConvertPathNode[] | null = null;
+        const firstState = singleBatchStates[0];
+        firstState.status = "converting";
+        showBatchProgressPopup(singleBatchStates);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        const firstFile = inputFileData[0];
+        const output = await window.tryConvertByTraversing([firstFile], inputOption, outputOption);
+        if (output) {
+          cachedRoute = output.path;
+          singleResults.push(...output.files);
+          firstState.status = "done";
+        } else {
+          firstState.status = _conversionCancelled ? "skipped" : "failed";
+          (_conversionCancelled ? singleSkipped : singleFailures).push(firstFile.name);
+        }
+
+        // Step 2: convert remaining files in parallel
+        if (cachedRoute && !_batchCancelled) {
+          const concurrency = Math.min(navigator.hardwareConcurrency || 4, 6);
+          const remaining = singleBatchStates.filter(s => s.status === "queued");
+          const remainingData = inputFileData.filter((_, idx) => singleBatchStates[idx].status === "queued");
+
+          showBatchProgressPopup(singleBatchStates);
+
+          const tasks = remaining.map((state, taskIdx) => async () => {
+            if (_batchCancelled || state.cancelToken.cancelled) {
+              state.status = "skipped";
+              singleSkipped.push(remainingData[taskIdx].name);
+              showBatchProgressPopup(singleBatchStates);
+              return;
+            }
+
+            state.status = "converting";
+            showBatchProgressPopup(singleBatchStates);
+
+            const fd = remainingData[taskIdx];
+            try {
+              const result = await convertFileDirectly(fd, cachedRoute!, state.cancelToken);
+              if (result) {
+                singleResults.push(...result);
+                state.status = "done";
+              } else {
+                state.status = state.cancelToken.cancelled ? "skipped" : "failed";
+                (state.cancelToken.cancelled ? singleSkipped : singleFailures).push(fd.name);
+              }
+            } catch (e) {
+              console.error(`Failed to convert ${fd.name}:`, e);
+              state.status = "failed";
+              singleFailures.push(fd.name);
+            }
+
+            showBatchProgressPopup(singleBatchStates);
+          });
+
+          await runConcurrent(tasks, concurrency);
+        }
+
+        // Mark any still-queued as skipped
+        for (const state of singleBatchStates) {
+          if (state.status === "queued") {
+            state.status = "skipped";
+            singleSkipped.push(state.file.name);
+          }
         }
       }
 
+      _inBatchMode = false;
+
       if (singleResults.length === 0) {
         if (singleFailures.length > 0) {
-          if (singleFailures.length === 1) {
+          if (singleFailures.length === 1 && inputFileData.length === 1) {
             showConversionFailedPopup(inputOption.format.format, outputOption.format.format);
           } else {
             window.showPopup(
@@ -5830,11 +6246,15 @@ ui.convertButton.onclick = async function () {
       const singleFailureHtml = singleFailures.length > 0
         ? `<p style="color:#e74c3c"><b>${singleFailures.length} file${singleFailures.length !== 1 ? "s" : ""} failed:</b> ${singleFailures.join(", ")}</p>`
         : ``;
+      const singleSkippedHtml = singleSkipped.length > 0
+        ? `<p style="opacity:0.7"><b>${singleSkipped.length} file${singleSkipped.length !== 1 ? "s" : ""} skipped</b></p>`
+        : ``;
       window.showPopup(
         `<h2>Converted ${processedSingleFiles.length} file${processedSingleFiles.length !== 1 ? "s" : ""} to ${outputOption.format.format}!</h2>` +
         `<p>Size: ${formatFileSize(singleTotalSize)} — took ${formatElapsed(Date.now() - _convertStartTime)}</p>` +
         compressionHtml +
         singleFailureHtml +
+        singleSkippedHtml +
         `<div class="popup-actions">` +
         getClipboardCopyHtml(processedSingleFiles, outputOption.format.mime) +
         `<button onclick="window.hidePopup()">OK</button>` +
