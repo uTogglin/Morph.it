@@ -2251,6 +2251,9 @@ window.tryConvertByTraversing = async function (
   let result = null;
   _lastSearchRoutesTried = 0;
   for await (const path of window.traversionGraph.searchPath(from, to)) {
+    // In advanced mode, skip paths whose final handler doesn't match the
+    // user's selected output handler.
+    if (!simpleMode && to.handler && path.at(-1)?.handler.name !== to.handler.name) continue;
     _lastSearchRoutesTried++;
     // Use exact output format if the target handler supports it
     if (path.at(-1)?.handler === to.handler) {
