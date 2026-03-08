@@ -22,9 +22,12 @@ class bsorHandler implements FormatHandler {
     CommonFormats.JSON.supported("json", false, true, true)
   ];
 
-  public ready: boolean = true;
+  public ready: boolean = false;
+
+  private THREE!: typeof import("three");
 
   async init() {
+    this.THREE = await import("three");
     this.ready = true;
   }
 
@@ -33,9 +36,10 @@ class bsorHandler implements FormatHandler {
     inputFormat: FileFormat,
     outputFormat: FileFormat
   ): Promise<FileData[]> {
+    const THREE = this.THREE;
     let frameIndex = 0;
     return (await Promise.all(inputFiles.map(async(file) => {
-      const replay = new Replay(file.bytes);
+      const replay = new Replay(file.bytes, THREE);
       if(outputFormat.internal == "json") {
         return [{
           name: getBaseName(file.name) + ".json",
@@ -44,7 +48,7 @@ class bsorHandler implements FormatHandler {
       }
       let outputs: FileData[] = [];
       await new Promise<void>(resolve => {
-        render(replay, 640, 480,
+        render(THREE, replay, 640, 480,
           async(renderer) => {
             const bytes = await canvasToBytes(renderer.domElement, outputFormat.mime);
             outputs.push({

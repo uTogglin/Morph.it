@@ -3,9 +3,6 @@ import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import { canvasToBytes } from "../utils/canvas-to-bytes.ts";
 import { getBaseName } from "../utils/file-utils.ts";
 
-import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 
 class threejsHandler implements FormatHandler {
@@ -48,11 +45,26 @@ class threejsHandler implements FormatHandler {
   ];
   public ready: boolean = false;
 
-  private scene = new THREE.Scene();
-  private camera = new THREE.PerspectiveCamera(90, 16 / 9, 0.1, 4096);
-  private renderer = new THREE.WebGLRenderer();
+  private THREE!: typeof import("three");
+  private GLTFLoader!: typeof import("three/addons/loaders/GLTFLoader.js").GLTFLoader;
+  private OBJLoader!: typeof import("three/addons/loaders/OBJLoader.js").OBJLoader;
+
+  private scene!: import("three").Scene;
+  private camera!: import("three").PerspectiveCamera;
+  private renderer!: import("three").WebGLRenderer;
 
   async init () {
+    const THREE = await import("three");
+    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    const { OBJLoader } = await import("three/addons/loaders/OBJLoader.js");
+
+    this.THREE = THREE;
+    this.GLTFLoader = GLTFLoader;
+    this.OBJLoader = OBJLoader;
+
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(90, 16 / 9, 0.1, 4096);
+    this.renderer = new THREE.WebGLRenderer();
     this.renderer.setSize(960, 540);
     this.ready = true;
   }
@@ -69,12 +81,13 @@ class threejsHandler implements FormatHandler {
       const blob = new Blob([inputFile.bytes as BlobPart]);
       const url = URL.createObjectURL(blob);
 
-      let object: THREE.Group<THREE.Object3DEventMap>;
+      const THREE = this.THREE;
+      let object: import("three").Group<import("three").Object3DEventMap>;
 
       switch (inputFormat.internal) {
         case "glb": {
           const gltf: GLTF = await new Promise((resolve, reject) => {
-            const loader = new GLTFLoader();
+            const loader = new this.GLTFLoader();
             loader.load(url, resolve, undefined, reject);
           });
           object = gltf.scene;
@@ -82,7 +95,7 @@ class threejsHandler implements FormatHandler {
         }
         case "obj":
           object = await new Promise((resolve, reject) => {
-            const loader = new OBJLoader();
+            const loader = new this.OBJLoader();
             loader.load(url, resolve, undefined, reject);
           });
           break;

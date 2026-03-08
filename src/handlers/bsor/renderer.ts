@@ -1,9 +1,9 @@
-import * as THREE from "three";
-import { Vector3, Quaternion, Mesh } from "three";
+import type * as THREE_NS from "three";
+import type { Vector3, Quaternion, Mesh } from "three";
 
 import * as BSOR from "./replay.ts";
 
-export async function render(replay: BSOR.Replay, width: number, height: number, onFrame: (renderer: THREE.WebGLRenderer) => Promise<void>, onDone: () => Promise<void>) {
+export async function render(THREE: typeof THREE_NS, replay: BSOR.Replay, width: number, height: number, onFrame: (renderer: THREE_NS.WebGLRenderer) => Promise<void>, onDone: () => Promise<void>) {
 	const scene = new THREE.Scene();
 	const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
 
@@ -20,8 +20,8 @@ export async function render(replay: BSOR.Replay, width: number, height: number,
 	class Saber {
 		mesh: Mesh;
 
-		constructor(material: THREE.Material) {
-			this.mesh = new Mesh(saberGeometry, material)
+		constructor(material: THREE_NS.Material) {
+			this.mesh = new THREE.Mesh(saberGeometry, material)
 			scene.add(this.mesh);
 		}
 
@@ -52,22 +52,22 @@ export async function render(replay: BSOR.Replay, width: number, height: number,
 	const bombMaterial = new THREE.MeshBasicMaterial({ color: 0x808080 });
 	class Note {
 		data: BSOR.Note;
-		bloq: THREE.Mesh;
-		arrow: THREE.Mesh;
+		bloq: THREE_NS.Mesh;
+		arrow: THREE_NS.Mesh;
 		removalQueued: boolean;
 
 		constructor(data: BSOR.Note) {
 			if(data.type == BSOR.CutType.BOMB) {
-				this.bloq = new Mesh(bombGeometry, bombMaterial);
+				this.bloq = new THREE.Mesh(bombGeometry, bombMaterial);
 			}
 			else {
-				this.bloq = new Mesh(noteGeometry, data.color == BSOR.NoteColor.LEFT ? leftMaterial : rightMaterial);
+				this.bloq = new THREE.Mesh(noteGeometry, data.color == BSOR.NoteColor.LEFT ? leftMaterial : rightMaterial);
 			}
 			if(data.cutDirection == BSOR.CutDirection.ANY) {
-				this.arrow = new Mesh(dotGeometry, arrowMaterial);
+				this.arrow = new THREE.Mesh(dotGeometry, arrowMaterial);
 			}
 			else {
-				this.arrow = new Mesh(arrowGeometry, arrowMaterial);
+				this.arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
 				this.arrow.position.set(0, -NOTE_SCALE*0.4, 0);
 			}
 			this.bloq.add(this.arrow);

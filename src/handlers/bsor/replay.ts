@@ -1,4 +1,4 @@
-import { Vector3, Quaternion } from "three";
+import type { Vector3, Quaternion } from "three";
 
 // See BSOR specification for more info:
 // https://github.com/BeatLeader/BS-Open-Replay
@@ -189,7 +189,7 @@ export class Replay {
 	/// Pause
 	pause: Pause[];
 
-	constructor(data: Uint8Array) {
+	constructor(data: Uint8Array, THREE: typeof import("three")) {
 		let pos = 0;
 		let buffer = new ArrayBuffer(4);
 		const bufferF32 = new Float32Array(buffer);
@@ -236,10 +236,10 @@ export class Replay {
 			return new TextDecoder().decode(new Uint8Array(data.buffer, pos-length, length));
 		}
 		function vector(): Vector3 {
-			return new Vector3(float(), float(), float());
+			return new THREE.Vector3(float(), float(), float());
 		}
 		function quaternion(): Quaternion {
-			return new Quaternion(float(), float(), float(), float());
+			return new THREE.Quaternion(float(), float(), float(), float());
 		}
 		// magic number
 		if(int() != 0x442D3D69)
