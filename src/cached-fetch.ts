@@ -185,6 +185,8 @@ export function showCachePrompt(): void {
 
   box.querySelector("#cache-prompt-yes")!.addEventListener("click", () => {
     try { localStorage.setItem(LS_KEY, "yes"); } catch {}
+    const toggle = document.querySelector("#cache-models-toggle");
+    if (toggle) toggle.classList.add("active");
     dismiss();
     requestPersistentStorage();
     applyHfCachePolicy();
@@ -192,6 +194,8 @@ export function showCachePrompt(): void {
 
   box.querySelector("#cache-prompt-no")!.addEventListener("click", () => {
     try { localStorage.setItem(LS_KEY, "no"); } catch {}
+    const toggle = document.querySelector("#cache-models-toggle");
+    if (toggle) toggle.classList.remove("active");
     dismiss();
     applyHfCachePolicy();
   });

@@ -832,6 +832,7 @@ function openSettings(panel?: string) {
   }
   ui.settingsModal.classList.remove("hidden");
   ui.settingsOverlay.classList.remove("hidden");
+  refreshCacheStats();
 }
 
 function closeSettings() {
@@ -2024,6 +2025,7 @@ if (ui.cacheModelsToggle) {
     applyHfCachePolicy();
     if (nowOn) {
       requestPersistentStorage();
+      refreshCacheStats();
     } else {
       clearModelCache().then(() => refreshCacheStats());
     }
@@ -2048,9 +2050,6 @@ if (ui.cacheClearAllBtn) {
     }
   });
 }
-
-// Load cache stats when settings panel is first shown
-refreshCacheStats();
 
 // ──── AI Acceleration Setting ────
 if (ui.aiDeviceSelect) {
