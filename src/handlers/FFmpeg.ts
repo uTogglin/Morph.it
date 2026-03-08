@@ -301,7 +301,9 @@ class FFmpegHandler implements FormatHandler {
     // Hook progress events to update the conversion popup's progress bar
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const onProgress = (e: any) => {
-      const pct = Math.min(Math.round((e.progress ?? 0) * 100), 99);
+      const raw = e.progress ?? 0;
+      if (raw < 0 || raw > 1 || !isFinite(raw)) return; // ignore bogus values
+      const pct = Math.min(Math.round(raw * 100), 99);
       const bar = document.getElementById("convert-progress-bar");
       const label = document.getElementById("convert-progress-pct");
       if (bar) bar.style.width = pct + "%";
