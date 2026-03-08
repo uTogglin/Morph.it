@@ -344,12 +344,40 @@
           </label>
         </div>
         <div class="sm-group">
-          <span class="sm-label">Storage</span>
-          <label class="sm-switch-row">
+          <span class="sm-label">Cache management</span>
+          <p class="sm-hint" style="margin-top:0">We cache the converter files on your browser so you don't have to re-download them every time, improving performance and reducing data usage.</p>
+          <label class="sm-switch-row" style="margin-bottom:10px">
             <span class="sm-switch-label">Cache AI models locally</span>
             <button id="cache-models-toggle" class="sm-switch" role="switch" aria-checked="false"></button>
           </label>
-          <p class="sm-hint">Keep downloaded AI models &amp; WASM libraries in your browser's Cache Storage so they load instantly on future visits.</p>
+          <div class="cache-stats-row">
+            <div class="cache-stat-card">
+              <span class="cache-stat-label">Total Size</span>
+              <span class="cache-stat-value" id="cache-total-size">—</span>
+            </div>
+            <div class="cache-stat-card">
+              <span class="cache-stat-label">Files Cached</span>
+              <span class="cache-stat-value" id="cache-file-count">—</span>
+            </div>
+          </div>
+          <div class="cache-btn-row">
+            <button class="cache-action-btn" id="cache-refresh-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M2.5 11.5a10 10 0 0 1 18.8-4.3M21.5 12.5a10 10 0 0 1-18.8 4.3"/></svg>
+              Refresh cache
+            </button>
+            <button class="cache-action-btn cache-action-btn--danger" id="cache-clear-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              Clear cache
+            </button>
+          </div>
+        </div>
+        <div class="sm-group">
+          <span class="sm-label">Site data management</span>
+          <p class="sm-hint" style="margin-top:0">Clear all site data including settings and cached files, resetting convert to its default state and reloading the page.</p>
+          <button class="cache-action-btn cache-action-btn--danger cache-action-btn--full" id="cache-clear-all-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Clear all site data
+          </button>
         </div>
         <div class="sm-group">
           <span class="sm-label">AI Acceleration</span>

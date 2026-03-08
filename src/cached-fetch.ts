@@ -78,6 +78,44 @@ export async function clearModelCache(): Promise<void> {
 }
 
 /**
+ * Get cache statistics: total size in bytes and number of cached entries.
+ */
+export async function getCacheStats(): Promise<{ totalSize: number; fileCount: number }> {
+  let totalSize = 0;
+  let fileCount = 0;
+  try {
+    for (const name of [CACHE_NAME, HF_CACHE_NAME]) {
+      const exists = await caches.has(name);
+      if (!exists) continue;
+      const cache = await caches.open(name);
+      const keys = await cache.keys();
+      for (const req of keys) {
+        fileCount++;
+        try {
+          const resp = await cache.match(req);
+          if (resp) {
+            const blob = await resp.blob();
+            totalSize += blob.size;
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+  return { totalSize, fileCount };
+}
+
+/**
+ * Clear all site data: caches, localStorage, sessionStorage, then reload.
+ */
+export async function clearAllSiteData(): Promise<void> {
+  try { await caches.delete(CACHE_NAME); } catch {}
+  try { await caches.delete(HF_CACHE_NAME); } catch {}
+  try { localStorage.clear(); } catch {}
+  try { sessionStorage.clear(); } catch {}
+  location.reload();
+}
+
+/**
  * Tell @huggingface/transformers whether to use its browser cache.
  * Called early — before any pipeline is created.
  */

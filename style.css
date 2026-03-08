@@ -991,6 +991,75 @@ body[data-tool="pdf-editor"] #convert-button {
 }
 .sm-hint a { color: var(--accent); }
 
+/* ── Cache management cards ── */
+.cache-stats-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.cache-stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+}
+.cache-stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.cache-stat-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.cache-btn-row {
+  display: flex;
+  gap: 10px;
+}
+.cache-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text-main);
+  font-size: 0.84rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.cache-action-btn:hover {
+  border-color: var(--accent);
+  background: var(--surface-color);
+}
+.cache-action-btn--danger:hover {
+  border-color: var(--color-danger, #e74c3c);
+  color: var(--color-danger, #e74c3c);
+  background: var(--surface-color);
+}
+.cache-action-btn--full {
+  width: 100%;
+}
+.cache-action-btn svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.cache-action-btn:hover svg {
+  opacity: 1;
+}
+
 .sm-size-row {
   display: flex;
   align-items: center;

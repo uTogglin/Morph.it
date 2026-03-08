@@ -14,7 +14,7 @@ import { initSpeechTool } from "./speech-tool.js";
 import { initSummarizeTool } from "./summarize-tool.js";
 import { initOcrTool } from "./ocr-tool.js";
 import { initPdfEditorTool } from "./pdf-editor-tool.js";
-import { cachedFetch, requestPersistentStorage, showCachePrompt, clearModelCache, applyHfCachePolicy } from "./cached-fetch.js";
+import { cachedFetch, requestPersistentStorage, showCachePrompt, clearModelCache, applyHfCachePolicy, getCacheStats, clearAllSiteData } from "./cached-fetch.js";
 import { cdnFetch } from "./cdn.js";
 
 // ── In-app console log capture ─────────────────────────────────────────────
@@ -362,6 +362,11 @@ const ui = {
   rescaleLockInput: document.querySelector("#rescale-lock-ratio") as HTMLInputElement,
   privacyToggle: document.querySelector("#privacy-toggle") as HTMLButtonElement,
   cacheModelsToggle: document.querySelector("#cache-models-toggle") as HTMLButtonElement,
+  cacheTotalSize: document.querySelector("#cache-total-size") as HTMLSpanElement,
+  cacheFileCount: document.querySelector("#cache-file-count") as HTMLSpanElement,
+  cacheRefreshBtn: document.querySelector("#cache-refresh-btn") as HTMLButtonElement,
+  cacheClearBtn: document.querySelector("#cache-clear-btn") as HTMLButtonElement,
+  cacheClearAllBtn: document.querySelector("#cache-clear-all-btn") as HTMLButtonElement,
   aiDeviceSelect: document.querySelector("#sm-ai-device") as HTMLSelectElement,
   compressOptions: document.querySelector("#compress-options") as HTMLDivElement,
   compressTargetInput: document.querySelector("#compress-target-mb") as HTMLInputElement,
@@ -1991,7 +1996,23 @@ if (ui.privacyToggle) {
   });
 }
 
-// ──── Cache Models Toggle ────
+// ──── Cache Management ────
+function formatCacheSize(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const val = bytes / Math.pow(1024, i);
+  return `${val < 10 ? val.toFixed(2) : val < 100 ? val.toFixed(1) : Math.round(val)} ${units[i]}`;
+}
+
+async function refreshCacheStats() {
+  if (ui.cacheTotalSize) ui.cacheTotalSize.textContent = "…";
+  if (ui.cacheFileCount) ui.cacheFileCount.textContent = "…";
+  const stats = await getCacheStats();
+  if (ui.cacheTotalSize) ui.cacheTotalSize.textContent = formatCacheSize(stats.totalSize);
+  if (ui.cacheFileCount) ui.cacheFileCount.textContent = String(stats.fileCount);
+}
+
 if (ui.cacheModelsToggle) {
   const cacheOn = (() => { try { return localStorage.getItem("convert-cache-models") === "yes"; } catch { return false; } })();
   ui.cacheModelsToggle.classList.toggle("active", cacheOn);
@@ -2004,10 +2025,32 @@ if (ui.cacheModelsToggle) {
     if (nowOn) {
       requestPersistentStorage();
     } else {
-      clearModelCache();
+      clearModelCache().then(() => refreshCacheStats());
     }
   });
 }
+
+if (ui.cacheRefreshBtn) {
+  ui.cacheRefreshBtn.addEventListener("click", () => refreshCacheStats());
+}
+
+if (ui.cacheClearBtn) {
+  ui.cacheClearBtn.addEventListener("click", async () => {
+    await clearModelCache();
+    await refreshCacheStats();
+  });
+}
+
+if (ui.cacheClearAllBtn) {
+  ui.cacheClearAllBtn.addEventListener("click", () => {
+    if (confirm("This will clear all settings, cached files, and reload the page. Continue?")) {
+      clearAllSiteData();
+    }
+  });
+}
+
+// Load cache stats when settings panel is first shown
+refreshCacheStats();
 
 // ──── AI Acceleration Setting ────
 if (ui.aiDeviceSelect) {
