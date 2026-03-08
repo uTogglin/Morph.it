@@ -1,1 +1,397 @@
-[]
+[
+  {
+    "handler": "curani",
+    "from": "image/vnd.microsoft.icon(ico)",
+    "to": "application/x-navi-animation(ani)"
+  },
+  {
+    "handler": "FFmpeg",
+    "from": "image/gif(gif)",
+    "to": "audio/ogg(ogg)"
+  },
+  {
+    "handler": "FFmpeg",
+    "from": "image/gif(gif)",
+    "to": "video/ogg(ogv)"
+  },
+  {
+    "handler": "FFmpeg",
+    "from": "image/png(png)",
+    "to": "audio/ogg(ogg)"
+  },
+  {
+    "handler": "FFmpeg",
+    "from": "image/png(png)",
+    "to": "video/ogg(ogv)"
+  },
+  {
+    "handler": "FFmpeg",
+    "from": "image/vnd.microsoft.icon(ico)",
+    "to": "audio/ogg(ogg)"
+  },
+  {
+    "handler": "FFmpeg",
+    "from": "image/vnd.microsoft.icon(ico)",
+    "to": "video/ogg(ogv)"
+  },
+  {
+    "handler": "FFmpeg",
+    "from": "video/mp4(mp4)",
+    "to": "audio/ogg(ogg)"
+  },
+  {
+    "handler": "FFmpeg",
+    "from": "video/mp4(mp4)",
+    "to": "video/ogg(ogv)"
+  },
+  {
+    "handler": "FFmpeg",
+    "from": "video/mp4(mp4)",
+    "to": "video/webm(webm)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/bmp(bmp)",
+    "to": "application/pdf(pocketmod)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/bmp(bmp)",
+    "to": "application/vnd.mobius.msl(msl)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/bmp(bmp)",
+    "to": "image/jp2(jpt)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/gif(gif)",
+    "to": "application/pdf(pocketmod)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/gif(gif)",
+    "to": "application/vnd.mobius.msl(msl)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/gif(gif)",
+    "to": "image/jp2(jpt)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/jpeg(jpeg)",
+    "to": "application/pdf(pocketmod)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/jpeg(jpeg)",
+    "to": "application/pdf(pocketmod)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/jpeg(jpeg)",
+    "to": "application/vnd.mobius.msl(msl)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/jpeg(jpeg)",
+    "to": "application/vnd.mobius.msl(msl)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/jpeg(jpeg)",
+    "to": "image/jp2(jpt)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/jpeg(jpeg)",
+    "to": "image/jp2(jpt)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/png(png)",
+    "to": "application/pdf(pocketmod)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/png(png)",
+    "to": "application/vnd.mobius.msl(msl)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/png(png)",
+    "to": "image/jp2(jpt)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/tiff(tiff)",
+    "to": "application/pdf(pocketmod)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/tiff(tiff)",
+    "to": "application/vnd.mobius.msl(msl)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/tiff(tiff)",
+    "to": "image/jp2(jpt)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/vnd.microsoft.icon(ico)",
+    "to": "application/pdf(pocketmod)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/vnd.microsoft.icon(ico)",
+    "to": "application/vnd.mobius.msl(msl)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/vnd.microsoft.icon(ico)",
+    "to": "image/jp2(jpt)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/webp(webp)",
+    "to": "application/pdf(pocketmod)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/webp(webp)",
+    "to": "application/vnd.mobius.msl(msl)"
+  },
+  {
+    "handler": "ImageMagick",
+    "from": "image/webp(webp)",
+    "to": "image/jp2(jpt)"
+  },
+  {
+    "handler": "lzh",
+    "from": "application/zip(zip)",
+    "to": "application/json(json)"
+  },
+  {
+    "handler": "mcMap",
+    "from": "image/png(png)",
+    "to": "image/x-rgb(rgb)"
+  },
+  {
+    "handler": "meyda",
+    "from": "audio/flac(flac)",
+    "to": "audio/wav(wav)"
+  },
+  {
+    "handler": "meyda",
+    "from": "audio/mpeg(mp3)",
+    "to": "audio/wav(wav)"
+  },
+  {
+    "handler": "meyda",
+    "from": "audio/ogg(ogg)",
+    "to": "audio/wav(wav)"
+  },
+  {
+    "handler": "meyda",
+    "from": "image/jpeg(jpeg)",
+    "to": "image/png(png)"
+  },
+  {
+    "handler": "meyda",
+    "from": "image/jpeg(jpeg)",
+    "to": "image/webp(webp)"
+  },
+  {
+    "handler": "meyda",
+    "from": "image/png(png)",
+    "to": "image/jpeg(jpeg)"
+  },
+  {
+    "handler": "meyda",
+    "from": "image/png(png)",
+    "to": "image/webp(webp)"
+  },
+  {
+    "handler": "meyda",
+    "from": "image/webp(webp)",
+    "to": "image/jpeg(jpeg)"
+  },
+  {
+    "handler": "meyda",
+    "from": "image/webp(webp)",
+    "to": "image/png(png)"
+  },
+  {
+    "handler": "miditextcodec",
+    "from": "audio/midi(mid)",
+    "to": "image/png(png)"
+  },
+  {
+    "handler": "nbt",
+    "from": "application/json(json)",
+    "to": "application/x-minecraft-snbt(snbt)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "application/vnd.openxmlformats-officedocument.wordprocessingml.document(docx)",
+    "to": "application/zip(chunkedhtml)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "application/vnd.openxmlformats-officedocument.wordprocessingml.document(docx)",
+    "to": "text/biblatex(biblatex)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "application/vnd.openxmlformats-officedocument.wordprocessingml.document(docx)",
+    "to": "text/bibtex(bibtex)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/csv(csv)",
+    "to": "application/zip(chunkedhtml)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/csv(csv)",
+    "to": "text/biblatex(biblatex)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/csv(csv)",
+    "to": "text/bibtex(bibtex)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/html(html)",
+    "to": "application/zip(chunkedhtml)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/html(html)",
+    "to": "text/biblatex(biblatex)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/html(html)",
+    "to": "text/bibtex(bibtex)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/markdown(markdown)",
+    "to": "application/zip(chunkedhtml)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/markdown(markdown)",
+    "to": "text/biblatex(biblatex)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/markdown(markdown)",
+    "to": "text/bibtex(bibtex)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/tab-separated-values(tsv)",
+    "to": "application/zip(chunkedhtml)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/tab-separated-values(tsv)",
+    "to": "text/biblatex(biblatex)"
+  },
+  {
+    "handler": "pandoc",
+    "from": "text/tab-separated-values(tsv)",
+    "to": "text/bibtex(bibtex)"
+  },
+  {
+    "handler": "pyturtle",
+    "from": "image/svg+xml(svg)",
+    "to": "text/x-python(py)"
+  },
+  {
+    "handler": "qoa-fu",
+    "from": "audio/flac(flac)",
+    "to": "audio/wav(wav)"
+  },
+  {
+    "handler": "qoa-fu",
+    "from": "audio/mpeg(mp3)",
+    "to": "audio/wav(wav)"
+  },
+  {
+    "handler": "qoa-fu",
+    "from": "audio/ogg(ogg)",
+    "to": "audio/wav(wav)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/gif(gif)",
+    "to": "image/jpeg(jpeg)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/gif(gif)",
+    "to": "image/png(png)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/gif(gif)",
+    "to": "image/webp(webp)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/jpeg(jpeg)",
+    "to": "image/png(png)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/jpeg(jpeg)",
+    "to": "image/webp(webp)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/png(png)",
+    "to": "image/jpeg(jpeg)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/png(png)",
+    "to": "image/webp(webp)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/svg+xml(svg)",
+    "to": "image/jpeg(jpeg)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/svg+xml(svg)",
+    "to": "image/png(png)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/svg+xml(svg)",
+    "to": "image/webp(webp)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/webp(webp)",
+    "to": "image/jpeg(jpeg)"
+  },
+  {
+    "handler": "qoi-fu",
+    "from": "image/webp(webp)",
+    "to": "image/png(png)"
+  },
+  {
+    "handler": "rgba",
+    "from": "image/png(png)",
+    "to": "image/x-rgb(rgb)"
+  }
+]
