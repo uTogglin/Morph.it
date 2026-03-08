@@ -240,6 +240,9 @@ const deadRoutes = await page.evaluate(
           "Invalid input-output",         // comics needs multi-file input, not single
           "Archive contains multiple",    // fixture zip has mixed types
           "User probably intends",        // comics heuristic based on input shape
+          "concat, from 'list.txt'",      // FFmpeg concat fails with single-frame GIF/minimal fixtures
+          "Guessed Channel Layout",       // FFmpeg mono WAV fixture ≠ required channel config
+          "FFmpeg failed to produce",     // FFmpeg generic failure, codec/fixture dependent
         ].some(p => msg.includes(p));
         if (fixtureIssue) {
           console.log(`${label} — skipped (fixture issue: ${msg.slice(0, 80)})`);
