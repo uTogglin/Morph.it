@@ -249,6 +249,14 @@ class FFmpegHandler implements FormatHandler {
     this.ready = true;
   }
 
+  /**
+   * Abort an in-progress doConvert by terminating the FFmpeg worker.
+   * The pending exec() promise will reject, propagating up to the caller.
+   */
+  cancel () {
+    this.terminateFFmpeg();
+  }
+
   async doConvert (
     inputFiles: FileData[],
     inputFormat: FileFormat,

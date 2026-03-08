@@ -2133,6 +2133,16 @@ function showConversionFailedPopup(fromFmt: string, toFmt: string) {
   );
 }
 
+let _conversionCancelled = false;
+
+/** Cancel an in-progress conversion from the UI. */
+window._cancelActiveConversion = () => {
+  _conversionCancelled = true;
+  window.traversionGraph.abortSearch();
+  const handler = window._activeConversionHandler as any;
+  if (handler?.cancel) handler.cancel();
+};
+
 async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
 
   const pathString = path.map(c => c.format.format).join(" → ");
@@ -2145,10 +2155,21 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
     }
   }
 
-  ui.popupBox.innerHTML = `<h2>Finding conversion route...</h2>
-    <p id="convert-search-status" class="search-status"></p>
+  // Show conversion popup with elapsed timer and cancel button
+  const convertStartTime = Date.now();
+  ui.popupBox.innerHTML = `<h2>Converting...</h2>
     <p>Trying <b>${pathString}</b>...</p>
-    <button onclick="window.traversionGraph.abortSearch()">Cancel</button>`;
+    <p id="convert-elapsed" class="search-status"></p>
+    <button onclick="window._cancelActiveConversion()">Cancel</button>`;
+
+  const timerInterval = setInterval(() => {
+    const el = document.getElementById("convert-elapsed");
+    if (!el) return;
+    const seconds = Math.floor((Date.now() - convertStartTime) / 1000);
+    const min = Math.floor(seconds / 60);
+    const sec = seconds % 60;
+    el.textContent = `Elapsed: ${min}:${sec.toString().padStart(2, "0")}`;
+  }, 1000);
 
   for (let i = 0; i < path.length - 1; i ++) {
     const handler = path[i + 1].handler;
@@ -2168,13 +2189,20 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
         && c.mime === path[i].format.mime
         && c.format === path[i].format.format
       )!;
+      window._activeConversionHandler = handler;
       files = (await Promise.all([
         handler.doConvert(files, inputFormat, path[i + 1].format),
         // Ensure that we wait long enough for the UI to update
         new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
       ]))[0];
+      window._activeConversionHandler = null;
       if (files.some(c => !c.bytes.length)) throw "Output is empty.";
     } catch (e) {
+      window._activeConversionHandler = null;
+      clearInterval(timerInterval);
+
+      // If the user cancelled, don't register as a dead end
+      if (_conversionCancelled) return null;
 
       console.log(path.map(c => c.format.format));
       console.error(handler.name, `${path[i].format.format} → ${path[i + 1].format.format}`, e);
@@ -2188,7 +2216,7 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
 
       ui.popupBox.innerHTML = `<h2>Finding conversion route...</h2>
         <p id="convert-search-status" class="search-status">Looking for a valid path...</p>
-        <button onclick="window.traversionGraph.abortSearch()">Cancel</button>`;
+        <button onclick="window._cancelActiveConversion()">Cancel</button>`;
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       return null;
@@ -2196,6 +2224,7 @@ async function attemptConvertPath (files: FileData[], path: ConvertPathNode[]) {
     }
   }
 
+  clearInterval(timerInterval);
   return { files, path };
 
 }
@@ -2207,12 +2236,13 @@ window.tryConvertByTraversing = async function (
 ) {
   deadEndHashes = new Set();
   window.traversionGraph.clearDeadEndPaths();
+  _conversionCancelled = false;
 
   // Show initial search popup with cancel button
   ui.popupBox.innerHTML = `<h2>Finding conversion route...</h2>
     <p id="convert-search-status" class="search-status">Searching\u2026</p>
     <p id="convert-search-path" class="search-path"></p>
-    <button onclick="window.traversionGraph.abortSearch()">Cancel</button>`;
+    <button onclick="window._cancelActiveConversion()">Cancel</button>`;
   ui.popupBox.style.display = "block";
   ui.popupBackground.style.display = "block";
 
@@ -2235,6 +2265,7 @@ window.tryConvertByTraversing = async function (
       }
     } catch (e) { console.warn("[fast-path] error, falling back to graph search:", e); }
   }
+
 
   // Live listener: update popup with the path currently being explored
   const searchListener = (state: string, path: ConvertPathNode[]) => {
@@ -2260,6 +2291,7 @@ window.tryConvertByTraversing = async function (
       path[path.length - 1] = to;
     }
     const convertResult = await attemptConvertPath(files, path);
+    if (_conversionCancelled) break; // user cancelled
     if (convertResult) {
       result = convertResult;
       break;

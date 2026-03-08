@@ -179,6 +179,11 @@ export interface FormatHandler {
    */
   init: () => Promise<void>;
   /**
+   * Aborts an in-progress conversion, if the handler supports it.
+   * Called when the user clicks Cancel during an active conversion.
+   */
+  cancel?: () => void;
+  /**
    * Performs the actual file conversion.
    * @param inputFiles Array of {@link FileData} entries, one per input file.
    * @param inputFormat Input {@link FileFormat}, the same for all inputs.

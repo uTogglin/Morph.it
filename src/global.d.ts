@@ -1,4 +1,4 @@
-import type { FileFormat, FileData, ConvertPathNode } from "./FormatHandler.js";
+import type { FileFormat, FileData, ConvertPathNode, FormatHandler } from "./FormatHandler.js";
 import type { TraversionGraph } from "./TraversionGraph.js";
 
 declare global {
@@ -12,6 +12,8 @@ declare global {
       files: FileData[];
       path: ConvertPathNode[];
     } | null>;
+    _cancelActiveConversion: () => void;
+    _activeConversionHandler: FormatHandler | null;
   }
 }
 
