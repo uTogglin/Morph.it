@@ -1,13 +1,13 @@
 <div align="center">
 
 <!-- Purple gradient banner -->
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:4c1d95,50:7c3aed,100:a78bfa&height=200&section=header&text=Convert.it&fontSize=72&fontColor=ffffff&fontAlignY=35&desc=A%20truly%20universal%20file%20converter%20and%20toolkit&descSize=18&descColor=e9d5ff&descAlignY=55&animation=fadeIn" width="100%" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:4c1d95,50:7c3aed,100:a78bfa&height=200&section=header&text=Morph.it&fontSize=72&fontColor=ffffff&fontAlignY=35&desc=A%20truly%20universal%20file%20converter%20and%20toolkit&descSize=18&descColor=e9d5ff&descAlignY=55&animation=fadeIn" width="100%" />
 
 <br>
 
 [![Live Site](https://img.shields.io/badge/Live_Site-convert.utoggl.in-7c3aed?style=for-the-badge&logo=googlechrome&logoColor=white)](https://convert.utoggl.in/)
 [![License](https://img.shields.io/badge/License-GPL_2.0-a78bfa?style=for-the-badge)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/uTogglin/convert?style=for-the-badge&color=6d28d9&logo=github)](https://github.com/uTogglin/convert)
+[![GitHub Stars](https://img.shields.io/github/stars/uTogglin/morph.it?style=for-the-badge&color=6d28d9&logo=github)](https://github.com/uTogglin/morph.it)
 
 <br>
 
@@ -16,7 +16,7 @@ Powered by WebAssembly and on-device AI.
 
 <br>
 
-<img src="docs/screenshots/homepage.png" alt="Convert.it Homepage" width="90%" style="border-radius: 12px;" />
+<img src="docs/screenshots/homepage.png" alt="Morph.it Homepage" width="90%" style="border-radius: 12px;" />
 
 </div>
 
@@ -26,11 +26,11 @@ Powered by WebAssembly and on-device AI.
 
 <br>
 
-## What is Convert.it?
+## What is Morph.it?
 
 Most online converters are limited, insecure, and boring. They only handle conversions within the same media type and force you to upload your files to some random server.
 
-**Convert.it is different** — it processes everything locally using WebAssembly and on-device AI, supports cross-medium conversions, and packs a full suite of creative tools without ever touching a server.
+**Morph.it is different** — it processes everything locally using WebAssembly and on-device AI, supports cross-medium conversions, and packs a full suite of creative tools without ever touching a server.
 
 Need to turn an AVI into a PDF? Extract text from a scanned document? Generate speech from text? Edit a PDF? Go for it.
 
@@ -232,7 +232,7 @@ Extract text from images and scanned PDFs in 14 languages. Multi-page PDF suppor
 
 ## Usage
 
-1. Go to **[convert.utoggl.in](https://convert.utoggl.in/)**
+1. Go to **[morph.it](https://convert.utoggl.in/)** (or [convert.utoggl.in](https://convert.utoggl.in/))
 2. Pick a tool from the home screen or drop files anywhere
 3. Configure your options and hit the action button
 4. Download your result — or keep working
@@ -245,7 +245,7 @@ Extract text from images and scanned PDFs in 14 languages. Multi-page PDF suppor
 
 <div align="center">
 
-**GPL-2.0** &nbsp;|&nbsp; Fork of [**Convert**](https://github.com/p2r3/convert) by [p2r3](https://github.com/p2r3) &nbsp;|&nbsp; Image editor powered by [**miniPaint**](https://github.com/viliusle/miniPaint) by [viliusle](https://github.com/viliusle)
+**GPL-2.0** &nbsp;|&nbsp; **Morph.it** &nbsp;|&nbsp; Fork of [Convert](https://github.com/p2r3/convert) by [p2r3](https://github.com/p2r3) &nbsp;|&nbsp; Image editor powered by [miniPaint](https://github.com/viliusle/miniPaint) by [viliusle](https://github.com/viliusle)
 
 <br>
 
