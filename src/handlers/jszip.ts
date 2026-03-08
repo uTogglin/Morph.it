@@ -27,8 +27,11 @@ class jszipHandler implements FormatHandler {
     const outputFiles: FileData[] = [];
     const zip = new JSZip();
 
-    for (const file of inputFiles) {
-      zip.file(file.name, file.bytes);
+    for (let i = 0; i < inputFiles.length; i++) {
+      zip.file(inputFiles[i].name, inputFiles[i].bytes);
+      if (i % 10 === 9) {
+        await new Promise(r => requestAnimationFrame(r));
+      }
     }
 
     const output = await zip.generateAsync({ type: "uint8array" });

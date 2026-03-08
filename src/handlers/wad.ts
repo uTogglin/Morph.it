@@ -146,6 +146,9 @@ class wadHandler implements FormatHandler {
                             zipName = `${zipName}.${i}`;
                         }
                         zip.file(zipName, lump.data);
+                        if (i % 10 === 9) {
+                            await new Promise(r => requestAnimationFrame(r));
+                        }
                     }
                     const output = await zip.generateAsync({ type: "uint8array" });
                     outputFiles.push({ bytes: output, name: baseName + ".zip" });

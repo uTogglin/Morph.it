@@ -3253,17 +3253,22 @@ ui.createArchiveBtn.addEventListener("click", async () => {
       switch (fmt) {
         case "zip": {
           const zip = new JSZip();
-          for (const f of inputFileData) zip.file(f.name, f.bytes);
+          for (let i = 0; i < inputFileData.length; i++) {
+            zip.file(inputFileData[i].name, inputFileData[i].bytes);
+            if (i % 10 === 9) {
+              await new Promise(r => requestAnimationFrame(r));
+            }
+          }
           const out = await zip.generateAsync({ type: "uint8array" });
           downloadFile(out, "archive.zip");
           break;
         }
         case "tar": {
-          downloadFile(createTar(inputFileData), "archive.tar");
+          downloadFile(await createTar(inputFileData), "archive.tar");
           break;
         }
         case "tgz": {
-          downloadFile(pakoGzip(createTar(inputFileData)), "archive.tar.gz");
+          downloadFile(pakoGzip(await createTar(inputFileData)), "archive.tar.gz");
           break;
         }
         case "gz": {
@@ -3279,7 +3284,12 @@ ui.createArchiveBtn.addEventListener("click", async () => {
           const { cdnUrlPreload: _preload, cdnUrlSync: _sync } = await import("./cdn.js");
           await _preload("sevenZip");
           const sz = await SevenZip({ locateFile: () => _sync("sevenZip") });
-          for (const f of inputFileData) sz.FS.writeFile(f.name, f.bytes);
+          for (let i = 0; i < inputFileData.length; i++) {
+            sz.FS.writeFile(inputFileData[i].name, inputFileData[i].bytes);
+            if (i % 10 === 9) {
+              await new Promise(r => requestAnimationFrame(r));
+            }
+          }
           sz.callMain(["a", "-t7z", "archive.7z", ...inputFileData.map(f => f.name)]);
           downloadFile(sz.FS.readFile("archive.7z"), "archive.7z");
           break;
@@ -5245,7 +5255,12 @@ ui.vidDownloadBtn?.addEventListener("click", async () => {
     const results = Array.from(vidProcessedResults.values());
     if (archiveMultiOutput) {
       const zip = new JSZip();
-      for (const f of results) zip.file(f.name, f.bytes);
+      for (let i = 0; i < results.length; i++) {
+        zip.file(results[i].name, results[i].bytes);
+        if (i % 10 === 9) {
+          await new Promise(r => requestAnimationFrame(r));
+        }
+      }
       const zipBytes = await zip.generateAsync({ type: "uint8array" });
       downloadFile(zipBytes, "edited_videos.zip");
     } else {
@@ -5301,7 +5316,12 @@ ui.vidDownloadBtn?.addEventListener("click", async () => {
       // Download
       if (archiveMultiOutput) {
         const zip = new JSZip();
-        for (const f of results) zip.file(f.name, f.bytes);
+        for (let i = 0; i < results.length; i++) {
+          zip.file(results[i].name, results[i].bytes);
+          if (i % 10 === 9) {
+            await new Promise(r => requestAnimationFrame(r));
+          }
+        }
         const zipBytes = await zip.generateAsync({ type: "uint8array" });
         downloadFile(zipBytes, "edited_videos.zip");
       } else {
@@ -5481,7 +5501,12 @@ ui.convertButton.onclick = async function () {
         downloadFile(processedOutputFiles[0].bytes, processedOutputFiles[0].name);
       } else if (archiveMultiOutput) {
         const zip = new JSZip();
-        for (const f of processedOutputFiles) zip.file(f.name, f.bytes);
+        for (let i = 0; i < processedOutputFiles.length; i++) {
+          zip.file(processedOutputFiles[i].name, processedOutputFiles[i].bytes);
+          if (i % 10 === 9) {
+            await new Promise(r => requestAnimationFrame(r));
+          }
+        }
         const zipBytes = await zip.generateAsync({ type: "uint8array" });
         downloadFile(zipBytes, "converted.zip");
       } else {

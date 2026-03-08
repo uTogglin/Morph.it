@@ -111,7 +111,8 @@ class LZHHandler implements FormatHandler {
 
         const zip = new JSZip();
 
-        for (const file of extractedFiles) {
+        for (let i = 0; i < extractedFiles.length; i++) {
+          const file = extractedFiles[i];
           // Skip directory entries
           if (file.method === "-lhd-" || file.filename.endsWith("/")) {
             continue;
@@ -120,6 +121,9 @@ class LZHHandler implements FormatHandler {
           zip.file(file.filename, file.data, {
             date: file.timestamp
           });
+          if (i % 10 === 9) {
+            await new Promise(r => requestAnimationFrame(r));
+          }
         }
 
         const zipData = await zip.generateAsync({ 

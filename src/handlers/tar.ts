@@ -84,7 +84,8 @@ class tarHandler implements FormatHandler {
 
         const zip = new JSZip();
 
-        for (const file of files) {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
           const date = file.attrs?.mtime ? new Date(file.attrs?.mtime * 1000) : undefined;
           const unixPermissions = file.attrs?.mode;
 
@@ -92,6 +93,9 @@ class tarHandler implements FormatHandler {
             zip.file(file.name, null, { dir: true, date, unixPermissions });
           } else {
             zip.file(file.name, file.data, { date, unixPermissions });
+          }
+          if (i % 10 === 9) {
+            await new Promise(r => requestAnimationFrame(r));
           }
         }
 

@@ -6,7 +6,7 @@ import { cdnUrlPreload, cdnUrlSync } from "../cdn.ts";
 /**
  * Builds a POSIX ustar TAR archive from an array of FileData entries.
  */
-export function createTar(files: FileData[]): Uint8Array {
+export async function createTar(files: FileData[]): Promise<Uint8Array> {
   const BLOCK = 512;
   const blocks: Uint8Array[] = [];
   const enc = new TextEncoder();
@@ -16,7 +16,8 @@ export function createTar(files: FileData[]): Uint8Array {
     buf.set(bytes, offset);
   };
 
-  for (const file of files) {
+  for (let _i = 0; _i < files.length; _i++) {
+    const file = files[_i];
     const header = new Uint8Array(BLOCK);
 
     writeField(header, file.name, 0, 100);                                                   // name
@@ -42,6 +43,10 @@ export function createTar(files: FileData[]): Uint8Array {
     const data = new Uint8Array(padded);
     data.set(file.bytes);
     blocks.push(data);
+
+    if (_i % 10 === 9) {
+      await new Promise(r => requestAnimationFrame(r));
+    }
   }
 
   // Two end-of-archive null blocks
@@ -85,11 +90,11 @@ class ArchiveHandler implements FormatHandler {
   ): Promise<FileData[]> {
 
     if (output.internal === "tar") {
-      return [{ name: "archive.tar", bytes: createTar(files) }];
+      return [{ name: "archive.tar", bytes: await createTar(files) }];
     }
 
     if (output.internal === "tgz") {
-      return [{ name: "archive.tar.gz", bytes: gzip(createTar(files)) }];
+      return [{ name: "archive.tar.gz", bytes: gzip(await createTar(files)) }];
     }
 
     if (output.internal === "gz") {
@@ -104,8 +109,11 @@ class ArchiveHandler implements FormatHandler {
       const sz = this.sevenZip;
       const names = files.map(f => f.name);
 
-      for (const file of files) {
-        sz.FS.writeFile(file.name, file.bytes);
+      for (let i = 0; i < files.length; i++) {
+        sz.FS.writeFile(files[i].name, files[i].bytes);
+        if (i % 10 === 9) {
+          await new Promise(r => requestAnimationFrame(r));
+        }
       }
       sz.callMain(["a", "-t7z", "archive.7z", ...names]);
       const result: Uint8Array = sz.FS.readFile("archive.7z");

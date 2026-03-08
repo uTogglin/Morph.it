@@ -55,15 +55,17 @@ class comicsHandler implements FormatHandler {
             const baseName = inputFiles[0].name.replace("_0."+inputFormat.extension,"."+inputFormat.extension).split(".").slice(0, -1).join(".");
         
             // Add files to archive
-            let iterations = 0;
-            for (const file of inputFiles) {
+            for (let iterations = 0; iterations < inputFiles.length; iterations++) {
+                const file = inputFiles[iterations];
                 if (outputFormat.internal === "cbz") {
                     zip.file("Page "+String(iterations)+"."+inputFormat.extension, file.bytes);
                 }
                 else {
                     zip.file(file.name, file.bytes);
                 }
-                iterations += 1;
+                if (iterations % 10 === 9) {
+                    await new Promise(r => requestAnimationFrame(r));
+                }
             }
             
             const output = await zip.generateAsync({ type: "uint8array" });

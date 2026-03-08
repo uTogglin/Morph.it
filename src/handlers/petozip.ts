@@ -85,13 +85,17 @@ class peToZipHandler implements FormatHandler {
         // Extract binary
         const allSections = peFile.getAllSections();
 
-        for (const section of allSections) {
-          const rawName = section.info.name.toString().replace(/\0/g, ''); 
+        for (let i = 0; i < allSections.length; i++) {
+          const section = allSections[i];
+          const rawName = section.info.name.toString().replace(/\0/g, '');
           const safeName = rawName.replace(/[^a-zA-Z0-9]/g, '');
           const fileName = `section_${safeName || 'unnamed'}.bin`;
-          
+
           if (section.data) {
             zip.file(fileName, section.data);
+          }
+          if (i % 10 === 9) {
+            await new Promise(r => requestAnimationFrame(r));
           }
         }
         
