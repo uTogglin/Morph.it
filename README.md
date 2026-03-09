@@ -40,6 +40,51 @@ Need to turn an AVI into a PDF? Extract text from a scanned document? Generate s
 
 <br>
 
+## What's New in Morph.it
+
+Morph.it is a fork of [p2r3/convert](https://github.com/p2r3/convert). The original project is a brilliant universal file converter — Morph.it builds on that foundation with **7 new tools**, a redesigned UI, on-device AI, and major performance upgrades.
+
+### New Tools
+
+The original project focused on format conversion. Morph.it adds **7 new tools** on top — including video compression, AI background removal, a full video editor, neural text-to-speech & speech-to-text, AI summarization, OCR, and a PDF editor. See the full breakdown in the [Tools](#tools) table below.
+
+### Redesigned UI
+
+- **Full settings modal** with per-tool configuration panels
+- **Dark/light theme** toggle
+- **11 accent colors** — 8 presets + 3 custom slots with full color picker
+- **Recent files** history on the home page
+- **Output tray** — collect converted files instead of auto-downloading, or toggle auto-download
+- **In-app error log** viewer with color-coded levels
+
+### Performance
+
+- **A\* pathfinding for conversions** — finds the optimal multi-step route between any two formats using a graph-based traversal system, so even formats with no direct converter can be reached through intermediate steps
+- **Parallel batch conversion** — multiple files convert simultaneously using `navigator.hardwareConcurrency`, with per-handler serialization to prevent shared-state conflicts (e.g. FFmpeg's shared virtual filesystem)
+- **Per-file cancel/skip** — skip individual files during a batch without stopping the rest
+- **Dynamic memory detection** — probes the browser's max `ArrayBuffer` size and warns before conversions that could crash the tab
+- **3-tier CDN fallback** — jsDelivr &rarr; unpkg &rarr; local, so library downloads succeed even if a CDN is down
+- **Cache management** — full settings UI showing total cache size and file count, with refresh, clear cache, and "clear all site data" reset
+- **Persistent storage** — requests `navigator.storage.persist()` so the browser won't evict cached models
+
+### Quality of Life
+
+- **Completion chime** — Web Audio API synthesized ding when conversions finish
+- **Background notifications** — system notification when conversion completes in a background tab
+- **Conversion timer** — shows elapsed time in success popups
+- **Copy to clipboard** — one-click copy for text-based outputs (OCR, summarization, speech-to-text)
+- **Keyboard shortcuts** — Enter to convert, Escape to close modals/return home
+- **Privacy mode** — strips EXIF/GPS metadata, randomizes filenames, hides referrer headers
+- **First-visit cache prompt** — asks whether to cache AI models locally before any downloads
+
+Check out more information on the tools in the table below &darr;
+
+<br>
+
+---
+
+<br>
+
 ## Tools
 
 <table>
