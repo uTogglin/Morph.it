@@ -78,3 +78,13 @@ export type { AudioPanelChangeCallback } from './AudioTrackPanel.ts';
 export { AudioTrackPanel } from './AudioTrackPanel.ts';
 
 export { GraphEditorPanel } from './GraphEditorPanel.ts';
+
+export type { TextClip, TextClipStyle } from './TextClip.ts';
+export {
+  createTextClip,
+  createTextTrack,
+  textClipActiveAt,
+  evaluateTextProp,
+} from './TextClip.ts';
+
+export { TextRenderer } from './TextRenderer.ts';

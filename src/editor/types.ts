@@ -2,7 +2,9 @@
 // Non-destructive timeline: the Project tree is the single source of truth.
 // All File references are held by Clip; no bytes are copied or mutated here.
 
-export type TrackKind = 'video' | 'audio' | 'adjustment';
+import type { TextClip } from './TextClip.ts';
+
+export type TrackKind = 'video' | 'audio' | 'adjustment' | 'text';
 
 // ── Keyframe Animation ────────────────────────────────────────────────────────
 
@@ -58,6 +60,7 @@ export interface Track {
   linkedTrackId?: string;  // ID of a paired track (video↔audio)
   clips: Clip[];
   adjustmentClips?: AdjustmentClip[];  // only used when kind === 'adjustment'
+  textClips?: TextClip[];              // only used when kind === 'text'
 }
 
 // ── Adjustment Clip ───────────────────────────────────────────────────────────
@@ -310,13 +313,19 @@ export function createAdjustmentClip(trackId: string, timelineStart: number, dur
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Recompute project duration from all track clips. */
+/** Recompute project duration from all track clips (including text clips). */
 export function recomputeDuration(project: Project): number {
   let max = 0;
   for (const track of project.tracks) {
     for (const clip of track.clips) {
       const end = clip.timelineStart + clipTimelineDuration(clip);
       if (end > max) max = end;
+    }
+    if (track.textClips) {
+      for (const tc of track.textClips) {
+        const end = tc.timelineStart + tc.duration;
+        if (end > max) max = end;
+      }
     }
   }
   return max;
@@ -348,6 +357,7 @@ export function cloneProject(p: Project): Project {
         effects: ac.effects.map(e => ({ ...e, params: structuredClone(e.params) })),
         keyframeTracks: structuredClone(ac.keyframeTracks),
       })),
+      textClips: t.textClips?.map(tc => structuredClone(tc)),
     })),
   };
 }
