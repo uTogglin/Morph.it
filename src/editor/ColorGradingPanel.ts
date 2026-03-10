@@ -1,12 +1,16 @@
 // ── ColorGradingPanel ─────────────────────────────────────────────────────────
 // Renders the inspector panel content for a selected clip.
 // Features:
-//   • "Add Effect" dropdown for all effect types
+//   • Categorized "Add Effect" popover menu (Color, Transform, Stylize)
 //   • Per-effect collapsible sections with properly-bounded sliders
+//   • Drag-and-drop reorder via grip handles
+//   • Eye-icon enable/disable toggle per effect card
+//   • Right-click context menu: Delete / Duplicate
+//   • Card summary line showing key param at a glance
 //   • ColorCorrect: grouped Basic / 3-Way sections
 //   • LUT: .cube file import button + opacity slider
-//   • Remove-effect button per section
 //   • onChange callback fires after every mutation so caller can update engine
+//   • onWarning callback fires on 6+ effect warning
 
 import type {
   Clip,
@@ -253,17 +257,129 @@ const EFFECT_LABELS: Record<string, string> = {
   crop:         'Crop',
 };
 
+// ── Eye icon SVGs ─────────────────────────────────────────────────────────────
+
+const EYE_OPEN_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+  <circle cx="12" cy="12" r="3"/>
+</svg>`;
+
+const EYE_CLOSED_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.4">
+  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+  <line x1="1" y1="1" x2="23" y2="23"/>
+</svg>`;
+
+// ── Module-level drag state ───────────────────────────────────────────────────
+
+let dragSourceIndex = -1;
+
+// ── Context menu ──────────────────────────────────────────────────────────────
+
+function showContextMenu(
+  x: number,
+  y: number,
+  items: { label: string; action: () => void }[],
+): void {
+  // Remove any existing context menu
+  document.querySelector('.cgp-context-menu')?.remove();
+
+  const menu = document.createElement('div');
+  menu.className = 'cgp-context-menu';
+  menu.style.left = `${x}px`;
+  menu.style.top  = `${y}px`;
+
+  for (const item of items) {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'cgp-context-item';
+    itemEl.textContent = item.label;
+    itemEl.addEventListener('click', () => {
+      item.action();
+      menu.remove();
+    });
+    menu.appendChild(itemEl);
+  }
+
+  document.body.appendChild(menu);
+
+  // Dismiss on click-outside (capturing phase)
+  const dismiss = (e: PointerEvent | KeyboardEvent) => {
+    if ('key' in e && e.key !== 'Escape') return;
+    menu.remove();
+    document.removeEventListener('pointerdown', dismiss as EventListener, true);
+    document.removeEventListener('keydown', dismiss as EventListener);
+  };
+  setTimeout(() => {
+    document.addEventListener('pointerdown', dismiss as EventListener, { capture: true, once: true });
+    document.addEventListener('keydown', dismiss as EventListener, { once: true });
+  }, 0);
+}
+
+// ── Card summary helper ───────────────────────────────────────────────────────
+
+function buildCardSummary(effect: Effect): string {
+  switch (effect.kind) {
+    case 'blur': {
+      const p = effect.params as BlurParams;
+      return `${p.radius}px`;
+    }
+    case 'sharpen': {
+      const p = effect.params as SharpenParams;
+      return `${p.amount.toFixed(2)}`;
+    }
+    case 'vignette': {
+      const p = effect.params as VignetteParams;
+      return `str:${p.strength.toFixed(2)}`;
+    }
+    case 'colorCorrect': {
+      const p = effect.params as ColorCorrectParams;
+      const allParams: Record<string, number> = p as unknown as Record<string, number>;
+      const defaults: Record<string, number> = {
+        brightness: 0, contrast: 0, saturation: 0, hue: 0, temperature: 0, tint: 0,
+        liftR: 0, liftG: 0, liftB: 0, gammaR: 1, gammaG: 1, gammaB: 1,
+        gainR: 1, gainG: 1, gainB: 1,
+      };
+      let adjusted = 0;
+      for (const [k, def] of Object.entries(defaults)) {
+        if (Math.abs((allParams[k] ?? def) - def) > 0.001) adjusted++;
+      }
+      return adjusted > 0 ? `${adjusted} adjusted` : 'default';
+    }
+    case 'lut': {
+      const p = effect.params as LutParams;
+      return p.size > 0 ? `${p.size}³` : 'No LUT';
+    }
+    case 'transform': {
+      const p = effect.params as TransformParams;
+      if (p.x !== 0 || p.y !== 0) return `x:${p.x} y:${p.y}`;
+      if (p.scaleX !== 1 || p.scaleY !== 1) return `scale:${p.scaleX.toFixed(2)}`;
+      if (p.rotation !== 0) return `rot:${p.rotation}°`;
+      return 'default';
+    }
+    case 'crop': {
+      return 'cropped';
+    }
+    default:
+      return '';
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export class ColorGradingPanel {
   private container: HTMLElement;
   private onChange: PanelChangeCallback;
+  private onWarning?: (msg: string) => void;
   private _clip: Clip | null = null;
   private _trackKind: 'video' | 'audio' = 'video';
 
-  constructor(container: HTMLElement, onChange: PanelChangeCallback) {
+  constructor(
+    container: HTMLElement,
+    onChange: PanelChangeCallback,
+    onWarning?: (msg: string) => void,
+  ) {
     this.container = container;
     this.onChange  = onChange;
+    this.onWarning = onWarning;
   }
 
   /** Render the panel for the given clip (or show empty state). */
@@ -283,59 +399,26 @@ export class ColorGradingPanel {
     // ── Clip Properties card ─────────────────────────────────────────────────
     this.container.appendChild(this.buildPropertiesCard(clip, trackKind));
 
-    // ── "Add Effect" section ─────────────────────────────────────────────────
+    // ── "Add Effect" button (categorized popover) ────────────────────────────
     const addRow = document.createElement('div');
     addRow.className = 'cgp-add-row';
 
-    const addLabel = document.createElement('span');
-    addLabel.className = 'cgp-add-label';
-    addLabel.textContent = 'Add effect:';
-
-    const select = document.createElement('select');
-    select.className = 'cgp-add-select';
-    for (const [kind, label] of Object.entries(EFFECT_LABELS)) {
-      const opt = document.createElement('option');
-      opt.value = kind;
-      opt.textContent = label;
-      select.appendChild(opt);
-    }
-
     const addBtn = document.createElement('button');
     addBtn.className = 'cgp-add-btn';
-    addBtn.textContent = '+ Add';
+    addBtn.textContent = '+ Add Effect';
     addBtn.addEventListener('click', () => {
       if (!this._clip) return;
-      let effect: Effect;
-      switch (select.value) {
-        case 'colorCorrect': effect = createColorCorrectEffect(); break;
-        case 'blur':         effect = createBlurEffect();         break;
-        case 'sharpen':      effect = createSharpenEffect();      break;
-        case 'vignette':     effect = createVignetteEffect();     break;
-        case 'transform':    effect = createTransformEffect();    break;
-        case 'crop':         effect = createCropEffect();         break;
-        case 'lut':
-          effect = {
-            id: crypto.randomUUID(),
-            kind: 'lut',
-            enabled: true,
-            params: { lutData: new Float32Array(0), size: 0, opacity: 1.0 } satisfies LutParams,
-          };
-          break;
-        default: return;
-      }
-      this._clip.effects.push(effect);
-      this.onChange(this._clip);
-      this.render(this._clip);
+      this.showAddMenu(addBtn, this._clip);
     });
 
-    addRow.append(addLabel, select, addBtn);
+    addRow.appendChild(addBtn);
     this.container.appendChild(addRow);
 
     // ── Effect list ──────────────────────────────────────────────────────────
     if (clip.effects.length === 0) {
       const p = document.createElement('p');
       p.className = 'cgp-empty';
-      p.textContent = 'No effects. Use "Add effect" above.';
+      p.textContent = 'No effects. Use "+ Add Effect" above.';
       this.container.appendChild(p);
       return;
     }
@@ -343,6 +426,91 @@ export class ColorGradingPanel {
     for (let i = 0; i < clip.effects.length; i++) {
       this.container.appendChild(this.buildEffectCard(clip, i));
     }
+  }
+
+  // ── Private: categorized add menu ─────────────────────────────────────────
+
+  private showAddMenu(anchorBtn: HTMLButtonElement, clip: Clip): void {
+    // Remove existing add menu
+    document.querySelector('.cgp-add-menu')?.remove();
+
+    const categories: { label: string; effects: string[] }[] = [
+      { label: 'Color',     effects: ['colorCorrect', 'lut'] },
+      { label: 'Transform', effects: ['transform', 'crop'] },
+      { label: 'Stylize',   effects: ['blur', 'sharpen', 'vignette'] },
+    ];
+
+    const menu = document.createElement('div');
+    menu.className = 'cgp-add-menu';
+
+    for (const cat of categories) {
+      const catLabel = document.createElement('div');
+      catLabel.className = 'cgp-add-category';
+      catLabel.textContent = cat.label;
+      menu.appendChild(catLabel);
+
+      for (const kind of cat.effects) {
+        const btn = document.createElement('button');
+        btn.textContent = EFFECT_LABELS[kind] ?? kind;
+        btn.addEventListener('click', () => {
+          menu.remove();
+          this.addEffect(clip, kind);
+        });
+        menu.appendChild(btn);
+      }
+    }
+
+    // Position below the anchor button
+    const rect = anchorBtn.getBoundingClientRect();
+    const container = anchorBtn.closest('.editor-inspector, [class*="inspector"]') as HTMLElement | null;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      menu.style.position = 'fixed';
+      menu.style.left = `${rect.left}px`;
+      menu.style.top  = `${rect.bottom + 4}px`;
+    } else {
+      menu.style.position = 'fixed';
+      menu.style.left = `${rect.left}px`;
+      menu.style.top  = `${rect.bottom + 4}px`;
+    }
+
+    document.body.appendChild(menu);
+
+    // Dismiss on click-outside
+    setTimeout(() => {
+      document.addEventListener('pointerdown', (e) => {
+        if (!menu.contains(e.target as Node)) menu.remove();
+      }, { capture: true, once: true });
+    }, 0);
+  }
+
+  // ── Private: add effect to clip ───────────────────────────────────────────
+
+  private addEffect(clip: Clip, kind: string): void {
+    let effect: Effect;
+    switch (kind) {
+      case 'colorCorrect': effect = createColorCorrectEffect(); break;
+      case 'blur':         effect = createBlurEffect();         break;
+      case 'sharpen':      effect = createSharpenEffect();      break;
+      case 'vignette':     effect = createVignetteEffect();     break;
+      case 'transform':    effect = createTransformEffect();    break;
+      case 'crop':         effect = createCropEffect();         break;
+      case 'lut':
+        effect = {
+          id:      crypto.randomUUID(),
+          kind:    'lut',
+          enabled: true,
+          params:  { lutData: new Float32Array(0), size: 0, opacity: 1.0 } satisfies LutParams,
+        };
+        break;
+      default: return;
+    }
+    clip.effects.push(effect);
+    if (clip.effects.length >= 6) {
+      this.onWarning?.('Performance may degrade with many effects');
+    }
+    this.onChange(clip);
+    this.render(clip, this._trackKind);
   }
 
   // ── Private: build clip properties card ──────────────────────────────────
@@ -428,21 +596,48 @@ export class ColorGradingPanel {
     const header = document.createElement('div');
     header.className = 'cgp-card-header';
 
-    // Enable toggle
-    const toggle = document.createElement('input');
-    toggle.type    = 'checkbox';
-    toggle.className = 'cgp-toggle';
-    toggle.checked = effect.enabled;
-    toggle.title   = 'Enable / disable effect';
-    toggle.addEventListener('change', () => {
-      effect.enabled = toggle.checked;
-      body.style.opacity = toggle.checked ? '' : '0.4';
+    // Drag handle
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'cgp-drag-handle';
+    dragHandle.draggable = true;
+    dragHandle.textContent = '⋮⋮';
+    dragHandle.title = 'Drag to reorder';
+
+    dragHandle.addEventListener('dragstart', (e) => {
+      dragSourceIndex = index;
+      e.dataTransfer!.effectAllowed = 'move';
+      card.classList.add('cgp-dragging');
+    });
+    dragHandle.addEventListener('dragend', () => {
+      card.classList.remove('cgp-dragging');
+    });
+
+    // Eye toggle button
+    const eyeBtn = document.createElement('button');
+    eyeBtn.className = 'cgp-eye-btn';
+    eyeBtn.title = 'Enable / disable effect';
+
+    const updateEyeIcon = (enabled: boolean) => {
+      eyeBtn.innerHTML = enabled ? EYE_OPEN_SVG : EYE_CLOSED_SVG;
+    };
+    updateEyeIcon(effect.enabled);
+
+    eyeBtn.addEventListener('click', () => {
+      effect.enabled = !effect.enabled;
+      updateEyeIcon(effect.enabled);
+      body.style.opacity = effect.enabled ? '' : '0.4';
       this.onChange(clip);
     });
 
+    // Title
     const title = document.createElement('span');
     title.className = 'cgp-card-title';
     title.textContent = EFFECT_LABELS[effect.kind] ?? effect.kind;
+
+    // Card summary
+    const summary = document.createElement('span');
+    summary.className = 'cgp-card-summary';
+    summary.textContent = buildCardSummary(effect);
 
     // Collapse toggle
     const collapseBtn = document.createElement('button');
@@ -459,10 +654,10 @@ export class ColorGradingPanel {
     removeBtn.addEventListener('click', () => {
       clip.effects.splice(index, 1);
       this.onChange(clip);
-      this.render(clip);
+      this.render(clip, this._trackKind);
     });
 
-    header.append(toggle, title, collapseBtn, removeBtn);
+    header.append(dragHandle, eyeBtn, title, summary, collapseBtn, removeBtn);
 
     // ── Body ────────────────────────────────────────────────────────────────
     const body = document.createElement('div');
@@ -501,6 +696,56 @@ export class ColorGradingPanel {
       collapsed = !collapsed;
       body.style.display = collapsed ? 'none' : '';
       collapseBtn.textContent = collapsed ? '▸' : '▾';
+    });
+
+    // ── Drag-over / drop on card ─────────────────────────────────────────────
+    card.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'move';
+      card.classList.add('cgp-drag-over');
+    });
+    card.addEventListener('dragleave', () => {
+      card.classList.remove('cgp-drag-over');
+    });
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      card.classList.remove('cgp-drag-over');
+      if (dragSourceIndex === index || dragSourceIndex === -1) return;
+      // Reorder: remove from source, insert at target
+      const [moved] = clip.effects.splice(dragSourceIndex, 1);
+      clip.effects.splice(index, 0, moved);
+      dragSourceIndex = -1;
+      this.onChange(clip);
+      this.render(clip, this._trackKind);
+    });
+
+    // ── Right-click context menu ─────────────────────────────────────────────
+    card.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showContextMenu(e.clientX, e.clientY, [
+        {
+          label: 'Delete',
+          action: () => {
+            clip.effects.splice(index, 1);
+            this.onChange(clip);
+            this.render(clip, this._trackKind);
+          },
+        },
+        {
+          label: 'Duplicate',
+          action: () => {
+            const duplicate: Effect = {
+              id:      crypto.randomUUID(),
+              kind:    effect.kind,
+              enabled: effect.enabled,
+              params:  structuredClone(effect.params),
+            };
+            clip.effects.splice(index + 1, 0, duplicate);
+            this.onChange(clip);
+            this.render(clip, this._trackKind);
+          },
+        },
+      ]);
     });
 
     card.append(header, body);
