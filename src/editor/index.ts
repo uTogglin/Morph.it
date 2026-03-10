@@ -14,6 +14,9 @@ export type {
   SharpenParams,
   VignetteParams,
   TransformParams,
+  InterpolationType,
+  Keyframe,
+  KeyframeTrack,
 } from './types.ts';
 
 export {
@@ -33,6 +36,13 @@ export {
 } from './types.ts';
 
 export { EffectChain } from './EffectChain.ts';
+
+export {
+  evaluateTrack,
+  evaluateEffectParam,
+  addKeyframe,
+  removeKeyframe,
+} from './KeyframeEngine.ts';
 
 export type { FrameCallback } from './ClipDecoder.ts';
 export { ClipDecoder, ClipDecoderPool } from './ClipDecoder.ts';
