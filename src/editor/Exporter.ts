@@ -156,7 +156,7 @@ export class Exporter {
       await encoder.flush();
       if (encodeError) throw encodeError;
     } finally {
-      encoder.close();
+      if (encoder.state !== 'closed') encoder.close();
       effectChain.dispose();
       decoders.disposeAll();
     }
