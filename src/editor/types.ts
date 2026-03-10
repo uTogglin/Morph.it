@@ -2,7 +2,32 @@
 // Non-destructive timeline: the Project tree is the single source of truth.
 // All File references are held by Clip; no bytes are copied or mutated here.
 
-export type TrackKind = 'video' | 'audio';
+export type TrackKind = 'video' | 'audio' | 'adjustment';
+
+// ── Keyframe Animation ────────────────────────────────────────────────────────
+
+export type InterpolationType = 'linear' | 'bezier' | 'hold';
+
+export interface Keyframe {
+  /** Seconds from clip.timelineStart (clip-relative offset). */
+  t: number;
+  value: number;
+  interpolation: InterpolationType;
+  /** Bezier handle OUT (leaving this keyframe). Offset from keyframe position in [dt, dv] space. */
+  handleOut: [number, number];
+  /** Bezier handle IN (arriving at this keyframe from the left). Offset from keyframe position in [dt, dv] space. */
+  handleIn: [number, number];
+}
+
+export interface KeyframeTrack {
+  /**
+   * Dot-path into EffectParams, prefixed by effectId.
+   * Format: "<effectId>.<fieldName>", e.g. "abc-123.brightness"
+   */
+  property: string;
+  /** Keyframes sorted by t ascending — engine assumes this invariant. */
+  keyframes: Keyframe[];
+}
 
 // ── Project ───────────────────────────────────────────────────────────────────
 
@@ -47,6 +72,7 @@ export interface Clip {
   audioGain: number;       // 0.0–2.0 per-clip audio gain
   effects: Effect[];
   linkedClipId?: string;   // ID of a paired clip on the linked track
+  keyframeTracks: KeyframeTrack[];  // empty array = no animation
 }
 
 /** How long the clip occupies on the timeline, accounting for speed. */
@@ -196,6 +222,7 @@ export function createClip(
     speed: 1.0,
     audioGain: 1.0,
     effects: [],
+    keyframeTracks: [],
   };
 }
 
@@ -270,6 +297,7 @@ export function cloneProject(p: Project): Project {
           // structuredClone correctly deep-copies typed arrays (Float32Array in LutParams)
           params: structuredClone(e.params),
         })),
+        keyframeTracks: structuredClone(c.keyframeTracks),
       })),
     })),
   };
