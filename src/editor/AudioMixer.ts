@@ -144,6 +144,10 @@ export class AudioMixer {
       const node = this.ctx.createMediaElementSource(videoEl);
       node.connect(t.trackGain);
       this.mediaSources.set(videoEl, { node, trackId });
+      // Chrome silences MediaElementAudioSourceNode when the element is muted.
+      // After createMediaElementSource redirects audio into Web Audio, unmute so
+      // the signal flows through the graph without double-playback from the element.
+      videoEl.muted = false;
     }
   }
 
