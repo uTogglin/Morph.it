@@ -412,16 +412,17 @@ export class EffectChain {
   // ── Public API ───────────────────────────────────────────────────────────
 
   /**
-   * Process a VideoFrame through the effect stack.
-   * The VideoFrame is NOT closed here — caller is responsible.
+   * Process a VideoFrame or ImageBitmap through the effect stack.
+   * The frame/bitmap is NOT closed here — caller is responsible.
    * Returns an ImageBitmap for drawing to the display canvas.
    */
-  async process(frame: VideoFrame, effects: Effect[]): Promise<ImageBitmap> {
+  async process(frame: VideoFrame | ImageBitmap, effects: Effect[]): Promise<ImageBitmap> {
     const gl = this.gl;
 
     // Resize FBOs if the frame dimensions differ from our current size
-    const fw = frame.displayWidth;
-    const fh = frame.displayHeight;
+    // ImageBitmap uses .width/.height; VideoFrame uses .displayWidth/.displayHeight
+    const fw = 'displayWidth' in frame ? frame.displayWidth : frame.width;
+    const fh = 'displayHeight' in frame ? frame.displayHeight : frame.height;
     if (fw !== this.width || fh !== this.height) {
       this.resize(fw, fh);
     }

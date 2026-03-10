@@ -57,6 +57,24 @@ export interface Track {
   pan: number;             // -1.0 (L) to 1.0 (R), audio tracks only
   linkedTrackId?: string;  // ID of a paired track (video↔audio)
   clips: Clip[];
+  adjustmentClips?: AdjustmentClip[];  // only used when kind === 'adjustment'
+}
+
+// ── Adjustment Clip ───────────────────────────────────────────────────────────
+
+/** A clip on an adjustment track — applies its effect stack to all video beneath it. */
+export interface AdjustmentClip {
+  id: string;
+  trackId: string;
+  timelineStart: number;
+  duration: number;
+  effects: Effect[];
+  keyframeTracks: KeyframeTrack[];
+}
+
+/** Whether the adjustment clip is active at a given timeline position (seconds). */
+export function adjustmentClipActiveAt(clip: AdjustmentClip, t: number): boolean {
+  return t >= clip.timelineStart && t < clip.timelineStart + clip.duration;
 }
 
 // ── Clip ──────────────────────────────────────────────────────────────────────
@@ -264,6 +282,32 @@ export function createCropEffect(): Effect {
   return { id: crypto.randomUUID(), kind: 'crop', enabled: true, params };
 }
 
+export function createAdjustmentTrack(name = 'Adjustment Layer'): Track {
+  return {
+    id: crypto.randomUUID(),
+    kind: 'adjustment',
+    name,
+    muted: false,
+    solo: false,
+    locked: false,
+    volume: 1.0,
+    pan: 0,
+    clips: [],
+    adjustmentClips: [],
+  };
+}
+
+export function createAdjustmentClip(trackId: string, timelineStart: number, duration: number): AdjustmentClip {
+  return {
+    id: crypto.randomUUID(),
+    trackId,
+    timelineStart,
+    duration,
+    effects: [],
+    keyframeTracks: [],
+  };
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Recompute project duration from all track clips. */
@@ -298,6 +342,11 @@ export function cloneProject(p: Project): Project {
           params: structuredClone(e.params),
         })),
         keyframeTracks: structuredClone(c.keyframeTracks),
+      })),
+      adjustmentClips: t.adjustmentClips?.map(ac => ({
+        ...ac,
+        effects: ac.effects.map(e => ({ ...e, params: structuredClone(e.params) })),
+        keyframeTracks: structuredClone(ac.keyframeTracks),
       })),
     })),
   };
