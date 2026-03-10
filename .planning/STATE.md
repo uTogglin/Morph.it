@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-03-10T22:46:43.092Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-10T23:49:50.179Z"
 last_activity: 2026-03-10 — Roadmap created, STATE.md initialized
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 12
+  completed_plans: 10
   percent: 0
 ---
 
@@ -60,6 +60,8 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02-keyframe-engine-compositing P03 | 3 | 2 tasks | 6 files |
 | Phase 02 P04 | 5 | 2 tasks | 3 files |
 | Phase 02-keyframe-engine-compositing P04 | 25 | 3 tasks | 3 files |
+| Phase 03-text-tool P01 | 12 | 2 tasks | 5 files |
+| Phase 03-text-tool P02 | 3 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -95,6 +97,12 @@ Recent decisions affecting current work:
 - [Phase 02-keyframe-engine-compositing]: Exporter uses offscreen.transferToImageBitmap() (zero-copy) for adjustment layer snapshot rather than createImageBitmap(offscreen) (copy)
 - [Phase 02-keyframe-engine-compositing]: Proxy over TimelineState: GraphEditorPanel created synchronously but tlController loads async — Proxy delegates to tlController.state once available, defaults before that
 - [Phase 02-keyframe-engine-compositing]: Proxy over TimelineState: GraphEditorPanel created synchronously but tlController loads async — Proxy delegates to tlController.state once available, defaults before that
+- [Phase 03-text-tool]: evaluateTextProp uses bare property name (not effectId.field format) — separate from evaluateEffectParam which uses effectId prefix
+- [Phase 03-text-tool]: TextClip structuredClone-safe by design — no File references or class instances in the type
+- [Phase 03-text-tool]: types.ts imports TextClip via type-only import to avoid runtime circular dependency
+- [Phase 03-text-tool]: loadedFonts cache key uses family:weight:style (CSS family string) — FontFace deduplication works on the family name appearing in CSS
+- [Phase 03-text-tool]: applyTextPreset owns PRESET_PROPERTIES set {opacity, x, charReveal} and unconditionally removes matching tracks before writing — prevents stacking on preset switch
+- [Phase 03-text-tool]: fetchFontsourceList() caches full API response in module-level variable — repeated calls don't hit network again
 
 ### Pending Todos
 
@@ -108,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T22:46:43.089Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-03-10T23:49:50.176Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
