@@ -12,7 +12,66 @@
 
 import type {
   Effect, ColorCorrectParams, BlurParams, SharpenParams, VignetteParams, CropParams,
+  TransformParams, LutParams,
 } from './types.ts';
+
+// ── Pure-logic helpers (exported for unit testing) ────────────────────────────
+
+/**
+ * Convert TransformParams (pixel offsets, degrees) to normalized shader uniforms.
+ * Translation is normalized to UV space (0..1). Rotation is converted to radians.
+ * Scale and anchor pass through unchanged.
+ */
+export function normalizeTransformUniforms(
+  params: TransformParams,
+  width: number,
+  height: number,
+): { u_tx: number; u_ty: number; u_sx: number; u_sy: number; u_rot: number; u_ax: number; u_ay: number } {
+  return {
+    u_tx: params.x / width,
+    u_ty: params.y / height,
+    u_sx: params.scaleX,
+    u_sy: params.scaleY,
+    u_rot: params.rotation * (Math.PI / 180),
+    u_ax: params.anchorX,
+    u_ay: params.anchorY,
+  };
+}
+
+/**
+ * Scale a LUT coordinate to avoid clamping artifacts at edges.
+ * Returns: value * ((lutSize - 1) / lutSize) + 0.5 / lutSize
+ */
+export function computeLutCoord(value: number, lutSize: number): number {
+  return value * ((lutSize - 1) / lutSize) + 0.5 / lutSize;
+}
+
+/**
+ * Select the FBO internal format and pixel type based on float16 extension availability.
+ */
+export function selectFboFormat(hasFloat16: boolean): { internalFormat: string; type: string } {
+  return hasFloat16
+    ? { internalFormat: 'RGBA16F', type: 'HALF_FLOAT' }
+    : { internalFormat: 'RGBA8', type: 'UNSIGNED_BYTE' };
+}
+
+/**
+ * Return only the effects with enabled === true.
+ */
+export function filterEnabledEffects(effects: Effect[]): Effect[] {
+  return effects.filter(e => e.enabled);
+}
+
+/**
+ * Move an effect from fromIndex to toIndex, returning a new array.
+ * The original array is not mutated.
+ */
+export function reorderEffects(effects: Effect[], fromIndex: number, toIndex: number): Effect[] {
+  const arr = effects.slice();
+  const [moved] = arr.splice(fromIndex, 1);
+  arr.splice(toIndex, 0, moved);
+  return arr;
+}
 
 // ── GLSL sources ──────────────────────────────────────────────────────────────
 
@@ -209,6 +268,60 @@ void main() {
   }
 }`;
 
+// 2D Transform — inverse-affine UV remapping in the fragment shader.
+// Uniforms are in normalized UV space (0..1); use normalizeTransformUniforms()
+// before calling runPass to convert from TransformParams pixel/degree values.
+const FRAG_TRANSFORM = /* glsl */ `#version 300 es
+precision mediump float;
+uniform sampler2D u_tex;
+uniform float u_tx;        // translation X in normalized coords
+uniform float u_ty;        // translation Y in normalized coords
+uniform float u_sx;        // scale X
+uniform float u_sy;        // scale Y
+uniform float u_rot;       // rotation in radians
+uniform float u_ax;        // anchor X (normalized, 0..1)
+uniform float u_ay;        // anchor Y (normalized, 0..1)
+in vec2 v_uv;
+out vec4 o_color;
+void main() {
+  // Move origin to anchor point
+  vec2 uv = v_uv - vec2(u_ax, u_ay);
+  // Inverse rotation
+  float c = cos(-u_rot);
+  float s = sin(-u_rot);
+  uv = vec2(c * uv.x - s * uv.y, s * uv.x + c * uv.y);
+  // Inverse scale
+  uv = uv / vec2(u_sx, u_sy);
+  // Inverse translation (translate is applied in screen space, not texture space)
+  uv = uv + vec2(u_ax, u_ay) - vec2(u_tx, u_ty);
+  // Out-of-bounds → transparent black
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+    o_color = vec4(0.0);
+    return;
+  }
+  o_color = texture(u_tex, uv);
+}`;
+
+// 3D LUT — samples a TEXTURE_3D with GPU trilinear interpolation.
+// The coordinate scaling avoids clamping artifacts at LUT edges.
+const FRAG_LUT = /* glsl */ `#version 300 es
+precision mediump float;
+uniform sampler2D u_tex;
+uniform sampler3D u_lut;
+uniform float u_opacity;
+uniform float u_lut_size;  // LUT dimension N
+in vec2 v_uv;
+out vec4 o_color;
+void main() {
+  vec4 col = texture(u_tex, v_uv);
+  // Scale input to account for LUT edge interpolation (avoids clamping artifacts)
+  float scale = (u_lut_size - 1.0) / u_lut_size;
+  float offset = 0.5 / u_lut_size;
+  vec3 lutCoord = col.rgb * scale + offset;
+  vec3 graded = texture(u_lut, lutCoord).rgb;
+  o_color = vec4(mix(col.rgb, graded, u_opacity), col.a);
+}`;
+
 // ── Internal types ────────────────────────────────────────────────────────────
 
 interface Program {
@@ -241,9 +354,22 @@ export class EffectChain {
   private width: number;
   private height: number;
 
-  constructor(width: number, height: number) {
+  /** True when EXT_color_buffer_float is available — enables RGBA16F FBO textures. */
+  private useFloat16: boolean;
+  /** True when OES_texture_float_linear is available — enables LINEAR filter on TEXTURE_3D. */
+  private hasFloatLinear: boolean;
+
+  /** Cache of uploaded LUT 3D textures, keyed by Float32Array reference. */
+  private lutTexCache: Map<Float32Array, WebGLTexture> = new Map();
+  /** Tracks whether the NEAREST-filter warning has been fired (fire once per instance). */
+  private lutNearestWarnFired = false;
+
+  private onWarning?: (msg: string) => void;
+
+  constructor(width: number, height: number, onWarning?: (msg: string) => void) {
     this.width  = width;
     this.height = height;
+    this.onWarning = onWarning;
     this.canvas = new OffscreenCanvas(width, height);
     const gl = this.canvas.getContext('webgl2', {
       alpha: false,
@@ -252,6 +378,14 @@ export class EffectChain {
     });
     if (!gl) throw new Error('WebGL2 is not available in this browser.');
     this.gl = gl;
+
+    // Check float extension availability (both enables the extension AND tests presence)
+    this.useFloat16     = !!gl.getExtension('EXT_color_buffer_float');
+    this.hasFloatLinear = !!gl.getExtension('OES_texture_float_linear');
+
+    if (!this.useFloat16) {
+      this.onWarning?.('GPU limited: some effects may show banding');
+    }
 
     this.sourceTex = this.mkTex();
     this.fbo       = this.mkFBOPair();
@@ -268,6 +402,10 @@ export class EffectChain {
       ['u_strength','u_midpoint','u_roundness','u_feather','u_aspect']);
     this.buildProgram('crop',         VERT, FRAG_CROP,
       ['u_left','u_right','u_top','u_bottom']);
+    this.buildProgram('transform',    VERT, FRAG_TRANSFORM,
+      ['u_tx','u_ty','u_sx','u_sy','u_rot','u_ax','u_ay']);
+    this.buildProgram('lut',          VERT, FRAG_LUT,
+      ['u_lut','u_opacity','u_lut_size']);
   }
 
   // ── Public API ───────────────────────────────────────────────────────────
@@ -293,7 +431,7 @@ export class EffectChain {
     gl.bindTexture(gl.TEXTURE_2D, this.sourceTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
 
-    const enabledEffects = effects.filter(e => e.enabled);
+    const enabledEffects = filterEnabledEffects(effects);
 
     if (enabledEffects.length === 0) {
       // Fast path: blit source directly to canvas (null = default framebuffer)
@@ -349,6 +487,12 @@ export class EffectChain {
     gl.deleteFramebuffer(this.fbo.fbo[1]);
     gl.deleteTexture(this.scratch.tex);
     gl.deleteFramebuffer(this.scratch.fbo);
+
+    // Clean up cached LUT 3D textures
+    for (const tex of this.lutTexCache.values()) {
+      gl.deleteTexture(tex);
+    }
+    this.lutTexCache.clear();
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────
@@ -414,10 +558,83 @@ export class EffectChain {
         });
         break;
       }
+      case 'transform': {
+        const t = p as TransformParams;
+        const uniforms = normalizeTransformUniforms(t, this.width, this.height);
+        this.runPass('transform', readTex, writeFBO, uniforms);
+        break;
+      }
+      case 'lut': {
+        const lut = p as LutParams;
+        // Skip if no LUT data loaded — run identity pass-through
+        if (lut.lutData.length === 0) {
+          this.runPass('identity', readTex, writeFBO, {});
+          break;
+        }
+        const lutTex = this.uploadLut(lut.lutData, lut.size);
+        const gl = this.gl;
+        const prog = this.programs.get('lut');
+        if (!prog) break;
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, writeFBO);
+        gl.useProgram(prog.prog);
+        gl.bindVertexArray(prog.vao);
+
+        // Bind source 2D texture to unit 0
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, readTex);
+        const uTex = prog.uniforms.get('u_tex');
+        if (uTex != null) gl.uniform1i(uTex, 0);
+
+        // Bind LUT 3D texture to unit 1
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_3D, lutTex);
+        const uLut = prog.uniforms.get('u_lut');
+        if (uLut != null) gl.uniform1i(uLut, 1);
+
+        // Set float uniforms
+        const uOpacity = prog.uniforms.get('u_opacity');
+        if (uOpacity != null) gl.uniform1f(uOpacity, lut.opacity);
+        const uLutSize = prog.uniforms.get('u_lut_size');
+        if (uLutSize != null) gl.uniform1f(uLutSize, lut.size);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.bindVertexArray(null);
+        break;
+      }
       default:
-        // Unsupported / transform: pass through
+        // Unknown effect kind — pass through
         this.runPass('identity', readTex, writeFBO, {});
     }
+  }
+
+  /**
+   * Upload a LUT Float32Array as a WebGL2 TEXTURE_3D, caching by reference.
+   * Uses LINEAR filter when OES_texture_float_linear is available, NEAREST otherwise.
+   */
+  private uploadLut(lutData: Float32Array, size: number): WebGLTexture {
+    const existing = this.lutTexCache.get(lutData);
+    if (existing) return existing;
+
+    const gl = this.gl;
+    const tex = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_3D, tex);
+
+    const filter = this.hasFloatLinear ? gl.LINEAR : gl.NEAREST;
+    if (!this.hasFloatLinear && !this.lutNearestWarnFired) {
+      this.lutNearestWarnFired = true;
+      this.onWarning?.('GPU limited: LUT trilinear filter unavailable, using NEAREST (may show banding)');
+    }
+
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGB32F, size, size, size, 0, gl.RGB, gl.FLOAT, lutData);
+
+    this.lutTexCache.set(lutData, tex);
+    return tex;
   }
 
   private runPass(
@@ -522,14 +739,18 @@ export class EffectChain {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    const internalFmt = this.useFloat16 ? gl.RGBA16F  : gl.RGBA8;
+    const pixelType   = this.useFloat16 ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFmt, this.width, this.height, 0, gl.RGBA, pixelType, null);
     return tex;
   }
 
   private resizeTex(tex: WebGLTexture): void {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, this.width, this.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    const internalFmt = this.useFloat16 ? gl.RGBA16F  : gl.RGBA8;
+    const pixelType   = this.useFloat16 ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFmt, this.width, this.height, 0, gl.RGBA, pixelType, null);
   }
 
   private mkFBOPair(): FBOPair {

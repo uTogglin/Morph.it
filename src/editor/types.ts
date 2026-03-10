@@ -227,6 +227,11 @@ export function createTransformEffect(): Effect {
   return { id: crypto.randomUUID(), kind: 'transform', enabled: true, params };
 }
 
+export function createLutEffect(): Effect {
+  const params: LutParams = { lutData: new Float32Array(0), size: 0, opacity: 1.0 };
+  return { id: crypto.randomUUID(), kind: 'lut', enabled: true, params };
+}
+
 export function createCropEffect(): Effect {
   const params: CropParams = { left: 0, right: 0, top: 0, bottom: 0 };
   return { id: crypto.randomUUID(), kind: 'crop', enabled: true, params };
