@@ -619,7 +619,8 @@ body[data-tool="video"] #format-containers,
 body[data-tool="speech"] #format-containers,
 body[data-tool="summarize"] #format-containers,
 body[data-tool="ocr"] #format-containers,
-body[data-tool="pdf-editor"] #format-containers {
+body[data-tool="pdf-editor"] #format-containers,
+body[data-tool="editor"] #format-containers {
   display: none;
 }
 
@@ -649,7 +650,11 @@ body[data-tool="ocr"] #convert-button,
 body[data-tool="pdf-editor"] #file-area,
 body[data-tool="pdf-editor"] #archive-panel,
 body[data-tool="pdf-editor"] #output-tray,
-body[data-tool="pdf-editor"] #convert-button {
+body[data-tool="pdf-editor"] #convert-button,
+body[data-tool="editor"] #file-area,
+body[data-tool="editor"] #archive-panel,
+body[data-tool="editor"] #output-tray,
+body[data-tool="editor"] #convert-button {
   display: none;
 }
 
