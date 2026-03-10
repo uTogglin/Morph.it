@@ -315,9 +315,19 @@ export function initEditorPage(): void {
 
     snapshot();
 
+    // Also collect linked clip IDs so they delete together
+    const allDeleteIds = new Set(selectedIds);
+    for (const track of project.tracks) {
+      for (const clip of track.clips) {
+        if (selectedIds.has(clip.id) && clip.linkedClipId) {
+          allDeleteIds.add(clip.linkedClipId);
+        }
+      }
+    }
+
     for (const track of project.tracks) {
       track.clips = track.clips.filter((c: Clip) => {
-        if (selectedIds.has(c.id)) {
+        if (allDeleteIds.has(c.id)) {
           waveformCache?.evict(c.id);
           thumbnailCache?.evict(c.id);
           return false;
@@ -359,11 +369,49 @@ export function initEditorPage(): void {
 
     let insertAt = project.duration;
 
-    function addClips(fileList: File[], kind: 'video' | 'audio'): void {
+    // For video files: create video clip + linked audio clip on a paired track
+    function addVideoWithLinkedAudio(fileList: File[]): void {
       if (!fileList.length) return;
-      let track = project!.tracks.find((t: Track) => t.kind === kind && !t.locked);
+      // Find or create the primary (unlinked) video track
+      let videoTrack = project!.tracks.find((t: Track) => t.kind === 'video' && !t.locked && !t.linkedTrackId);
+      if (!videoTrack) {
+        videoTrack = createTrack('video');
+        project!.tracks.push(videoTrack);
+      }
+      // Find or create the paired audio track immediately below it
+      let audioTrack: Track;
+      if (videoTrack.linkedTrackId) {
+        audioTrack = project!.tracks.find((t: Track) => t.id === videoTrack!.linkedTrackId) ?? createTrack('audio');
+      } else {
+        audioTrack = createTrack('audio');
+        audioTrack.name = videoTrack.name.replace('Video', 'Audio');
+        const videoIdx = project!.tracks.indexOf(videoTrack);
+        project!.tracks.splice(videoIdx + 1, 0, audioTrack);
+        videoTrack.linkedTrackId = audioTrack.id;
+        audioTrack.linkedTrackId = videoTrack.id;
+      }
+      for (const file of fileList) {
+        const dur       = durationMap.get(file) ?? 60;
+        const videoClip = createClip(file, videoTrack!.id, 0, dur, insertAt);
+        const audioClip = createClip(file, audioTrack.id,  0, dur, insertAt);
+        videoClip.linkedClipId = audioClip.id;
+        audioClip.linkedClipId = videoClip.id;
+        videoTrack!.clips.push(videoClip);
+        audioTrack.clips.push(audioClip);
+        insertAt += dur;
+        if (waveformCache) {
+          waveformCache.requestDecode(audioClip.id, file, () => {
+            if (tlRenderer && engine) tlRenderer.render(engine.time);
+          });
+        }
+      }
+    }
+
+    function addAudioClips(fileList: File[]): void {
+      if (!fileList.length) return;
+      let track = project!.tracks.find((t: Track) => t.kind === 'audio' && !t.locked && !t.linkedTrackId);
       if (!track) {
-        track = createTrack(kind);
+        track = createTrack('audio');
         project!.tracks.push(track);
       }
       for (const file of fileList) {
@@ -371,7 +419,7 @@ export function initEditorPage(): void {
         const clip = createClip(file, track!.id, 0, dur, insertAt);
         track!.clips.push(clip);
         insertAt += dur;
-        if (kind === 'audio' && waveformCache) {
+        if (waveformCache) {
           waveformCache.requestDecode(clip.id, file, () => {
             if (tlRenderer && engine) tlRenderer.render(engine.time);
           });
@@ -379,8 +427,8 @@ export function initEditorPage(): void {
       }
     }
 
-    addClips(videoFiles, 'video');
-    addClips(audioFiles, 'audio');
+    addVideoWithLinkedAudio(videoFiles);
+    addAudioClips(audioFiles);
 
     project.duration   = recomputeDuration(project);
     project.modifiedAt = Date.now();

@@ -34,10 +34,12 @@ type HitKind =
 
 type DragMode =
   | { mode: 'seek' }
-  | { mode: 'moveClip';       clip: Clip; trackIndex: number; originTimelineStart: number; originPx: number }
-  | { mode: 'trimLeft';       clip: Clip; originSourceStart: number; originTimelineStart: number; originPx: number }
-  | { mode: 'trimRight';      clip: Clip; originSourceEnd: number; originPx: number }
-  | { mode: 'scrollCanvas';   originScrollX: number; originScrollY: number; originPx: number; originPy: number };
+  | { mode: 'moveClip';       clip: Clip; linkedClip: Clip | null; trackIndex: number; originTimelineStart: number; originPx: number }
+  | { mode: 'trimLeft';       clip: Clip; linkedClip: Clip | null; originSourceStart: number; originTimelineStart: number; originPx: number }
+  | { mode: 'trimRight';      clip: Clip; linkedClip: Clip | null; originSourceEnd: number; originPx: number }
+  | { mode: 'scrollCanvas';   originScrollX: number; originScrollY: number; originPx: number; originPy: number }
+  | { mode: 'scrollbarH';     originScrollX: number; originPx: number; scrollPerPx: number }
+  | { mode: 'scrollbarV';     originScrollY: number; originPy: number; scrollPerPx: number };
 
 // ── Callbacks ─────────────────────────────────────────────────────────────────
 
@@ -162,6 +164,56 @@ export class TimelineController {
     return RULER_HEIGHT + trackIndex * TRACK_HEIGHT - this.state.scrollY;
   }
 
+  // ── Linked clip helper ──────────────────────────────────────────────────────
+
+  private findLinkedClip(clip: Clip): Clip | null {
+    if (!this.project || !clip.linkedClipId) return null;
+    for (const track of this.project.tracks) {
+      const found = track.clips.find(c => c.id === clip.linkedClipId);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  // ── Scrollbar geometry ──────────────────────────────────────────────────────
+
+  private getScrollbarGeometry(): {
+    hThumb: { x: number; y: number; w: number; scrollPerPx: number } | null;
+    vThumb: { x: number; y: number; h: number; scrollPerPx: number } | null;
+  } {
+    if (!this.project) return { hThumb: null, vThumb: null };
+    const cssW     = this.canvas.clientWidth;
+    const cssH     = this.canvas.clientHeight;
+    const contentW = cssW - TRACK_HEADER_WIDTH;
+    const contentH = cssH - RULER_HEIGHT;
+    if (contentW <= 0 || contentH <= 0) return { hThumb: null, vThumb: null };
+
+    const totalSec  = Math.max(this.project.duration, this.state.scrollX + contentW / this.state.zoom);
+    const totalPxW  = totalSec * this.state.zoom;
+    const totalPxH  = this.project.tracks.length * TRACK_HEIGHT;
+    const minThumb  = 20;
+
+    let hThumb = null;
+    if (totalPxW > contentW) {
+      const thumbW      = Math.max(minThumb, contentW * (contentW / totalPxW));
+      const scrollRatio = (this.state.scrollX * this.state.zoom) / (totalPxW - contentW);
+      const thumbX      = TRACK_HEADER_WIDTH + scrollRatio * (contentW - thumbW);
+      const scrollPerPx = (totalPxW - contentW) / (contentW - thumbW) / this.state.zoom;
+      hThumb = { x: thumbX, y: cssH - 12, w: thumbW, scrollPerPx };
+    }
+
+    let vThumb = null;
+    if (totalPxH > contentH) {
+      const thumbH      = Math.max(minThumb, contentH * (contentH / totalPxH));
+      const scrollRatio = this.state.scrollY / (totalPxH - contentH);
+      const thumbY      = RULER_HEIGHT + scrollRatio * (contentH - thumbH);
+      const scrollPerPx = (totalPxH - contentH) / (contentH - thumbH);
+      vThumb = { x: cssW - 12, y: thumbY, h: thumbH, scrollPerPx };
+    }
+
+    return { hThumb, vThumb };
+  }
+
   // ── Hit testing ─────────────────────────────────────────────────────────────
 
   hitTest(px: number, py: number): HitKind {
@@ -270,9 +322,27 @@ export class TimelineController {
     this.canvas.setPointerCapture(e.pointerId);
 
     const { px, py } = this.getCanvasPos(e);
-    const hit = this.hitTest(px, py);
     this.accumulatedDx = 0;
     this.accumulatedDy = 0;
+
+    // Check scrollbar zones before normal hit testing
+    const cssH = this.canvas.clientHeight;
+    const cssW = this.canvas.clientWidth;
+    const { hThumb, vThumb } = this.getScrollbarGeometry();
+    if (hThumb && py >= cssH - 16 && px >= TRACK_HEADER_WIDTH) {
+      if (px >= hThumb.x && px <= hThumb.x + hThumb.w) {
+        this.drag = { mode: 'scrollbarH', originScrollX: this.state.scrollX, originPx: px, scrollPerPx: hThumb.scrollPerPx };
+      }
+      return;
+    }
+    if (vThumb && px >= cssW - 16 && py >= RULER_HEIGHT) {
+      if (py >= vThumb.y && py <= vThumb.y + vThumb.h) {
+        this.drag = { mode: 'scrollbarV', originScrollY: this.state.scrollY, originPy: py, scrollPerPx: vThumb.scrollPerPx };
+      }
+      return;
+    }
+
+    const hit = this.hitTest(px, py);
 
     switch (hit.kind) {
       case 'ruler': {
@@ -303,6 +373,7 @@ export class TimelineController {
         this.drag = {
           mode: 'moveClip',
           clip: hit.clip,
+          linkedClip: this.findLinkedClip(hit.clip),
           trackIndex: hit.trackIndex,
           originTimelineStart: hit.clip.timelineStart,
           originPx: px,
@@ -316,6 +387,7 @@ export class TimelineController {
         this.drag = {
           mode: 'trimLeft',
           clip: hit.clip,
+          linkedClip: this.findLinkedClip(hit.clip),
           originSourceStart: hit.clip.sourceStart,
           originTimelineStart: hit.clip.timelineStart,
           originPx: px,
@@ -329,6 +401,7 @@ export class TimelineController {
         this.drag = {
           mode: 'trimRight',
           clip: hit.clip,
+          linkedClip: this.findLinkedClip(hit.clip),
           originSourceEnd: hit.clip.sourceEnd,
           originPx: px,
         };
@@ -393,6 +466,7 @@ export class TimelineController {
         newStart        = Math.max(0, newStart);
         newStart        = this.snap(newStart, this.drag.clip.id);
         this.drag.clip.timelineStart = newStart;
+        if (this.drag.linkedClip) this.drag.linkedClip.timelineStart = newStart;
         this.callbacks.onChange?.();
         break;
       }
@@ -421,6 +495,10 @@ export class TimelineController {
 
         this.drag.clip.sourceStart   = newSrcStart;
         this.drag.clip.timelineStart = newTlStart;
+        if (this.drag.linkedClip) {
+          this.drag.linkedClip.sourceStart   = newSrcStart;
+          this.drag.linkedClip.timelineStart = newTlStart;
+        }
         this.callbacks.onChange?.();
         break;
       }
@@ -440,6 +518,21 @@ export class TimelineController {
         newSrcEnd          = Math.max(newSrcEnd, minSrcEnd);
 
         this.drag.clip.sourceEnd = newSrcEnd;
+        if (this.drag.linkedClip) this.drag.linkedClip.sourceEnd = newSrcEnd;
+        this.callbacks.onChange?.();
+        break;
+      }
+
+      case 'scrollbarH': {
+        const { px } = this.getCanvasPos(e);
+        this.state.scrollX = Math.max(0, this.drag.originScrollX + (px - this.drag.originPx) * this.drag.scrollPerPx);
+        this.callbacks.onChange?.();
+        break;
+      }
+
+      case 'scrollbarV': {
+        const { py } = this.getCanvasPos(e);
+        this.state.scrollY = Math.max(0, this.drag.originScrollY + (py - this.drag.originPy) * this.drag.scrollPerPx);
         this.callbacks.onChange?.();
         break;
       }
@@ -508,12 +601,12 @@ export class TimelineController {
       this.state.scrollX = Math.max(0, this.state.scrollX);
       this.callbacks.onZoomChange?.(newZoom);
     } else if (e.shiftKey) {
-      // Horizontal scroll
-      const deltaSeconds     = e.deltaY / this.state.zoom;
-      this.state.scrollX     = Math.max(0, this.state.scrollX + deltaSeconds);
-    } else {
-      // Vertical scroll
+      // Shift+wheel → vertical scroll
       this.state.scrollY = Math.max(0, this.state.scrollY + e.deltaY);
+    } else {
+      // Plain wheel → horizontal scroll (natural for timeline)
+      const deltaSeconds = e.deltaY / this.state.zoom;
+      this.state.scrollX = Math.max(0, this.state.scrollX + deltaSeconds);
     }
 
     this.callbacks.onChange?.();

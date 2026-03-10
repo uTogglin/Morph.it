@@ -201,6 +201,30 @@ export class TimelineRenderer {
     ctx.fillStyle = COLOR_BG_HEADER_BORDER;
     ctx.fillRect(TRACK_HEADER_WIDTH - 1, 0, 1, cssH);
 
+    // Draw link brackets connecting adjacent paired tracks
+    for (let i = 0; i < project.tracks.length - 1; i++) {
+      const t1 = project.tracks[i];
+      const t2 = project.tracks[i + 1];
+      if (t1.linkedTrackId !== t2.id && t2.linkedTrackId !== t1.id) continue;
+      const y1 = RULER_HEIGHT + i * TRACK_HEIGHT - state.scrollY;
+      const y2 = y1 + TRACK_HEIGHT * 2;
+      if (y2 < RULER_HEIGHT || y1 > cssH) continue;
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.moveTo(4, y1 + 6);
+      ctx.lineTo(4, y2 - 6);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(4, y1 + 6);
+      ctx.lineTo(8, y1 + 6);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(4, y2 - 6);
+      ctx.lineTo(8, y2 - 6);
+      ctx.stroke();
+    }
+
     for (let i = 0; i < project.tracks.length; i++) {
       const track = project.tracks[i];
       const y     = RULER_HEIGHT + i * TRACK_HEIGHT - state.scrollY;
@@ -214,8 +238,10 @@ export class TimelineRenderer {
       ctx.font         = '12px system-ui, sans-serif';
       ctx.textBaseline = 'middle';
       ctx.textAlign    = 'left';
-      const maxNameWidth = TRACK_HEADER_WIDTH - 56;
-      ctx.fillText(this.truncateText(ctx, track.name, maxNameWidth), 8, y + TRACK_HEIGHT * 0.35);
+      // Indent linked audio track labels slightly
+      const labelX       = track.linkedTrackId && track.kind === 'audio' ? 14 : 8;
+      const maxNameWidth = TRACK_HEADER_WIDTH - 56 - (labelX - 8);
+      ctx.fillText(this.truncateText(ctx, track.name, maxNameWidth), labelX, y + TRACK_HEIGHT * 0.35);
 
       // Mute / Solo indicators
       const iconY = y + TRACK_HEIGHT * 0.68;

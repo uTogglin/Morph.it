@@ -30,6 +30,7 @@ export interface Track {
   locked: boolean;
   volume: number;          // 0.0–2.0  (1.0 = unity)
   pan: number;             // -1.0 (L) to 1.0 (R), audio tracks only
+  linkedTrackId?: string;  // ID of a paired track (video↔audio)
   clips: Clip[];
 }
 
@@ -45,6 +46,7 @@ export interface Clip {
   speed: number;           // playback speed multiplier (1.0 = normal)
   audioGain: number;       // 0.0–2.0 per-clip audio gain
   effects: Effect[];
+  linkedClipId?: string;   // ID of a paired clip on the linked track
 }
 
 /** How long the clip occupies on the timeline, accounting for speed. */
