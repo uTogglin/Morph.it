@@ -24,6 +24,7 @@ import {
   createSharpenEffect,
   createVignetteEffect,
   createTransformEffect,
+  createCropEffect,
 } from './types.ts';
 import { loadCubeLutFile } from './LutParser.ts';
 
@@ -88,6 +89,13 @@ const TRANSFORM_PARAMS: Record<string, ParamMeta> = {
   rotation: { label: 'Rotation',  min: -180,  max: 180,  step: 0.5  },
   anchorX:  { label: 'Anchor X',  min: 0,     max: 1,    step: 0.01 },
   anchorY:  { label: 'Anchor Y',  min: 0,     max: 1,    step: 0.01 },
+};
+
+const CROP_PARAMS: Record<string, ParamMeta> = {
+  left:   { label: 'Left',   min: 0, max: 1, step: 0.001 },
+  right:  { label: 'Right',  min: 0, max: 1, step: 0.001 },
+  top:    { label: 'Top',    min: 0, max: 1, step: 0.001 },
+  bottom: { label: 'Bottom', min: 0, max: 1, step: 0.001 },
 };
 
 // ── Helper builders ───────────────────────────────────────────────────────────
@@ -242,6 +250,7 @@ const EFFECT_LABELS: Record<string, string> = {
   sharpen:      'Sharpen',
   vignette:     'Vignette',
   transform:    'Transform',
+  crop:         'Crop',
 };
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -250,6 +259,7 @@ export class ColorGradingPanel {
   private container: HTMLElement;
   private onChange: PanelChangeCallback;
   private _clip: Clip | null = null;
+  private _trackKind: 'video' | 'audio' = 'video';
 
   constructor(container: HTMLElement, onChange: PanelChangeCallback) {
     this.container = container;
@@ -257,8 +267,9 @@ export class ColorGradingPanel {
   }
 
   /** Render the panel for the given clip (or show empty state). */
-  render(clip: Clip | null): void {
+  render(clip: Clip | null, trackKind: 'video' | 'audio' = 'video'): void {
     this._clip = clip;
+    this._trackKind = trackKind;
     this.container.innerHTML = '';
 
     if (!clip) {
@@ -270,7 +281,7 @@ export class ColorGradingPanel {
     }
 
     // ── Clip Properties card ─────────────────────────────────────────────────
-    this.container.appendChild(this.buildPropertiesCard(clip));
+    this.container.appendChild(this.buildPropertiesCard(clip, trackKind));
 
     // ── "Add Effect" section ─────────────────────────────────────────────────
     const addRow = document.createElement('div');
@@ -301,6 +312,7 @@ export class ColorGradingPanel {
         case 'sharpen':      effect = createSharpenEffect();      break;
         case 'vignette':     effect = createVignetteEffect();     break;
         case 'transform':    effect = createTransformEffect();    break;
+        case 'crop':         effect = createCropEffect();         break;
         case 'lut':
           effect = {
             id: crypto.randomUUID(),
@@ -335,7 +347,7 @@ export class ColorGradingPanel {
 
   // ── Private: build clip properties card ──────────────────────────────────
 
-  private buildPropertiesCard(clip: Clip): HTMLElement {
+  private buildPropertiesCard(clip: Clip, trackKind: 'video' | 'audio' = 'video'): HTMLElement {
     const card = document.createElement('div');
     card.className = 'cgp-card cgp-props-card';
 
@@ -380,15 +392,17 @@ export class ColorGradingPanel {
       )
     );
 
-    // Audio gain slider
-    body.appendChild(
-      makeSliderRow(
-        clip as unknown as Record<string, unknown>,
-        'audioGain',
-        { label: 'Audio Gain', min: 0.0, max: 2.0, step: 0.01 },
-        onPropChange,
-      )
-    );
+    // Audio gain slider — only show for audio clips (video clips have a linked audio clip)
+    if (trackKind === 'audio') {
+      body.appendChild(
+        makeSliderRow(
+          clip as unknown as Record<string, unknown>,
+          'audioGain',
+          { label: 'Audio Gain', min: 0.0, max: 2.0, step: 0.01 },
+          onPropChange,
+        )
+      );
+    }
 
     // Collapse logic
     let collapsed = false;
@@ -475,6 +489,9 @@ export class ColorGradingPanel {
         break;
       case 'transform':
         body.appendChild(buildGenericSection(effect, TRANSFORM_PARAMS, onParamChange));
+        break;
+      case 'crop':
+        body.appendChild(buildGenericSection(effect, CROP_PARAMS, onParamChange));
         break;
     }
 

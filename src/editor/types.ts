@@ -71,7 +71,7 @@ export function clipSourceTime(clip: Clip, timelineT: number): number {
 
 // ── Effects ───────────────────────────────────────────────────────────────────
 
-export type EffectKind = 'colorCorrect' | 'lut' | 'blur' | 'sharpen' | 'vignette' | 'transform';
+export type EffectKind = 'colorCorrect' | 'lut' | 'blur' | 'sharpen' | 'vignette' | 'transform' | 'crop';
 
 export interface Effect {
   id: string;
@@ -120,6 +120,14 @@ export interface VignetteParams {
   feather: number;         // 0.0–1.0
 }
 
+// Crop (all values 0.0–1.0, fraction of frame to remove from each edge)
+export interface CropParams {
+  left:   number;
+  right:  number;
+  top:    number;
+  bottom: number;
+}
+
 // 2D transform
 export interface TransformParams {
   x: number;               // pixels offset
@@ -137,7 +145,8 @@ export type EffectParams =
   | BlurParams
   | SharpenParams
   | VignetteParams
-  | TransformParams;
+  | TransformParams
+  | CropParams;
 
 // ── Factory functions ─────────────────────────────────────────────────────────
 
@@ -216,6 +225,11 @@ export function createVignetteEffect(): Effect {
 export function createTransformEffect(): Effect {
   const params: TransformParams = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, anchorX: 0.5, anchorY: 0.5 };
   return { id: crypto.randomUUID(), kind: 'transform', enabled: true, params };
+}
+
+export function createCropEffect(): Effect {
+  const params: CropParams = { left: 0, right: 0, top: 0, bottom: 0 };
+  return { id: crypto.randomUUID(), kind: 'crop', enabled: true, params };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

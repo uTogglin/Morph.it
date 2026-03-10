@@ -11,7 +11,7 @@
 //   chain.dispose();
 
 import type {
-  Effect, ColorCorrectParams, BlurParams, SharpenParams, VignetteParams,
+  Effect, ColorCorrectParams, BlurParams, SharpenParams, VignetteParams, CropParams,
 } from './types.ts';
 
 // ── GLSL sources ──────────────────────────────────────────────────────────────
@@ -190,6 +190,25 @@ void main() {
   o_color = vec4(col.rgb * vig, col.a);
 }`;
 
+// Crop — masks edges to black using normalized 0-1 fractions per side
+const FRAG_CROP = /* glsl */ `#version 300 es
+precision mediump float;
+uniform sampler2D u_tex;
+uniform float u_left;
+uniform float u_right;
+uniform float u_top;
+uniform float u_bottom;
+in vec2 v_uv;
+out vec4 o_color;
+void main() {
+  if (v_uv.x < u_left || v_uv.x > 1.0 - u_right ||
+      v_uv.y < u_top  || v_uv.y > 1.0 - u_bottom) {
+    o_color = vec4(0.0, 0.0, 0.0, 1.0);
+  } else {
+    o_color = texture(u_tex, v_uv);
+  }
+}`;
+
 // ── Internal types ────────────────────────────────────────────────────────────
 
 interface Program {
@@ -247,6 +266,8 @@ export class EffectChain {
     this.buildProgram('sharpen',      VERT, FRAG_SHARPEN,       ['u_amount','u_texel']);
     this.buildProgram('vignette',     VERT, FRAG_VIGNETTE,
       ['u_strength','u_midpoint','u_roundness','u_feather','u_aspect']);
+    this.buildProgram('crop',         VERT, FRAG_CROP,
+      ['u_left','u_right','u_top','u_bottom']);
   }
 
   // ── Public API ───────────────────────────────────────────────────────────
@@ -380,6 +401,16 @@ export class EffectChain {
           u_roundness: v.roundness,
           u_feather:   v.feather,
           u_aspect:    this.width / this.height,
+        });
+        break;
+      }
+      case 'crop': {
+        const c = p as CropParams;
+        this.runPass('crop', readTex, writeFBO, {
+          u_left:   c.left,
+          u_right:  c.right,
+          u_top:    c.top,
+          u_bottom: c.bottom,
         });
         break;
       }

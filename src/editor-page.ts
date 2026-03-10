@@ -7,6 +7,7 @@ import {
   createClip,
   recomputeDuration,
   cloneProject,
+  clipTimelineDuration,
   PlaybackEngine,
   ColorGradingPanel,
   Exporter,
@@ -104,7 +105,10 @@ export function initEditorPage(): void {
   const exportProgress = el<HTMLDivElement>('editor-export-progress');
   const exportBar      = el<HTMLDivElement>('editor-export-bar');
   const exportPct      = el<HTMLSpanElement>('editor-export-pct');
-  const exportCancelBtn = el<HTMLButtonElement>('editor-export-cancel-btn');
+  const exportCancelBtn  = el<HTMLButtonElement>('editor-export-cancel-btn');
+  const keybindsBtn      = el<HTMLButtonElement>('editor-keybinds-btn');
+  const keybindsModal    = el<HTMLDivElement>('editor-keybinds-modal');
+  const keybindsClose    = el<HTMLButtonElement>('editor-keybinds-close');
 
   const playBtn        = el<HTMLButtonElement>('editor-play-btn');
   const pauseBtn       = el<HTMLButtonElement>('editor-pause-btn');
@@ -302,8 +306,88 @@ export function initEditorPage(): void {
     if (found.track.kind === 'audio') {
       audioPanel?.render(found.track);
     } else {
-      gradingPanel?.render(found.clip);
+      gradingPanel?.render(found.clip, 'video');
     }
+  }
+
+  // ── Split clip at playhead ────────────────────────────────────────────────
+
+  function splitClipAtPlayhead(): void {
+    if (!project || !tlController || !engine) return;
+    const selectedIds = tlController.state.selectedClipIds;
+    if (selectedIds.size === 0) return;
+
+    const playhead = engine.time;
+    let didSplit = false;
+
+    snapshot();
+
+    // Collect clips to split (including their linked counterparts)
+    const toSplit = new Set<string>(selectedIds);
+    for (const track of project.tracks) {
+      for (const clip of track.clips) {
+        if (selectedIds.has(clip.id) && clip.linkedClipId) {
+          toSplit.add(clip.linkedClipId);
+        }
+      }
+    }
+
+    // Map original clip id → [left new id, right new id] for cross-link patching
+    const splitMap = new Map<string, [string, string]>();
+
+    for (const track of project.tracks) {
+      const newClips: Clip[] = [];
+      for (const clip of track.clips) {
+        if (!toSplit.has(clip.id)) { newClips.push(clip); continue; }
+
+        const clipEnd = clip.timelineStart + clipTimelineDuration(clip);
+        if (playhead <= clip.timelineStart || playhead >= clipEnd) {
+          newClips.push(clip);
+          continue;
+        }
+
+        const elapsed = playhead - clip.timelineStart;
+        const splitSourceTime = clip.speed >= 0
+          ? clip.sourceStart + elapsed * clip.speed
+          : clip.sourceEnd   + elapsed * clip.speed;
+
+        const leftId  = crypto.randomUUID();
+        const rightId = crypto.randomUUID();
+
+        const left: Clip  = { ...clip, id: leftId,  sourceEnd:   splitSourceTime, timelineStart: clip.timelineStart, linkedClipId: undefined };
+        const right: Clip = { ...clip, id: rightId, sourceStart: splitSourceTime, timelineStart: playhead,           linkedClipId: undefined };
+
+        newClips.push(left, right);
+        splitMap.set(clip.id, [leftId, rightId]);
+        didSplit = true;
+      }
+      track.clips = newClips;
+    }
+
+    // Patch linkedClipId: each new half links to the matching half of its pair
+    for (const track of project.tracks) {
+      for (const clip of track.clips) {
+        if (!clip.linkedClipId) continue;
+        const pair = splitMap.get(clip.linkedClipId);
+        if (!pair) continue;
+        const [leftId, rightId] = pair;
+        clip.linkedClipId = clip.timelineStart >= playhead ? rightId : leftId;
+      }
+    }
+
+    if (!didSplit) return;
+
+    project.duration   = recomputeDuration(project);
+    project.modifiedAt = Date.now();
+
+    tlController.selectClips(new Set());
+    engine.updateProject(project);
+    tlController.setProject(project);
+    if (tlRenderer) {
+      tlRenderer.setProject(project);
+      tlRenderer.render(engine.time);
+    }
+    refreshDuration();
   }
 
   // ── Delete selected clips ─────────────────────────────────────────────────
@@ -525,6 +609,28 @@ export function initEditorPage(): void {
       return;
     }
 
+    // ? = show keybindings
+    if (e.key === '?') {
+      e.preventDefault();
+      keybindsModal.classList.toggle('hidden');
+      return;
+    }
+
+    // Escape = close modal
+    if (e.key === 'Escape') {
+      if (!keybindsModal.classList.contains('hidden')) {
+        keybindsModal.classList.add('hidden');
+        return;
+      }
+    }
+
+    // S = split selected clip(s) at playhead
+    if (e.key === 's' || e.key === 'S') {
+      e.preventDefault();
+      splitClipAtPlayhead();
+      return;
+    }
+
     // Delete / Backspace = remove selected clips
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
@@ -588,6 +694,10 @@ export function initEditorPage(): void {
   saveBtn.addEventListener('click',      saveProject);
   exportBtn.addEventListener('click',    () => { void runExport(); });
   exportCancelBtn.addEventListener('click', () => { exportAbort?.abort(); });
+
+  keybindsBtn.addEventListener('click',   () => keybindsModal.classList.remove('hidden'));
+  keybindsClose.addEventListener('click', () => keybindsModal.classList.add('hidden'));
+  keybindsModal.addEventListener('click', (e) => { if (e.target === keybindsModal) keybindsModal.classList.add('hidden'); });
 
   playBtn.addEventListener('click',  () => { void engine?.play(); });
   pauseBtn.addEventListener('click', () => { engine?.pause(); });

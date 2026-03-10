@@ -1640,6 +1640,9 @@
           <span class="editor-time-sep">/</span>
           <span id="editor-duration">00:00.0</span>
         </div>
+        <button id="editor-keybinds-btn" class="editor-btn editor-btn-icon" title="Keyboard shortcuts (?)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </button>
       </div>
 
       <!-- Main workspace: preview + timeline side by side -->
@@ -1689,6 +1692,47 @@
         </div>
       </aside>
 
+    </div>
+
+    <!-- Keybindings modal -->
+    <div id="editor-keybinds-modal" class="editor-modal-overlay hidden" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+      <div class="editor-modal">
+        <div class="editor-modal-header">
+          <span class="editor-modal-title">Keyboard Shortcuts</span>
+          <button id="editor-keybinds-close" class="editor-modal-close" title="Close">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="editor-modal-body">
+          <table class="editor-keybinds-table">
+            <thead><tr><th>Action</th><th>Key</th></tr></thead>
+            <tbody>
+              <tr><td>Play / Pause</td><td><kbd>Space</kbd></td></tr>
+              <tr><td>Split clip at playhead</td><td><kbd>S</kbd></td></tr>
+              <tr><td>Delete selected clip(s)</td><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td></tr>
+              <tr><td>Step back 1 frame</td><td><kbd>←</kbd></td></tr>
+              <tr><td>Step forward 1 frame</td><td><kbd>→</kbd></td></tr>
+              <tr><td>Step back 10 frames</td><td><kbd>Shift</kbd> + <kbd>←</kbd></td></tr>
+              <tr><td>Step forward 10 frames</td><td><kbd>Shift</kbd> + <kbd>→</kbd></td></tr>
+              <tr><td>Undo</td><td><kbd>Ctrl</kbd> + <kbd>Z</kbd></td></tr>
+              <tr><td>Redo</td><td><kbd>Ctrl</kbd> + <kbd>Y</kbd> / <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></td></tr>
+              <tr><td>Show shortcuts</td><td><kbd>?</kbd></td></tr>
+            </tbody>
+          </table>
+          <div class="editor-keybinds-section">Timeline</div>
+          <table class="editor-keybinds-table">
+            <tbody>
+              <tr><td>Seek to position</td><td>Click anywhere on timeline</td></tr>
+              <tr><td>Zoom in / out</td><td><kbd>Ctrl</kbd> + Scroll</td></tr>
+              <tr><td>Scroll horizontally</td><td>Scroll wheel</td></tr>
+              <tr><td>Scroll vertically</td><td><kbd>Shift</kbd> + Scroll</td></tr>
+              <tr><td>Trim clip start / end</td><td>Drag clip edge handles</td></tr>
+              <tr><td>Move clip</td><td>Drag clip body</td></tr>
+              <tr><td>Multi-select</td><td><kbd>Shift</kbd> + Click</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- Export progress overlay (hidden until export starts) -->

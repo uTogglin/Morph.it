@@ -357,6 +357,10 @@ export class TimelineController {
 
       case 'clipBody': {
         this.callbacks.onBeforeChange?.();
+        // Seek playhead to clicked position
+        const clipClickTime = Math.max(0, this.timeAt(px));
+        this.state.playheadTime = clipClickTime;
+        this.callbacks.onSeek?.(clipClickTime);
         // Toggle/set selection
         if (e.shiftKey) {
           const next = new Set(this.state.selectedClipIds);
@@ -415,13 +419,12 @@ export class TimelineController {
           this.state.selectedClipIds = new Set();
           this.callbacks.onSelectionChanged?.(new Set());
         }
-        this.drag = {
-          mode: 'scrollCanvas',
-          originScrollX: this.state.scrollX,
-          originScrollY: this.state.scrollY,
-          originPx: px,
-          originPy: py,
-        };
+        // Seek to clicked time (same as ruler)
+        const t = Math.max(0, this.timeAt(px));
+        this.state.playheadTime = t;
+        this.callbacks.onSeek?.(t);
+        this.drag = { mode: 'seek' };
+        this.tryPointerLock();
         this.callbacks.onChange?.();
         break;
       }
