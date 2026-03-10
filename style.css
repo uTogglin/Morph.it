@@ -4890,30 +4890,16 @@ kbd {
   border-bottom: 1px solid var(--card-border, #3a3a50);
   margin-bottom: 8px;
 }
-.cgp-add-label {
-  font-size: 11px;
-  color: var(--text-muted, #888);
-  flex-shrink: 0;
-}
-.cgp-add-select {
-  flex: 1;
-  font-size: 11px;
-  background: var(--input-bg, #2a2a3a);
-  color: var(--text-primary, #f0f0ff);
-  border: 1px solid var(--card-border, #3a3a50);
-  border-radius: 5px;
-  padding: 3px 6px;
-  outline: none;
-}
 .cgp-add-btn {
   font-size: 11px;
-  padding: 3px 10px;
+  padding: 4px 12px;
   background: var(--accent, #7c6ef7);
   color: #fff;
   border: none;
   border-radius: 5px;
   cursor: pointer;
   white-space: nowrap;
+  width: 100%;
 }
 .cgp-add-btn:hover { filter: brightness(1.12); }
 
@@ -4938,11 +4924,29 @@ kbd {
   font-weight: 600;
   color: var(--text-primary, #f0f0ff);
 }
-.cgp-toggle {
-  width: 14px;
-  height: 14px;
+/* Drag handle */
+.cgp-drag-handle {
+  cursor: grab;
+  color: #666;
+  font-size: 12px;
+  padding: 2px 4px;
+  user-select: none;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.cgp-drag-handle:active { cursor: grabbing; }
+.cgp-dragging { opacity: 0.5; }
+.cgp-drag-over { border-top: 2px solid #4a9eff; }
+
+/* Eye toggle */
+.cgp-eye-btn {
+  background: none;
+  border: none;
   cursor: pointer;
-  accent-color: var(--accent, #7c6ef7);
+  padding: 2px;
+  color: inherit;
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
 }
 .cgp-collapse-btn,
@@ -5049,6 +5053,67 @@ kbd {
   background: var(--surface-raised, #1e1e2e);
 }
 
+/* Context menu */
+.cgp-context-menu {
+  position: fixed;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 4px 0;
+  z-index: 10000;
+  min-width: 120px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.cgp-context-item {
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #ddd;
+}
+.cgp-context-item:hover { background: #3a3a3a; }
+
+/* Categorized add menu */
+.cgp-add-menu {
+  position: fixed;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 8px 0;
+  z-index: 10000;
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.cgp-add-category {
+  padding: 4px 12px;
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.cgp-add-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 6px 16px;
+  color: #ddd;
+  cursor: pointer;
+  font-size: 13px;
+}
+.cgp-add-menu button:hover { background: #3a3a3a; }
+
+/* Card summary */
+.cgp-card-summary {
+  font-size: 11px;
+  color: #888;
+  margin-left: 4px;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── AudioTrackPanel styles (atp-*) ──────────────────────────────────────── */
 
 .atp-empty {
@@ -5127,6 +5192,38 @@ kbd {
 .atp-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-primary, #f0f0ff); }
 .atp-mute.atp-active { background: #c0392b22; color: #e74c3c; border-color: #e74c3c44; }
 .atp-solo.atp-active { background: #f4d03f22; color: #f4d03f; border-color: #f4d03f44; }
+
+/* ── Toast notifications ─────────────────────────────────────────────────── */
+
+.editor-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #333;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  animation: toast-in 0.2s ease-out;
+}
+.editor-toast button {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  line-height: 1;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 /* ── Responsive: narrow screens stack preview above timeline ── */
 @media (max-width: 860px) {

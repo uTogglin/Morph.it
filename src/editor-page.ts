@@ -16,6 +16,23 @@ import {
   type Track,
   type EngineState,
 } from './editor/index.ts';
+
+// ── Toast notification ────────────────────────────────────────────────────────
+
+export function showToast(message: string, durationMs = 5000): void {
+  const toast = document.createElement('div');
+  toast.className = 'editor-toast';
+  toast.textContent = message;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.setAttribute('aria-label', 'Dismiss');
+  closeBtn.addEventListener('click', () => toast.remove());
+  toast.appendChild(closeBtn);
+
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), durationMs);
+}
 import { AudioTrackPanel } from './editor/AudioTrackPanel.ts';
 import { WaveformCache }   from './editor/WaveformCache.ts';
 import { ThumbnailCache }  from './editor/ThumbnailCache.ts';
@@ -201,7 +218,7 @@ export function initEditorPage(): void {
     if (tlRenderer) tlRenderer.setProject(project);
     tlRenderer?.render(engine.time);
     refreshDuration();
-  });
+  }, showToast);
 
   audioPanel = new AudioTrackPanel(inspectorBody, engine.audioMixer, (trackId: string) => {
     if (!project || !engine) return;
