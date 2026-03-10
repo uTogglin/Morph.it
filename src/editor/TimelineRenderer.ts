@@ -1,5 +1,6 @@
 import type { Project, Track, Clip, AdjustmentClip } from './types.ts';
 import { clipTimelineDuration } from './types.ts';
+import type { TextClip } from './TextClip.ts';
 import {
   TRACK_HEADER_WIDTH,
   RULER_HEIGHT,
@@ -36,6 +37,8 @@ const COLOR_VOLUME_BAR_FILL  = '#4caf50';
 const COLOR_SCROLL_INDICATOR = 'rgba(255,255,255,0.2)';
 const COLOR_CLIP_ADJUSTMENT  = 'rgba(168,85,247,0.7)';   // purple for adjustment clips
 const COLOR_TRACK_ADJUSTMENT = 'rgba(168,85,247,0.08)';  // subtle purple tint for adj track row
+const COLOR_CLIP_TEXT        = 'rgba(245,158,11,0.7)';   // amber for text clips (Tailwind amber-500)
+const COLOR_TRACK_TEXT       = 'rgba(245,158,11,0.08)';  // subtle amber tint for text track row
 
 const CLIP_CORNER_RADIUS = 4;
 const HANDLE_WIDTH       = 6; // must match TimelineController
@@ -362,6 +365,12 @@ export class TimelineRenderer {
         ctx.fillRect(TRACK_HEADER_WIDTH, y, cssW - TRACK_HEADER_WIDTH, TRACK_HEIGHT);
       }
 
+      // Text tracks get a subtle amber tint overlaid on the base row color
+      if (project.tracks[i].kind === 'text') {
+        ctx.fillStyle = COLOR_TRACK_TEXT;
+        ctx.fillRect(TRACK_HEADER_WIDTH, y, cssW - TRACK_HEADER_WIDTH, TRACK_HEIGHT);
+      }
+
       ctx.fillStyle = COLOR_TRACK_BORDER;
       ctx.fillRect(TRACK_HEADER_WIDTH, y + TRACK_HEIGHT - 1, cssW - TRACK_HEADER_WIDTH, 1);
     }
@@ -397,6 +406,13 @@ export class TimelineRenderer {
       if (track.kind === 'adjustment') {
         for (const adjClip of track.adjustmentClips ?? []) {
           this.drawAdjustmentClip(adjClip, trackY, state, cssW);
+        }
+      }
+
+      // Render text clips with distinct amber styling
+      if (track.kind === 'text') {
+        for (const textClip of track.textClips ?? []) {
+          this.drawTextClip(textClip, trackY, state, cssW);
         }
       }
     }
@@ -538,6 +554,53 @@ export class TimelineRenderer {
       ctx.textAlign    = 'left';
       const label = adjClip.effects.length > 0 ? `ADJ (${adjClip.effects.length})` : 'ADJ';
       ctx.fillText(this.truncateText(ctx, label, labelW), labelX, y + h / 2);
+
+      ctx.restore();
+    }
+  }
+
+  // ── Text clip drawing ────────────────────────────────────────────────────────
+
+  private drawTextClip(
+    textClip: TextClip,
+    trackY: number,
+    state: TimelineState,
+    cssW: number,
+  ): void {
+    const { ctx } = this;
+
+    const x1 = this.xAt(textClip.timelineStart, state);
+    const x2 = this.xAt(textClip.timelineStart + textClip.duration, state);
+    const w  = x2 - x1;
+    const h  = TRACK_HEIGHT - 2;
+    const y  = trackY + 1;
+
+    if (x2 < TRACK_HEADER_WIDTH || x1 > cssW || w < 1) return;
+
+    // Clip body — solid amber base
+    ctx.fillStyle = COLOR_CLIP_TEXT;
+    this.fillRoundRect(x1, y, w, h, CLIP_CORNER_RADIUS);
+
+    // Border
+    ctx.strokeStyle = 'rgba(245,158,11,0.9)';
+    ctx.lineWidth   = 1;
+    this.strokeRoundRect(x1, y, w, h, CLIP_CORNER_RADIUS);
+
+    // Text content label
+    if (w > 24) {
+      const labelX = x1 + HANDLE_WIDTH + 4;
+      const labelW = w - HANDLE_WIDTH * 2 - 8;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(Math.max(x1 + HANDLE_WIDTH, TRACK_HEADER_WIDTH), y + 1, labelW, h - 2);
+      ctx.clip();
+
+      ctx.fillStyle    = COLOR_CLIP_LABEL;
+      ctx.font         = '11px system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign    = 'left';
+      ctx.fillText(this.truncateText(ctx, textClip.content, labelW), labelX, y + h / 2);
 
       ctx.restore();
     }

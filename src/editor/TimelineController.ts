@@ -297,6 +297,20 @@ export class TimelineController {
         check(clip.timelineStart);
         check(clip.timelineStart + clipTimelineDuration(clip));
       }
+
+      // Snap to adjustment clip edges
+      for (const adjClip of track.adjustmentClips ?? []) {
+        if (adjClip.id === excludeClipId) continue;
+        check(adjClip.timelineStart);
+        check(adjClip.timelineStart + adjClip.duration);
+      }
+
+      // Snap to text clip edges
+      for (const tc of track.textClips ?? []) {
+        if (tc.id === excludeClipId) continue;
+        check(tc.timelineStart);
+        check(tc.timelineStart + tc.duration);
+      }
     }
 
     return best;
