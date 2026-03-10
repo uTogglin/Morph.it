@@ -226,7 +226,7 @@ function buildGenericSection(
   onChange: () => void,
 ): HTMLElement {
   const wrapper = document.createElement('div');
-  const p = effect.params as Record<string, unknown>;
+  const p = effect.params as unknown as Record<string, unknown>;
   for (const [k, m] of Object.entries(meta)) {
     wrapper.appendChild(makeSliderRow(p, k, m, onChange));
   }

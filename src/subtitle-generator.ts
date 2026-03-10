@@ -1,5 +1,53 @@
 import type { FileData } from "./FormatHandler.ts";
-import { extractAudioAsWav } from "./video-editor.ts";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import type { LogEvent } from "@ffmpeg/ffmpeg";
+import { cdnUrl } from "./cdn.ts";
+
+// ── Lazy FFmpeg instance for audio extraction ─────────────────────────────────
+let wavFFmpeg: FFmpeg | null = null;
+let wavFFmpegReady: Promise<void> | null = null;
+
+async function getWavFFmpeg(): Promise<FFmpeg> {
+  if (!wavFFmpeg) wavFFmpeg = new FFmpeg();
+  if (!wavFFmpegReady) wavFFmpegReady = wavFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
+  await wavFFmpegReady;
+  return wavFFmpeg;
+}
+
+async function reloadWavFFmpeg(): Promise<FFmpeg> {
+  if (wavFFmpeg) wavFFmpeg.terminate();
+  wavFFmpeg = new FFmpeg();
+  wavFFmpegReady = wavFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
+  await wavFFmpegReady;
+  return wavFFmpeg;
+}
+
+async function wavFFExec(ff: FFmpeg, args: string[]): Promise<void> {
+  const code = await ff.exec(args);
+  if (typeof code === "number" && code !== 0) throw new Error(`FFmpeg exited with code ${code}`);
+}
+
+async function extractAudioAsWav(file: File): Promise<Uint8Array> {
+  let ff: FFmpeg;
+  try {
+    ff = await getWavFFmpeg();
+  } catch {
+    ff = await reloadWavFFmpeg();
+  }
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "mp4";
+  const tmpIn = "whisper_in." + ext;
+  const tmpOut = "whisper_out.wav";
+
+  const buf = await file.arrayBuffer();
+  await ff.writeFile(tmpIn, new Uint8Array(buf));
+  await wavFFExec(ff, ["-i", tmpIn, "-ar", "16000", "-ac", "1", "-f", "wav", tmpOut]);
+
+  const data = await ff.readFile(tmpOut);
+  const result = data instanceof Uint8Array ? data : new TextEncoder().encode(data as string);
+  await ff.deleteFile(tmpIn);
+  await ff.deleteFile(tmpOut);
+  return result;
+}
 
 // ── Whisper STT via Web Worker ──────────────────────────────────────────────
 let whisperWorker: Worker | null = null;

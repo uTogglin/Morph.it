@@ -527,5 +527,5 @@ function muxWebM(
   // ── Assemble ─────────────────────────────────────────────────────────────────
   const segmentBody = concat([info, tracks, ...clusterParts]);
   const segment     = elUnknown([0x18, 0x53, 0x80, 0x67], segmentBody);
-  return new Blob([concat([ebmlHeader, segment])], { type: 'video/webm' });
+  return new Blob([concat([ebmlHeader, segment]) as unknown as BlobPart], { type: 'video/webm' });
 }
