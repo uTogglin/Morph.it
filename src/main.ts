@@ -13,6 +13,7 @@ import { initSpeechTool } from "./speech-tool.js";
 import { initSummarizeTool } from "./summarize-tool.js";
 import { initOcrTool } from "./ocr-tool.js";
 import { initPdfEditorTool } from "./pdf-editor-tool.js";
+import { initEditorPage } from "./editor-page.js";
 import { cachedFetch, requestPersistentStorage, showCachePrompt, clearModelCache, applyHfCachePolicy, getCacheStats, clearAllSiteData } from "./cached-fetch.js";
 import { cdnFetch } from "./cdn.js";
 
@@ -448,7 +449,7 @@ function formatTimeAgo(ts: number) {
 
 // ── Home page / tool navigation ──────────────────────────────────────────────
 /** Which tool view is active, or null when on the home page */
-let activeTool: "convert" | "compress" | "image" | "speech" | "summarize" | "ocr" | "pdf-editor" | null = null;
+let activeTool: "convert" | "compress" | "image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor" | null = null;
 let ocrTool: { stopTts: () => void };
 let speechTool: { stopTts: () => void };
 
@@ -458,6 +459,7 @@ const speechPage = document.querySelector("#speech-page") as HTMLElement;
 const summarizePage = document.querySelector("#summarize-page") as HTMLElement;
 const ocrPage = document.querySelector("#ocr-page") as HTMLElement;
 const pdfEditorPage = document.querySelector("#pdf-editor-page") as HTMLElement;
+const editorPage    = document.querySelector("#editor-page")     as HTMLElement;
 
 function showHomePage() {
   // Clean up tool state when navigating away
@@ -476,11 +478,12 @@ function showHomePage() {
   summarizePage.classList.add("hidden");
   ocrPage.classList.add("hidden");
   pdfEditorPage.classList.add("hidden");
+  editorPage.classList.add("hidden");
   animatePageIn(ui.homePage);
   renderRecentFiles();
 }
 
-function showToolView(tool: "convert" | "compress" | "image" | "speech" | "summarize" | "ocr" | "pdf-editor") {
+function showToolView(tool: "convert" | "compress" | "image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor") {
   // Clean up tool state when switching away
   if (activeTool === "compress" && tool !== "compress") compressResetState();
   if (activeTool === "image" && tool !== "image") imgResetState();
@@ -498,6 +501,7 @@ function showToolView(tool: "convert" | "compress" | "image" | "speech" | "summa
   summarizePage.classList.add("hidden");
   ocrPage.classList.add("hidden");
   pdfEditorPage.classList.add("hidden");
+  editorPage.classList.add("hidden");
 
   let pageEl: HTMLElement | null = null;
   if (tool === "compress") {
@@ -527,6 +531,10 @@ function showToolView(tool: "convert" | "compress" | "image" | "speech" | "summa
   } else if (tool === "pdf-editor") {
     pdfEditorPage.classList.remove("hidden");
     pageEl = pdfEditorPage;
+  } else if (tool === "editor") {
+    editorPage.classList.remove("hidden");
+    pageEl = editorPage;
+    initEditorPage();
   } else if (tool === "convert") {
     pageEl = document.getElementById("file-area");
   }
@@ -550,7 +558,7 @@ ui.backToHome.addEventListener("click", showHomePage);
 // Home card clicks
 for (const card of document.querySelectorAll<HTMLButtonElement>(".home-card")) {
   card.addEventListener("click", () => {
-    const tool = card.dataset.tool as "convert" | "compress" | "image" | "speech" | "summarize" | "ocr" | "pdf-editor";
+    const tool = card.dataset.tool as "convert" | "compress" | "image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor";
     if (tool) showToolView(tool);
   });
 }
