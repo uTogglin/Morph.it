@@ -94,3 +94,6 @@ export { fetchFontsourceList, loadFontsourceFont } from './FontPicker.ts';
 
 export type { TextPreset } from './TextPresets.ts';
 export { applyTextPreset, TEXT_PRESETS } from './TextPresets.ts';
+
+export { TextInspectorPanel } from './TextInspectorPanel.ts';
+export { TextEditOverlay } from './TextEditOverlay.ts';
