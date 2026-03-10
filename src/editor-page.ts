@@ -10,6 +10,7 @@ import {
   clipTimelineDuration,
   PlaybackEngine,
   ColorGradingPanel,
+  GraphEditorPanel,
   Exporter,
   type Project,
   type Clip,
@@ -48,6 +49,7 @@ let engine          : PlaybackEngine    | null = null;
 let tlRenderer      : TimelineRenderer  | null = null;
 let tlController    : TimelineController| null = null;
 let gradingPanel    : ColorGradingPanel | null = null;
+let graphEditor     : GraphEditorPanel  | null = null;
 let audioPanel      : AudioTrackPanel   | null = null;
 let waveformCache   : WaveformCache     | null = null;
 let thumbnailCache  : ThumbnailCache    | null = null;
@@ -148,6 +150,10 @@ export function initEditorPage(): void {
   engine = new PlaybackEngine(project, previewCanvas, {
     onTimeUpdate(time: number) {
       currentTimeEl.textContent = formatTime(time);
+      // Update diamond fill states in color grading panel
+      gradingPanel?.updatePlayheadTime(time);
+      // Refresh graph editor playhead line
+      graphEditor?.refresh();
       // Auto-scroll timeline to keep playhead visible during playback
       if (tlController && tlRenderer) {
         const s = tlController.state;
@@ -219,7 +225,10 @@ export function initEditorPage(): void {
     if (tlRenderer) tlRenderer.setProject(project);
     tlRenderer?.render(engine.time);
     refreshDuration();
-  }, showToast);
+  }, showToast, (clip: Clip, property: string) => {
+    // onKeyframeSelect: open the graph editor for this property
+    graphEditor?.show(clip, property);
+  });
 
   audioPanel = new AudioTrackPanel(inspectorBody, engine.audioMixer, (trackId: string) => {
     if (!project || !engine) return;
@@ -230,6 +239,41 @@ export function initEditorPage(): void {
   });
 
   gradingPanel.render(null);
+
+  // ── Graph Editor Panel ────────────────────────────────────────────────────
+  // Append below the timeline wrap inside the workspace.
+  const graphEditorContainer =
+    (timelineCanvas.closest('.editor-timeline-wrap')?.parentElement as HTMLElement | null)
+    ?? (timelineCanvas.closest('.editor-workspace') as HTMLElement | null)
+    ?? document.body;
+
+  // graphEditor needs timelineState — provide a live reference via a proxy object
+  // that delegates to tlController.state once it's available.
+  const liveTimelineState = new Proxy({} as import('./editor/TimelineController.ts').TimelineState, {
+    get(_target, prop: string) {
+      if (tlController) {
+        return (tlController.state as Record<string, unknown>)[prop];
+      }
+      // Fallback defaults before tlController loads
+      const defaults: Record<string, unknown> = {
+        zoom: 100, scrollX: 0, scrollY: 0, playheadTime: 0, selectedClipIds: new Set(),
+      };
+      return defaults[prop];
+    },
+  });
+
+  graphEditor = new GraphEditorPanel(
+    graphEditorContainer,
+    liveTimelineState as import('./editor/TimelineController.ts').TimelineState,
+    () => {
+      // onChange: push undo snapshot and re-render preview
+      if (!project || !engine) return;
+      snapshot();
+      project.modifiedAt = Date.now();
+      engine.updateProject(project);
+      void engine.seekTo(engine.time); // force re-render at current time
+    },
+  );
 
   // ── Lazy-load TimelineRenderer / TimelineController ───────────────────────
   (async () => {
@@ -250,6 +294,7 @@ export function initEditorPage(): void {
         },
         onZoomChange(pps: number) {
           timelineZoom = pps;
+          graphEditor?.refresh();
         },
         onBeforeChange() {
           snapshot();
@@ -260,6 +305,8 @@ export function initEditorPage(): void {
           timelineCanvas.dispatchEvent(
             new CustomEvent('editor:clipselect', { detail: { clipId } }),
           );
+          // Hide graph editor when no clip is selected
+          if (!clipId) graphEditor?.hide();
         },
         onChange() {
           if (tlRenderer && tlController) {
@@ -271,6 +318,8 @@ export function initEditorPage(): void {
             project.duration = recomputeDuration(project);
             refreshDuration();
           }
+          // Refresh graph editor on scroll/zoom changes
+          graphEditor?.refresh();
         },
       });
 
@@ -334,6 +383,7 @@ export function initEditorPage(): void {
     const found = getClipAndTrack(clipId);
     if (!found) {
       gradingPanel?.render(null);
+      graphEditor?.hide();
       return;
     }
     if (found.track.kind === 'audio') {
