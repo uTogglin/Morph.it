@@ -1616,17 +1616,6 @@
         </div>
         <div class="editor-toolbar-sep"></div>
         <div class="editor-toolbar-group">
-          <button id="editor-play-btn" class="editor-btn editor-btn-primary" title="Play">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            Play
-          </button>
-          <button id="editor-pause-btn" class="editor-btn" title="Pause">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-            Pause
-          </button>
-        </div>
-        <div class="editor-toolbar-sep"></div>
-        <div class="editor-toolbar-group">
           <button id="editor-zoom-out-btn" class="editor-btn editor-btn-icon" title="Zoom timeline out">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
           </button>
@@ -1643,6 +1632,9 @@
         <button id="editor-keybinds-btn" class="editor-btn editor-btn-icon" title="Keyboard shortcuts (?)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         </button>
+        <button id="editor-app-fs-btn" class="editor-btn editor-btn-icon" title="Fullscreen">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+        </button>
       </div>
 
       <!-- Main workspace: preview + timeline side by side -->
@@ -1650,18 +1642,34 @@
 
         <!-- Preview canvas -->
         <div class="editor-preview-wrap">
-          <canvas id="editor-preview-canvas"></canvas>
-          <div id="editor-drop-hint" class="editor-drop-hint">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="2" width="20" height="20" rx="2" ry="2"></rect>
-              <rect x="2" y="7" width="3" height="3" fill="currentColor" stroke="none"></rect>
-              <rect x="2" y="12" width="3" height="3" fill="currentColor" stroke="none"></rect>
-              <rect x="2" y="17" width="3" height="3" fill="currentColor" stroke="none"></rect>
-              <line x1="7" y1="2" x2="7" y2="22"></line>
-              <line x1="7" y1="12" x2="22" y2="12"></line>
-            </svg>
-            <p>Open media to start editing</p>
-            <button class="editor-btn editor-btn-primary" id="editor-drop-hint-open">Browse files</button>
+          <div class="editor-preview-canvas-area">
+            <canvas id="editor-preview-canvas"></canvas>
+            <div id="editor-drop-hint" class="editor-drop-hint">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="2" ry="2"></rect>
+                <rect x="2" y="7" width="3" height="3" fill="currentColor" stroke="none"></rect>
+                <rect x="2" y="12" width="3" height="3" fill="currentColor" stroke="none"></rect>
+                <rect x="2" y="17" width="3" height="3" fill="currentColor" stroke="none"></rect>
+                <line x1="7" y1="2" x2="7" y2="22"></line>
+                <line x1="7" y1="12" x2="22" y2="12"></line>
+              </svg>
+              <p>Open media to start editing</p>
+              <button class="editor-btn editor-btn-primary" id="editor-drop-hint-open">Browse files</button>
+            </div>
+          </div>
+          <div class="editor-preview-controls">
+            <button id="editor-play-btn" class="editor-btn editor-btn-primary editor-preview-play" title="Play (Space)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              Play
+            </button>
+            <button id="editor-pause-btn" class="editor-btn editor-preview-play" title="Pause (Space)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+              Pause
+            </button>
+            <div class="editor-preview-controls-spacer"></div>
+            <button id="editor-video-fs-btn" class="editor-btn editor-btn-icon" title="Video fullscreen">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+            </button>
           </div>
         </div>
 

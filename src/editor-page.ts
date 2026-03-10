@@ -109,6 +109,9 @@ export function initEditorPage(): void {
   const keybindsBtn      = el<HTMLButtonElement>('editor-keybinds-btn');
   const keybindsModal    = el<HTMLDivElement>('editor-keybinds-modal');
   const keybindsClose    = el<HTMLButtonElement>('editor-keybinds-close');
+  const appFsBtn         = el<HTMLButtonElement>('editor-app-fs-btn');
+  const videoFsBtn       = el<HTMLButtonElement>('editor-video-fs-btn');
+  const previewCanvasArea = previewCanvas.closest('.editor-preview-canvas-area') as HTMLElement;
 
   const playBtn        = el<HTMLButtonElement>('editor-play-btn');
   const pauseBtn       = el<HTMLButtonElement>('editor-pause-btn');
@@ -128,6 +131,18 @@ export function initEditorPage(): void {
   engine = new PlaybackEngine(project, previewCanvas, {
     onTimeUpdate(time: number) {
       currentTimeEl.textContent = formatTime(time);
+      // Auto-scroll timeline to keep playhead visible during playback
+      if (tlController && tlRenderer) {
+        const s = tlController.state;
+        const viewW = timelineCanvas.clientWidth - 160; // subtract TRACK_HEADER_WIDTH
+        if (viewW > 0) {
+          const playheadPx = (time - s.scrollX) * s.zoom;
+          if (playheadPx < 0 || playheadPx > viewW - 40) {
+            s.scrollX = Math.max(0, time - (viewW * 0.15) / s.zoom);
+            tlRenderer.syncState(s);
+          }
+        }
+      }
       tlRenderer?.render(time);
     },
     onEnded()                          { syncPlayPauseButtons('paused'); },
@@ -698,6 +713,31 @@ export function initEditorPage(): void {
   keybindsBtn.addEventListener('click',   () => keybindsModal.classList.remove('hidden'));
   keybindsClose.addEventListener('click', () => keybindsModal.classList.add('hidden'));
   keybindsModal.addEventListener('click', (e) => { if (e.target === keybindsModal) keybindsModal.classList.add('hidden'); });
+
+  const appFsSvgExpand  = '<polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line>';
+  const appFsSvgCompress = '<polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="10" y1="14" x2="3" y2="21"></line><line x1="21" y1="3" x2="14" y2="10"></line>';
+
+  document.addEventListener('fullscreenchange', () => {
+    const inner = appFsBtn.querySelector('svg');
+    if (inner) inner.innerHTML = document.fullscreenElement ? appFsSvgCompress : appFsSvgExpand;
+  });
+
+  appFsBtn.addEventListener('click', () => {
+    const editorPage = el<HTMLElement>('editor-page');
+    if (!document.fullscreenElement) {
+      void editorPage.requestFullscreen();
+    } else {
+      void document.exitFullscreen();
+    }
+  });
+
+  videoFsBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      void previewCanvasArea.requestFullscreen();
+    } else {
+      void document.exitFullscreen();
+    }
+  });
 
   playBtn.addEventListener('click',  () => { void engine?.play(); });
   pauseBtn.addEventListener('click', () => { engine?.pause(); });

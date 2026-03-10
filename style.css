@@ -4478,13 +4478,21 @@ body.ocr-tts-active .ocr-tts-overlay {
 
 /* ── Preview canvas area ── */
 .editor-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--card-border);
+  overflow: hidden;
+  background: #000;
+}
+
+.editor-preview-canvas-area {
+  flex: 1;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000;
-  border-right: 1px solid var(--card-border);
   overflow: hidden;
+  min-height: 0;
 }
 
 #editor-preview-canvas {
@@ -4492,6 +4500,24 @@ body.ocr-tts-active .ocr-tts-overlay {
   max-height: 100%;
   object-fit: contain;
   display: block;
+}
+
+/* ── Preview transport controls strip ── */
+.editor-preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--surface-color);
+  border-top: 1px solid var(--card-border);
+  flex-shrink: 0;
+}
+
+.editor-preview-controls-spacer { flex: 1 1 0; }
+
+.editor-preview-play {
+  min-width: 72px;
+  justify-content: center;
 }
 
 /* Drop hint shown when no project media exists */
