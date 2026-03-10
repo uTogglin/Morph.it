@@ -49,7 +49,10 @@ export class ClipDecoder {
   constructor(file: File) {
     this.objectUrl = URL.createObjectURL(file);
     this.video = document.createElement('video');
-    this.video.volume = 0;             // silence direct output; Web Audio captures regardless of volume (unlike muted=true which silences MediaElementAudioSourceNode in Chrome)
+    // Do NOT mute: Chrome routes zeros through MediaElementAudioSourceNode when
+    // the source element is muted, causing silence even through the Web Audio graph.
+    // video.play() is only ever called after a user gesture (sticky activation), so
+    // muted=true is not required to satisfy the autoplay policy.
     this.video.playsInline = true;
     this.video.preload = 'auto';
     this.video.src = this.objectUrl;

@@ -235,12 +235,13 @@ export class PlaybackEngine {
           // M4 fix: only call getOrCreate for active clips
           const decoder = this.decoders.getOrCreate(clip.id, clip.sourceFile);
 
-          // Connect audio if not yet done
+          // Connect audio synchronously — the video element exists immediately at
+          // ClipDecoder construction; no need to await decoder.ready. Doing this
+          // synchronously guarantees the Web Audio route is established before
+          // the async seekTo+play chain below can start the video playing.
           if (!this._connectedDecoders.has(clip.id)) {
-            decoder.ready.then(() => {
-              this.mixer.connectVideoElement(decoder.videoElement, clip.trackId);
-              this._connectedDecoders.add(clip.id);
-            }).catch(() => { /* ignore */ });
+            this.mixer.connectVideoElement(decoder.videoElement, clip.trackId);
+            this._connectedDecoders.add(clip.id);
           }
 
           // C1 fix: guard against concurrent seekTo+play per decoder
