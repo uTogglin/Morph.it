@@ -88,3 +88,9 @@ export {
 } from './TextClip.ts';
 
 export { TextRenderer } from './TextRenderer.ts';
+
+export type { FontEntry } from './FontPicker.ts';
+export { fetchFontsourceList, loadFontsourceFont } from './FontPicker.ts';
+
+export type { TextPreset } from './TextPresets.ts';
+export { applyTextPreset, TEXT_PRESETS } from './TextPresets.ts';
