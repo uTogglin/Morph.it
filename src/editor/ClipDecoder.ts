@@ -117,10 +117,19 @@ export class ClipDecoder {
    * The caller (PlaybackEngine) prevents concurrent seeks via _decoderStarting.
    */
   seekTo(seconds: number): Promise<VideoFrame> {
+    const target = Math.max(0, Math.min(seconds, this._duration));
+    // Chrome does not fire requestVideoFrameCallback when currentTime is set to
+    // its existing value on a paused element — the seek promise would hang forever,
+    // leaving _decoderStarting set and blocking all future play() attempts.
+    // Short-circuit: if we already have a frame and are already at the target
+    // position (within one frame at 60 fps), resolve immediately.
+    if (this.latestFrame !== null && Math.abs(this.video.currentTime - target) <= 1 / 60) {
+      return Promise.resolve(this.latestFrame);
+    }
     return new Promise<VideoFrame>((resolve, reject) => {
       this._seekPending = resolve;
       this._seekReject  = reject;
-      this.video.currentTime = Math.max(0, Math.min(seconds, this._duration));
+      this.video.currentTime = target;
     });
   }
 
