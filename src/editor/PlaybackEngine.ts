@@ -29,6 +29,8 @@ export interface PlaybackEngineOptions {
   onEnded?: () => void;
   /** Called when state changes. */
   onStateChange?: (state: EngineState) => void;
+  /** Called when EffectChain encounters a GPU limitation (e.g. no RGBA16F support). */
+  onWarning?: (msg: string) => void;
 }
 
 export class PlaybackEngine {
@@ -71,7 +73,7 @@ export class PlaybackEngine {
     if (!ctx) throw new Error('PlaybackEngine: could not get 2D context from canvas');
     this.ctx2d = ctx;
 
-    this.effectChain = new EffectChain(project.width, project.height);
+    this.effectChain = new EffectChain(project.width, project.height, opts.onWarning);
     this.decoders    = new ClipDecoderPool();
     this.mixer       = new AudioMixer();
 

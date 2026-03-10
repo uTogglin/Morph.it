@@ -164,6 +164,7 @@ export function initEditorPage(): void {
     },
     onEnded()                          { syncPlayPauseButtons('paused'); },
     onStateChange(s: EngineState)      { syncPlayPauseButtons(s); },
+    onWarning: showToast,
   });
 
   // ── History helpers ───────────────────────────────────────────────────────
@@ -591,6 +592,7 @@ export function initEditorPage(): void {
       const result = await Exporter.export(project, {
         signal: exportAbort.signal,
         onProgress: updateExportProgress,
+        onWarning: showToast,
       });
       const url = URL.createObjectURL(result.blob);
       const a   = document.createElement('a');

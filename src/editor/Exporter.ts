@@ -27,6 +27,8 @@ export interface ExportOptions {
   onProgress?: (progress: number) => void;
   /** AbortSignal — reject and clean up if aborted. */
   signal?: AbortSignal;
+  /** Called when EffectChain encounters a GPU limitation during export. */
+  onWarning?: (msg: string) => void;
 }
 
 export interface ExportResult {
@@ -44,7 +46,7 @@ export class Exporter {
    * live preview is unaffected.
    */
   static async export(project: Project, opts: ExportOptions = {}): Promise<ExportResult> {
-    const { onProgress, signal } = opts;
+    const { onProgress, signal, onWarning } = opts;
 
     if (typeof VideoEncoder === 'undefined') {
       throw new Error('WebCodecs VideoEncoder is not available in this browser.');
@@ -59,7 +61,7 @@ export class Exporter {
     const totalFrames   = Math.ceil(duration * frameRate);
     const frameDuration = 1_000_000 / frameRate; // microseconds per frame
 
-    const effectChain = new EffectChain(width, height);
+    const effectChain = new EffectChain(width, height, onWarning);
     const decoders    = new ClipDecoderPool();
 
     // Pre-seed decoders for all video clips
