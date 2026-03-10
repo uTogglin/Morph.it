@@ -76,3 +76,5 @@ export { ThumbnailCache } from './ThumbnailCache.ts';
 
 export type { AudioPanelChangeCallback } from './AudioTrackPanel.ts';
 export { AudioTrackPanel } from './AudioTrackPanel.ts';
+
+export { GraphEditorPanel } from './GraphEditorPanel.ts';
