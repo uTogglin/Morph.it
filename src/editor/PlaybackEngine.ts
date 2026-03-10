@@ -14,7 +14,7 @@
 //   L5  – applySolo() wired in syncTracksToMixer()
 
 import type { Project, Track, Clip } from './types.ts';
-import { clipActiveAt, clipSourceTime, clipTimelineDuration } from './types.ts';
+import { clipActiveAt, clipSourceTime, clipTimelineDuration, adjustmentClipActiveAt } from './types.ts';
 import { EffectChain } from './EffectChain.ts';
 import { evaluateEffectParam } from './KeyframeEngine.ts';
 import { ClipDecoder, ClipDecoderPool } from './ClipDecoder.ts';
@@ -316,6 +316,40 @@ export class PlaybackEngine {
             bitmap?.close();
           }
         }
+      }
+
+      // Phase 2 — apply adjustment layer effects to the composited video result
+      const adjTracks = this.project.tracks.filter(t => t.kind === 'adjustment' && !t.muted);
+      if (adjTracks.length > 0) {
+        // Snapshot the current canvas composite as an ImageBitmap
+        let compositeBitmap = await createImageBitmap(this.canvas);
+
+        for (const adjTrack of adjTracks) {
+          for (const adjClip of adjTrack.adjustmentClips ?? []) {
+            if (!adjustmentClipActiveAt(adjClip, this.currentTime)) continue;
+
+            // Evaluate keyframes on the adjustment clip's effects
+            const adjClipRelT = this.currentTime - adjClip.timelineStart;
+            const interpolatedEffects = adjClip.effects.map(e =>
+              adjClip.keyframeTracks.some(kt => kt.property.startsWith(e.id + '.'))
+                ? { ...e, params: evaluateEffectParam(e, { keyframeTracks: adjClip.keyframeTracks } as Clip, adjClipRelT) }
+                : e
+            );
+
+            try {
+              const result = await this.effectChain.process(compositeBitmap, interpolatedEffects);
+              compositeBitmap.close();
+              compositeBitmap = result;
+            } catch (e) {
+              console.warn('[PlaybackEngine] adjustment layer effect error:', e);
+            }
+          }
+        }
+
+        // Draw the final adjusted result back to the display canvas
+        this.ctx2d.clearRect(0, 0, width, height);
+        this.ctx2d.drawImage(compositeBitmap, 0, 0, width, height);
+        compositeBitmap.close();
       }
     } finally {
       this._rendering = false;

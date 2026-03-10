@@ -1,4 +1,4 @@
-import type { Project, Track, Clip } from './types.ts';
+import type { Project, Track, Clip, AdjustmentClip } from './types.ts';
 import { clipTimelineDuration } from './types.ts';
 import {
   TRACK_HEADER_WIDTH,
@@ -34,6 +34,8 @@ const COLOR_SOLO_CIRCLE      = '#f4d03f';
 const COLOR_VOLUME_BAR_BG    = '#333333';
 const COLOR_VOLUME_BAR_FILL  = '#4caf50';
 const COLOR_SCROLL_INDICATOR = 'rgba(255,255,255,0.2)';
+const COLOR_CLIP_ADJUSTMENT  = 'rgba(168,85,247,0.7)';   // purple for adjustment clips
+const COLOR_TRACK_ADJUSTMENT = 'rgba(168,85,247,0.08)';  // subtle purple tint for adj track row
 
 const CLIP_CORNER_RADIUS = 4;
 const HANDLE_WIDTH       = 6; // must match TimelineController
@@ -354,6 +356,12 @@ export class TimelineRenderer {
       ctx.fillStyle = i % 2 === 0 ? COLOR_TRACK_EVEN : COLOR_TRACK_ODD;
       ctx.fillRect(TRACK_HEADER_WIDTH, y, cssW - TRACK_HEADER_WIDTH, TRACK_HEIGHT);
 
+      // Adjustment tracks get a subtle purple tint overlaid on the base row color
+      if (project.tracks[i].kind === 'adjustment') {
+        ctx.fillStyle = COLOR_TRACK_ADJUSTMENT;
+        ctx.fillRect(TRACK_HEADER_WIDTH, y, cssW - TRACK_HEADER_WIDTH, TRACK_HEIGHT);
+      }
+
       ctx.fillStyle = COLOR_TRACK_BORDER;
       ctx.fillRect(TRACK_HEADER_WIDTH, y + TRACK_HEIGHT - 1, cssW - TRACK_HEADER_WIDTH, 1);
     }
@@ -383,6 +391,13 @@ export class TimelineRenderer {
 
       for (const clip of track.clips) {
         this.drawClip(clip, track, trackY, state, cssW);
+      }
+
+      // Render adjustment clips with distinct purple styling
+      if (track.kind === 'adjustment') {
+        for (const adjClip of track.adjustmentClips ?? []) {
+          this.drawAdjustmentClip(adjClip, trackY, state, cssW);
+        }
       }
     }
 
@@ -458,6 +473,70 @@ export class TimelineRenderer {
       ctx.font         = '11px system-ui, sans-serif';
       ctx.textBaseline = 'middle';
       ctx.textAlign    = 'left';
+      ctx.fillText(this.truncateText(ctx, label, labelW), labelX, y + h / 2);
+
+      ctx.restore();
+    }
+  }
+
+  // ── Adjustment clip drawing ──────────────────────────────────────────────────
+
+  private drawAdjustmentClip(
+    adjClip: AdjustmentClip,
+    trackY: number,
+    state: TimelineState,
+    cssW: number,
+  ): void {
+    const { ctx } = this;
+
+    const x1 = this.xAt(adjClip.timelineStart, state);
+    const x2 = this.xAt(adjClip.timelineStart + adjClip.duration, state);
+    const w  = x2 - x1;
+    const h  = TRACK_HEIGHT - 2;
+    const y  = trackY + 1;
+
+    if (x2 < TRACK_HEADER_WIDTH || x1 > cssW || w < 1) return;
+
+    // Clip body — solid purple base
+    ctx.fillStyle = COLOR_CLIP_ADJUSTMENT;
+    this.fillRoundRect(x1, y, w, h, CLIP_CORNER_RADIUS);
+
+    // Diagonal stripe pattern to visually distinguish from video/audio clips
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(Math.max(x1, TRACK_HEADER_WIDTH), y, Math.min(x2, cssW) - Math.max(x1, TRACK_HEADER_WIDTH), h);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 2;
+    const stripeSpacing = 10;
+    for (let sx = x1 - h; sx < x2 + h; sx += stripeSpacing) {
+      ctx.beginPath();
+      ctx.moveTo(sx, y);
+      ctx.lineTo(sx + h, y + h);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Border
+    ctx.strokeStyle = 'rgba(168,85,247,0.9)';
+    ctx.lineWidth   = 1;
+    this.strokeRoundRect(x1, y, w, h, CLIP_CORNER_RADIUS);
+
+    // "ADJ" label
+    if (w > 24) {
+      const labelX = x1 + HANDLE_WIDTH + 4;
+      const labelW = w - HANDLE_WIDTH * 2 - 8;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(Math.max(x1 + HANDLE_WIDTH, TRACK_HEADER_WIDTH), y + 1, labelW, h - 2);
+      ctx.clip();
+
+      ctx.fillStyle    = COLOR_CLIP_LABEL;
+      ctx.font         = 'bold 11px system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign    = 'left';
+      const label = adjClip.effects.length > 0 ? `ADJ (${adjClip.effects.length})` : 'ADJ';
       ctx.fillText(this.truncateText(ctx, label, labelW), labelX, y + h / 2);
 
       ctx.restore();

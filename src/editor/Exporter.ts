@@ -15,8 +15,8 @@
 //
 // Requires WebCodecs (Chrome 94+, Edge 94+, Safari 16.4+).
 
-import type { Project } from './types.ts';
-import { clipActiveAt, clipSourceTime } from './types.ts';
+import type { Project, Clip } from './types.ts';
+import { clipActiveAt, clipSourceTime, adjustmentClipActiveAt } from './types.ts';
 import { EffectChain } from './EffectChain.ts';
 import { ClipDecoderPool } from './ClipDecoder.ts';
 import { evaluateEffectParam } from './KeyframeEngine.ts';
@@ -136,6 +136,35 @@ export class Exporter {
               }
             } catch { /* skip clip on error */ }
           }
+        }
+
+        // Phase 2 — apply adjustment layer effects to the composited video result
+        const adjTracks = project.tracks.filter(tr => tr.kind === 'adjustment' && !tr.muted);
+        if (adjTracks.length > 0) {
+          // Snapshot the OffscreenCanvas composite as an ImageBitmap
+          let compositeBitmap = offscreen.transferToImageBitmap();
+
+          for (const adjTrack of adjTracks) {
+            for (const adjClip of adjTrack.adjustmentClips ?? []) {
+              if (!adjustmentClipActiveAt(adjClip, t)) continue;
+              const adjClipRelT = t - adjClip.timelineStart;
+              const interpolatedEffects = adjClip.effects.map(e =>
+                adjClip.keyframeTracks.some(kt => kt.property.startsWith(e.id + '.'))
+                  ? { ...e, params: evaluateEffectParam(e, { keyframeTracks: adjClip.keyframeTracks } as Clip, adjClipRelT) }
+                  : e
+              );
+              try {
+                const result = await effectChain.process(compositeBitmap, interpolatedEffects);
+                compositeBitmap.close();
+                compositeBitmap = result;
+              } catch { /* skip adjustment clip on error */ }
+            }
+          }
+
+          // Draw the adjusted result back to the OffscreenCanvas for encoding
+          ctx2d.clearRect(0, 0, width, height);
+          ctx2d.drawImage(compositeBitmap, 0, 0, width, height);
+          compositeBitmap.close();
         }
 
         const frameForEncoder = new VideoFrame(offscreen, {
