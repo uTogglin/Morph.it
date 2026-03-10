@@ -277,7 +277,7 @@ export function initEditorPage(): void {
 
   function checkEmptyState(): void {
     if (!project) return;
-    const hasMedia = project.tracks.some(t => t.clips.length > 0);
+    const hasMedia = project.tracks.some((t: Track) => t.clips.length > 0);
     dropHint.classList.toggle('hidden', hasMedia);
     emptyTimeline.classList.toggle('hidden', hasMedia);
   }
@@ -285,7 +285,7 @@ export function initEditorPage(): void {
   function getClipAndTrack(clipId: string | null): { clip: Clip; track: Track } | null {
     if (!project || !clipId) return null;
     for (const track of project.tracks) {
-      const clip = track.clips.find(c => c.id === clipId);
+      const clip = track.clips.find((c: Clip) => c.id === clipId);
       if (clip) return { clip, track };
     }
     return null;
@@ -316,7 +316,7 @@ export function initEditorPage(): void {
     snapshot();
 
     for (const track of project.tracks) {
-      track.clips = track.clips.filter(c => {
+      track.clips = track.clips.filter((c: Clip) => {
         if (selectedIds.has(c.id)) {
           waveformCache?.evict(c.id);
           thumbnailCache?.evict(c.id);
@@ -361,7 +361,7 @@ export function initEditorPage(): void {
 
     function addClips(fileList: File[], kind: 'video' | 'audio'): void {
       if (!fileList.length) return;
-      let track = project!.tracks.find(t => t.kind === kind && !t.locked);
+      let track = project!.tracks.find((t: Track) => t.kind === kind && !t.locked);
       if (!track) {
         track = createTrack(kind);
         project!.tracks.push(track);
@@ -446,8 +446,8 @@ export function initEditorPage(): void {
 
   function saveProject(): void {
     if (!project) return;
-    const json = JSON.stringify({ ...project, tracks: project.tracks.map(t => ({
-      ...t, clips: t.clips.map(c => ({ ...c, sourceFile: c.sourceFile.name })),
+    const json = JSON.stringify({ ...project, tracks: project.tracks.map((t: Track) => ({
+      ...t, clips: t.clips.map((c: Clip) => ({ ...c, sourceFile: c.sourceFile.name })),
     })) }, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
@@ -515,7 +515,7 @@ export function initEditorPage(): void {
       onStateChange(s: EngineState)      { syncPlayPauseButtons(s); },
     });
     if (audioPanel) {
-      audioPanel = new AudioTrackPanel(inspectorBody, engine.audioMixer, (tid) => {
+      audioPanel = new AudioTrackPanel(inspectorBody, engine.audioMixer, (tid: string) => {
         if (!project || !engine) return;
         if (!panelDirty) { snapshot(); panelDirty = true; }
         project.modifiedAt = Date.now();

@@ -5126,3 +5126,683 @@ body.ocr-tts-active .ocr-tts-overlay {
   .pde-workspace { min-height: 350px; height: calc(100vh - 200px); }
   .pde-toolbar { flex-wrap: wrap; gap: 4px; }
 }
+
+/* =========================================
+   Timeline Editor page  (#editor-page)
+   ========================================= */
+
+/* ── Page wrapper ── */
+#editor-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 84px); /* fill below fixed top-bar */
+  overflow: hidden;
+}
+
+#editor-page.hidden { display: none !important; }
+
+/* ── Top-level grid: toolbar / workspace / inspector stacked vertically,
+      workspace contains preview + timeline side-by-side */
+.editor-layout {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "toolbar    toolbar"
+    "workspace  inspector";
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-color);
+  position: relative; /* anchor for export overlay */
+}
+
+/* ── Toolbar ── */
+.editor-toolbar {
+  grid-area: toolbar;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--card-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.editor-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.editor-toolbar-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--card-border);
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+
+.editor-toolbar-spacer {
+  flex: 1 1 0;
+}
+
+/* ── Toolbar buttons ── */
+.editor-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text-main);
+  font: 500 12px/1 'Inter', sans-serif;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.editor-btn:hover {
+  background: var(--list-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.editor-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.editor-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.editor-btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #fff;
+}
+
+/* Icon-only button: no text, square */
+.editor-btn-icon {
+  padding: 5px 7px;
+}
+
+/* ── Time display ── */
+.editor-time-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: 500 13px/1 'Inter', monospace, sans-serif;
+  color: var(--text-main);
+  padding: 4px 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.03em;
+}
+
+.editor-time-sep {
+  color: var(--text-muted);
+}
+
+/* ── Workspace (preview + timeline) ── */
+.editor-workspace {
+  grid-area: workspace;
+  display: grid;
+  grid-template-columns: minmax(240px, 30%) 1fr;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+
+/* ── Preview canvas area ── */
+.editor-preview-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border-right: 1px solid var(--card-border);
+  overflow: hidden;
+}
+
+#editor-preview-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Drop hint shown when no project media exists */
+.editor-drop-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px;
+  pointer-events: none; /* allow clicks to fall through to canvas */
+}
+
+.editor-drop-hint svg {
+  opacity: 0.35;
+}
+
+.editor-drop-hint p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.editor-drop-hint .editor-btn {
+  pointer-events: all;
+}
+
+.editor-drop-hint.hidden { display: none; }
+
+/* ── Timeline wrap ── */
+.editor-timeline-wrap {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  background: var(--surface-color);
+}
+
+.editor-timeline-header {
+  display: flex;
+  align-items: stretch;
+  height: 28px;
+  border-bottom: 1px solid var(--card-border);
+  flex-shrink: 0;
+  background: var(--card-bg);
+}
+
+.editor-track-label-col {
+  width: 120px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--card-border);
+}
+
+#editor-timeline-ruler {
+  flex: 1 1 0;
+  height: 28px;
+  display: block;
+}
+
+.editor-timeline-body {
+  display: flex;
+  flex: 1 1 0;
+  overflow: auto;
+  min-height: 0;
+}
+
+.editor-track-labels {
+  width: 120px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Individual track label row (created by JS) */
+.editor-track-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 48px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--card-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.editor-track-label svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+#editor-timeline-canvas {
+  flex: 1 1 0;
+  display: block;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Empty-state message inside timeline */
+.editor-empty-timeline {
+  position: absolute;
+  bottom: 0;
+  left: 120px;
+  right: 0;
+  top: 29px; /* below ruler */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+  text-align: center;
+  padding: 16px;
+}
+
+.editor-empty-timeline.hidden { display: none; }
+
+/* ── Inspector sidebar ── */
+.editor-inspector {
+  grid-area: inspector;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--card-border);
+  background: var(--surface-color);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.editor-inspector-header {
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--card-border);
+  flex-shrink: 0;
+}
+
+.editor-inspector-body {
+  flex: 1 1 0;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.editor-inspector-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Effect controls rendered into inspector */
+.editor-effect-group {
+  margin-bottom: 16px;
+}
+
+.editor-effect-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.editor-effect-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.editor-effect-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+  height: 3px;
+  cursor: pointer;
+}
+
+.editor-effect-row .editor-effect-value {
+  width: 38px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Export overlay ───────────────────────────────────────────────────────── */
+.editor-export-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+}
+.editor-export-overlay.hidden { display: none; }
+
+.editor-export-dialog {
+  background: var(--card-bg, #1e1e2a);
+  border: 1px solid var(--card-border, #3a3a50);
+  border-radius: 10px;
+  padding: 24px 28px;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.editor-export-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #f0f0ff);
+}
+.editor-export-track {
+  height: 6px;
+  background: var(--input-bg, #2a2a3a);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.editor-export-bar {
+  height: 100%;
+  background: var(--accent, #7c6ef7);
+  border-radius: 3px;
+  transition: width 0.15s linear;
+}
+.editor-export-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted, #888);
+}
+
+/* ── ColorGradingPanel styles (cgp-*) ─────────────────────────────────────── */
+
+.cgp-empty {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  padding: 12px 4px;
+  line-height: 1.5;
+}
+
+.cgp-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--card-border, #3a3a50);
+  margin-bottom: 8px;
+}
+.cgp-add-label {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  flex-shrink: 0;
+}
+.cgp-add-select {
+  flex: 1;
+  font-size: 11px;
+  background: var(--input-bg, #2a2a3a);
+  color: var(--text-primary, #f0f0ff);
+  border: 1px solid var(--card-border, #3a3a50);
+  border-radius: 5px;
+  padding: 3px 6px;
+  outline: none;
+}
+.cgp-add-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  background: var(--accent, #7c6ef7);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cgp-add-btn:hover { filter: brightness(1.12); }
+
+/* Effect card */
+.cgp-card {
+  border: 1px solid var(--card-border, #3a3a50);
+  border-radius: 7px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.cgp-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--input-bg, #2a2a3a);
+  user-select: none;
+}
+.cgp-card-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #f0f0ff);
+}
+.cgp-toggle {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent, #7c6ef7);
+  flex-shrink: 0;
+}
+.cgp-collapse-btn,
+.cgp-remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, #888);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+.cgp-collapse-btn:hover,
+.cgp-remove-btn:hover {
+  color: var(--text-primary, #f0f0ff);
+  background: rgba(255,255,255,0.08);
+}
+.cgp-remove-btn:hover { color: #ff6b6b; }
+
+.cgp-card-body {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Sub-heading within a card section */
+.cgp-subheading {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #888);
+  margin: 8px 0 4px;
+}
+.cgp-subheading:first-child { margin-top: 2px; }
+
+/* Slider row */
+.cgp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+}
+.cgp-label {
+  width: 72px;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cgp-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent, #7c6ef7);
+  cursor: pointer;
+}
+.cgp-value {
+  width: 38px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* LUT import button */
+.cgp-lut-btn {
+  flex: 1;
+  font-size: 11px;
+  padding: 4px 8px;
+  background: var(--input-bg, #2a2a3a);
+  color: var(--text-primary, #f0f0ff);
+  border: 1px dashed var(--card-border, #3a3a50);
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cgp-lut-btn:hover {
+  border-color: var(--accent, #7c6ef7);
+  color: var(--accent, #7c6ef7);
+}
+
+/* Clip properties — text-only value (source filename) */
+.cgp-value-text {
+  width: auto;
+  flex: 1;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Clip Properties card — slightly different background */
+.cgp-props-card {
+  background: var(--surface-raised, #1e1e2e);
+}
+
+/* ── AudioTrackPanel styles (atp-*) ──────────────────────────────────────── */
+
+.atp-empty {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+  padding: 12px 4px;
+}
+.atp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+.atp-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #f0f0ff);
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--card-border, #3a3a50);
+}
+.atp-eq-heading {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #888);
+  margin: 10px 0 4px;
+}
+.atp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+}
+.atp-label {
+  width: 68px;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atp-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent, #7c6ef7);
+  cursor: pointer;
+}
+.atp-value {
+  width: 38px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.atp-btn-row {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 2px;
+}
+.atp-btn {
+  flex: 1;
+  padding: 4px 0;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--card-border, #3a3a50);
+  border-radius: 5px;
+  background: var(--input-bg, #2a2a3a);
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.atp-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-primary, #f0f0ff); }
+.atp-mute.atp-active { background: #c0392b22; color: #e74c3c; border-color: #e74c3c44; }
+.atp-solo.atp-active { background: #f4d03f22; color: #f4d03f; border-color: #f4d03f44; }
+
+/* ── Responsive: narrow screens stack preview above timeline ── */
+@media (max-width: 860px) {
+  .editor-layout {
+    grid-template-areas:
+      "toolbar    toolbar"
+      "workspace  workspace"
+      "inspector  inspector";
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 1fr;
+  }
+
+  .editor-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(160px, 35%) 1fr;
+  }
+
+  .editor-preview-wrap {
+    border-right: none;
+    border-bottom: 1px solid var(--card-border);
+  }
+
+  .editor-inspector {
+    width: 100%;
+    max-height: 180px;
+    border-left: none;
+    border-top: 1px solid var(--card-border);
+  }
+}

@@ -248,6 +248,26 @@
           <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
+      <button class="home-card" data-tool="editor">
+        <div class="home-card-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="2" ry="2"></rect>
+            <rect x="2" y="7" width="3" height="3" fill="currentColor" stroke="none"></rect>
+            <rect x="2" y="12" width="3" height="3" fill="currentColor" stroke="none"></rect>
+            <rect x="2" y="17" width="3" height="3" fill="currentColor" stroke="none"></rect>
+            <line x1="7" y1="2" x2="7" y2="22"></line>
+            <line x1="7" y1="12" x2="22" y2="12"></line>
+          </svg>
+        </div>
+        <div class="home-card-content">
+          <h3>Timeline Editor</h3>
+          <p>Multi-track video editing with effects, color grading, and audio mixing.</p>
+        </div>
+        <span class="home-card-tag">Non-destructive</span>
+        <span class="home-card-arrow">
+          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
+        </span>
+      </button>
     </div>
     <div id="recent-history" class="recent-history hidden">
       <div class="recent-header">
@@ -1931,6 +1951,125 @@
     <input id="pde-file-input" type="file" accept=".pdf" style="display:none">
     <input id="pde-img-input" type="file" accept="image/*" style="display:none">
     <input id="pde-merge-file-input" type="file" accept=".pdf" multiple style="display:none">
+  </section>
+
+  <!-- ── Timeline Editor page ───────────────────────────────────────────── -->
+  <section id="editor-page" class="page hidden">
+    <div class="editor-layout">
+
+      <!-- Toolbar -->
+      <div class="editor-toolbar">
+        <div class="editor-toolbar-group">
+          <button id="editor-new-btn" class="editor-btn" title="New project">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            New
+          </button>
+          <button id="editor-open-btn" class="editor-btn" title="Open media files">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+            Open
+          </button>
+          <button id="editor-save-btn" class="editor-btn" title="Save project manifest as JSON">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            Save
+          </button>
+          <button id="editor-export-btn" class="editor-btn editor-btn-primary" title="Export timeline to WebM video">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export
+          </button>
+        </div>
+        <div class="editor-toolbar-sep"></div>
+        <div class="editor-toolbar-group">
+          <button id="editor-play-btn" class="editor-btn editor-btn-primary" title="Play">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Play
+          </button>
+          <button id="editor-pause-btn" class="editor-btn" title="Pause">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+            Pause
+          </button>
+        </div>
+        <div class="editor-toolbar-sep"></div>
+        <div class="editor-toolbar-group">
+          <button id="editor-zoom-out-btn" class="editor-btn editor-btn-icon" title="Zoom timeline out">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+          </button>
+          <button id="editor-zoom-in-btn" class="editor-btn editor-btn-icon" title="Zoom timeline in">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+          </button>
+        </div>
+        <div class="editor-toolbar-spacer"></div>
+        <div class="editor-time-display">
+          <span id="editor-current-time">00:00.0</span>
+          <span class="editor-time-sep">/</span>
+          <span id="editor-duration">00:00.0</span>
+        </div>
+      </div>
+
+      <!-- Main workspace: preview + timeline side by side -->
+      <div class="editor-workspace">
+
+        <!-- Preview canvas -->
+        <div class="editor-preview-wrap">
+          <canvas id="editor-preview-canvas"></canvas>
+          <div id="editor-drop-hint" class="editor-drop-hint">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="20" height="20" rx="2" ry="2"></rect>
+              <rect x="2" y="7" width="3" height="3" fill="currentColor" stroke="none"></rect>
+              <rect x="2" y="12" width="3" height="3" fill="currentColor" stroke="none"></rect>
+              <rect x="2" y="17" width="3" height="3" fill="currentColor" stroke="none"></rect>
+              <line x1="7" y1="2" x2="7" y2="22"></line>
+              <line x1="7" y1="12" x2="22" y2="12"></line>
+            </svg>
+            <p>Open media to start editing</p>
+            <button class="editor-btn editor-btn-primary" id="editor-drop-hint-open">Browse files</button>
+          </div>
+        </div>
+
+        <!-- Timeline canvas (scrollable, multi-track) -->
+        <div class="editor-timeline-wrap">
+          <div class="editor-timeline-header">
+            <span class="editor-track-label-col"></span>
+            <canvas id="editor-timeline-ruler"></canvas>
+          </div>
+          <div class="editor-timeline-body">
+            <div id="editor-track-labels" class="editor-track-labels"></div>
+            <canvas id="editor-timeline-canvas" tabindex="0"></canvas>
+          </div>
+          <div id="editor-empty-timeline" class="editor-empty-timeline">
+            Open video or audio files to add tracks to the timeline.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Inspector / effect controls panel -->
+      <aside class="editor-inspector" id="editor-inspector">
+        <div class="editor-inspector-header">
+          <span>Inspector</span>
+        </div>
+        <div class="editor-inspector-body" id="editor-inspector-body">
+          <p class="editor-inspector-empty">Select a clip to view and edit its effects.</p>
+        </div>
+      </aside>
+
+    </div>
+
+    <!-- Export progress overlay (hidden until export starts) -->
+    <div id="editor-export-progress" class="editor-export-overlay hidden">
+      <div class="editor-export-dialog">
+        <div class="editor-export-title">Exporting…</div>
+        <div class="editor-export-track">
+          <div id="editor-export-bar" class="editor-export-bar" style="width:0%"></div>
+        </div>
+        <div class="editor-export-footer">
+          <span id="editor-export-pct">0%</span>
+          <button id="editor-export-cancel-btn" class="editor-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden file input for opening media -->
+    <input id="editor-file-input" type="file" accept="video/*,audio/*" multiple style="display:none">
   </section>
 
   <div id="format-containers">
