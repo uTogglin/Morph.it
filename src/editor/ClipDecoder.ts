@@ -49,7 +49,7 @@ export class ClipDecoder {
   constructor(file: File) {
     this.objectUrl = URL.createObjectURL(file);
     this.video = document.createElement('video');
-    this.video.muted = true;           // must be muted to autoplay without gesture
+    this.video.volume = 0;             // silence direct output; Web Audio captures regardless of volume (unlike muted=true which silences MediaElementAudioSourceNode in Chrome)
     this.video.playsInline = true;
     this.video.preload = 'auto';
     this.video.src = this.objectUrl;

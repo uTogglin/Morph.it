@@ -137,8 +137,8 @@ export function initEditorPage(): void {
         const viewW = timelineCanvas.clientWidth - 160; // subtract TRACK_HEADER_WIDTH
         if (viewW > 0) {
           const playheadPx = (time - s.scrollX) * s.zoom;
-          if (playheadPx < 0 || playheadPx > viewW - 40) {
-            s.scrollX = Math.max(0, time - (viewW * 0.15) / s.zoom);
+          if (playheadPx < 0 || playheadPx > viewW * 0.8) {
+            s.scrollX = Math.max(0, time - (viewW * 0.2) / s.zoom);
             tlRenderer.syncState(s);
           }
         }
