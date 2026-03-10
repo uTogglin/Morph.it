@@ -15,6 +15,8 @@
 import type {
   Clip,
   Effect,
+  Keyframe,
+  KeyframeTrack,
   ColorCorrectParams,
   BlurParams,
   SharpenParams,
@@ -31,8 +33,10 @@ import {
   createCropEffect,
 } from './types.ts';
 import { loadCubeLutFile } from './LutParser.ts';
+import { addKeyframe, removeKeyframe } from './KeyframeEngine.ts';
 
 export type PanelChangeCallback = (clip: Clip) => void;
+export type KeyframeSelectCallback = (clip: Clip, property: string) => void;
 
 // ── Param metadata ────────────────────────────────────────────────────────────
 
@@ -101,6 +105,33 @@ const CROP_PARAMS: Record<string, ParamMeta> = {
   top:    { label: 'Top',    min: 0, max: 1, step: 0.001 },
   bottom: { label: 'Bottom', min: 0, max: 1, step: 0.001 },
 };
+
+// ── Keyframe diamond CSS ──────────────────────────────────────────────────────
+
+const KEYFRAME_DIAMOND_STYLE_ID = 'cgp-keyframe-diamond-styles';
+
+function ensureDiamondStyles(): void {
+  if (document.getElementById(KEYFRAME_DIAMOND_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = KEYFRAME_DIAMOND_STYLE_ID;
+  style.textContent = `
+    .keyframe-toggle {
+      width: 10px; height: 10px;
+      transform: rotate(45deg);
+      border: 1.5px solid #f5a623;
+      background: transparent;
+      cursor: pointer;
+      margin-left: 4px;
+      display: inline-block;
+      flex-shrink: 0;
+      vertical-align: middle;
+    }
+    .keyframe-toggle.active {
+      background: #f5a623;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 // ── Helper builders ───────────────────────────────────────────────────────────
 
@@ -369,24 +400,48 @@ export class ColorGradingPanel {
   private container: HTMLElement;
   private onChange: PanelChangeCallback;
   private onWarning?: (msg: string) => void;
+  private onKeyframeSelect?: KeyframeSelectCallback;
   private _clip: Clip | null = null;
   private _trackKind: 'video' | 'audio' = 'video';
+  private _playheadTime = 0;
+  /** All diamond toggle elements keyed by "<effectId>.<paramKey>" for fast refresh. */
+  private _diamonds = new Map<string, HTMLElement>();
 
   constructor(
     container: HTMLElement,
     onChange: PanelChangeCallback,
     onWarning?: (msg: string) => void,
+    onKeyframeSelect?: KeyframeSelectCallback,
   ) {
     this.container = container;
     this.onChange  = onChange;
     this.onWarning = onWarning;
+    this.onKeyframeSelect = onKeyframeSelect;
+  }
+
+  /**
+   * Update the current playhead time and refresh diamond fill states.
+   * Called by the host (editor-page.ts) on every time update.
+   */
+  updatePlayheadTime(t: number): void {
+    this._playheadTime = t;
+    if (!this._clip) return;
+    // Refresh each diamond to reflect whether a keyframe exists at t
+    for (const [property, diamond] of this._diamonds) {
+      const track = this._clip.keyframeTracks.find(kt => kt.property === property);
+      const hasKfAtTime = track?.keyframes.some(kf => Math.abs(kf.t - t) < 1e-6) ?? false;
+      diamond.classList.toggle('active', hasKfAtTime);
+      diamond.title = hasKfAtTime ? 'Remove keyframe' : 'Add keyframe';
+    }
   }
 
   /** Render the panel for the given clip (or show empty state). */
   render(clip: Clip | null, trackKind: 'video' | 'audio' = 'video'): void {
     this._clip = clip;
     this._trackKind = trackKind;
+    this._diamonds.clear();
     this.container.innerHTML = '';
+    ensureDiamondStyles();
 
     if (!clip) {
       const p = document.createElement('p');
@@ -665,28 +720,30 @@ export class ColorGradingPanel {
     if (!effect.enabled) body.style.opacity = '0.4';
 
     const onParamChange = () => this.onChange(clip);
+    const makeKfRow = (params: Record<string, unknown>, key: string, meta: ParamMeta) =>
+      this.makeKeyframeSliderRow(clip, effect, params, key, meta, onParamChange);
 
     switch (effect.kind) {
       case 'colorCorrect':
-        body.appendChild(buildColorCorrectSection(effect, onParamChange));
+        body.appendChild(this.buildKeyframeColorCorrectSection(effect, makeKfRow));
         break;
       case 'lut':
         body.appendChild(buildLutSection(effect, onParamChange));
         break;
       case 'blur':
-        body.appendChild(buildGenericSection(effect, BLUR_PARAMS, onParamChange));
+        body.appendChild(this.buildKeyframeGenericSection(effect, BLUR_PARAMS, makeKfRow));
         break;
       case 'sharpen':
-        body.appendChild(buildGenericSection(effect, SHARPEN_PARAMS, onParamChange));
+        body.appendChild(this.buildKeyframeGenericSection(effect, SHARPEN_PARAMS, makeKfRow));
         break;
       case 'vignette':
-        body.appendChild(buildGenericSection(effect, VIGNETTE_PARAMS, onParamChange));
+        body.appendChild(this.buildKeyframeGenericSection(effect, VIGNETTE_PARAMS, makeKfRow));
         break;
       case 'transform':
-        body.appendChild(buildGenericSection(effect, TRANSFORM_PARAMS, onParamChange));
+        body.appendChild(this.buildKeyframeGenericSection(effect, TRANSFORM_PARAMS, makeKfRow));
         break;
       case 'crop':
-        body.appendChild(buildGenericSection(effect, CROP_PARAMS, onParamChange));
+        body.appendChild(this.buildKeyframeGenericSection(effect, CROP_PARAMS, makeKfRow));
         break;
     }
 
@@ -750,5 +807,139 @@ export class ColorGradingPanel {
 
     card.append(header, body);
     return card;
+  }
+
+  // ── Private: keyframe-aware slider row ────────────────────────────────────
+
+  /**
+   * Build a slider row with a diamond keyframe toggle button.
+   * The property path is "<effectId>.<key>".
+   */
+  private makeKeyframeSliderRow(
+    clip: Clip,
+    effect: Effect,
+    params: Record<string, unknown>,
+    key: string,
+    meta: ParamMeta,
+    onChange: () => void,
+  ): HTMLElement {
+    const row = makeSliderRow(params, key, meta, onChange);
+
+    const property = effect.id + '.' + key;
+
+    // Create diamond toggle
+    const diamond = document.createElement('div');
+    diamond.className = 'keyframe-toggle';
+
+    // Determine initial state
+    const track = clip.keyframeTracks.find(kt => kt.property === property);
+    const hasKfAtTime = track?.keyframes.some(kf => Math.abs(kf.t - this._playheadTime) < 1e-6) ?? false;
+    diamond.classList.toggle('active', hasKfAtTime);
+    diamond.title = hasKfAtTime ? 'Remove keyframe' : 'Add keyframe';
+
+    // Register for updatePlayheadTime() refreshes
+    this._diamonds.set(property, diamond);
+
+    diamond.addEventListener('click', () => {
+      if (!this._clip) return;
+      const currentTrack = this._clip.keyframeTracks.find(kt => kt.property === property);
+      const t = this._playheadTime;
+
+      if (currentTrack) {
+        const kfExistsAtTime = currentTrack.keyframes.some(kf => Math.abs(kf.t - t) < 1e-6);
+        if (kfExistsAtTime) {
+          // Remove keyframe
+          removeKeyframe(currentTrack, t);
+          // If track is now empty, remove it from the clip
+          if (currentTrack.keyframes.length === 0) {
+            const trackIdx = this._clip.keyframeTracks.indexOf(currentTrack);
+            if (trackIdx !== -1) this._clip.keyframeTracks.splice(trackIdx, 1);
+          }
+          diamond.classList.remove('active');
+          diamond.title = 'Add keyframe';
+        } else {
+          // Track exists but no keyframe at current time — add one, then fire onKeyframeSelect
+          const currentValue = params[key] as number ?? 0;
+          const keyframe: Keyframe = {
+            t,
+            value: currentValue,
+            interpolation: 'linear',
+            handleOut: [0, 0],
+            handleIn:  [0, 0],
+          };
+          addKeyframe(currentTrack, keyframe);
+          diamond.classList.add('active');
+          diamond.title = 'Remove keyframe';
+          this.onKeyframeSelect?.(this._clip, property);
+        }
+      } else {
+        // No track yet — create it with the first keyframe
+        const currentValue = params[key] as number ?? 0;
+        const keyframe: Keyframe = {
+          t,
+          value: currentValue,
+          interpolation: 'linear',
+          handleOut: [0, 0],
+          handleIn:  [0, 0],
+        };
+        const newTrack: KeyframeTrack = { property, keyframes: [keyframe] };
+        this._clip.keyframeTracks.push(newTrack);
+        diamond.classList.add('active');
+        diamond.title = 'Remove keyframe';
+      }
+
+      onChange();
+    });
+
+    row.appendChild(diamond);
+    return row;
+  }
+
+  // ── Private: keyframe-aware section builders ──────────────────────────────
+
+  private buildKeyframeGenericSection(
+    effect: Effect,
+    meta: Record<string, ParamMeta>,
+    makeKfRow: (params: Record<string, unknown>, key: string, m: ParamMeta) => HTMLElement,
+  ): HTMLElement {
+    const wrapper = document.createElement('div');
+    const p = effect.params as unknown as Record<string, unknown>;
+    for (const [k, m] of Object.entries(meta)) {
+      wrapper.appendChild(makeKfRow(p, k, m));
+    }
+    return wrapper;
+  }
+
+  private buildKeyframeColorCorrectSection(
+    effect: Effect,
+    makeKfRow: (params: Record<string, unknown>, key: string, m: ParamMeta) => HTMLElement,
+  ): HTMLElement {
+    const p = effect.params as ColorCorrectParams;
+    const pr = p as unknown as Record<string, unknown>;
+    const frag = document.createDocumentFragment();
+
+    frag.appendChild(makeSubheading('Basic'));
+    for (const [k, m] of Object.entries(COLOR_CORRECT_BASIC)) {
+      frag.appendChild(makeKfRow(pr, k, m));
+    }
+
+    frag.appendChild(makeSubheading('Lift (Shadows)'));
+    for (const [k, m] of Object.entries(COLOR_CORRECT_LIFT)) {
+      frag.appendChild(makeKfRow(pr, k, m));
+    }
+
+    frag.appendChild(makeSubheading('Gamma (Midtones)'));
+    for (const [k, m] of Object.entries(COLOR_CORRECT_GAMMA)) {
+      frag.appendChild(makeKfRow(pr, k, m));
+    }
+
+    frag.appendChild(makeSubheading('Gain (Highlights)'));
+    for (const [k, m] of Object.entries(COLOR_CORRECT_GAIN)) {
+      frag.appendChild(makeKfRow(pr, k, m));
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(frag);
+    return wrapper;
   }
 }
