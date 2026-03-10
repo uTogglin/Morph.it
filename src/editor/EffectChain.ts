@@ -80,7 +80,6 @@ in vec2 a_pos;
 out vec2 v_uv;
 void main() {
   v_uv = a_pos * 0.5 + 0.5;
-  v_uv.y = 1.0 - v_uv.y;          // flip Y: VideoFrame origin is top-left
   gl_Position = vec4(a_pos, 0.0, 1.0);
 }`;
 
@@ -429,9 +428,13 @@ export class EffectChain {
 
     gl.viewport(0, 0, this.width, this.height);
 
-    // Upload the VideoFrame to the source texture
+    // Upload the VideoFrame to the source texture (flip Y so GL's bottom-left
+    // origin matches the VideoFrame's top-left origin — done here once instead
+    // of in the vertex shader, which would double-flip on multi-pass chains)
     gl.bindTexture(gl.TEXTURE_2D, this.sourceTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
     const enabledEffects = filterEnabledEffects(effects);
 
