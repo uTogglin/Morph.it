@@ -19,6 +19,7 @@ import type { Project } from './types.ts';
 import { clipActiveAt, clipSourceTime } from './types.ts';
 import { EffectChain } from './EffectChain.ts';
 import { ClipDecoderPool } from './ClipDecoder.ts';
+import { evaluateEffectParam } from './KeyframeEngine.ts';
 
 export interface ExportOptions {
   /** Target bitrate in bits/s. Default: width * height * fps * 0.07 */
@@ -119,7 +120,15 @@ export class Exporter {
               const clipFrame = await decoder.seekTo(srcTime);
               // Always close the VideoFrame when done — it pins GPU memory until closed.
               try {
-                const bitmap = await effectChain.process(clipFrame, clip.effects);
+                // Evaluate keyframe interpolation for each effect (fast path: skip clone
+                // when no keyframe tracks reference that effect).
+                const clipRelT = srcTime - clip.sourceStart;
+                const interpolatedEffects = clip.effects.map(e =>
+                  clip.keyframeTracks.some(kt => kt.property.startsWith(e.id + '.'))
+                    ? { ...e, params: evaluateEffectParam(e, clip, clipRelT) }
+                    : e
+                );
+                const bitmap = await effectChain.process(clipFrame, interpolatedEffects);
                 ctx2d.drawImage(bitmap, 0, 0, width, height);
                 bitmap.close();
               } finally {

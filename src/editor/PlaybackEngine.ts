@@ -16,6 +16,7 @@
 import type { Project, Track, Clip } from './types.ts';
 import { clipActiveAt, clipSourceTime, clipTimelineDuration } from './types.ts';
 import { EffectChain } from './EffectChain.ts';
+import { evaluateEffectParam } from './KeyframeEngine.ts';
 import { ClipDecoder, ClipDecoderPool } from './ClipDecoder.ts';
 import type { TrackAudioConfig } from './AudioMixer.ts';
 import { AudioMixer } from './AudioMixer.ts';
@@ -296,9 +297,18 @@ export class PlaybackEngine {
           const frame   = decoder?.latestFrame;
           if (!frame) continue;
 
+          // Evaluate keyframe interpolation for each effect (fast path: skip clone
+          // when no keyframe tracks reference that effect).
+          const clipRelT = clipSourceTime(clip, this.currentTime) - clip.sourceStart;
+          const interpolatedEffects = clip.effects.map(e =>
+            clip.keyframeTracks.some(kt => kt.property.startsWith(e.id + '.'))
+              ? { ...e, params: evaluateEffectParam(e, clip, clipRelT) }
+              : e
+          );
+
           let bitmap: ImageBitmap | null = null;
           try {
-            bitmap = await this.effectChain.process(frame, clip.effects);
+            bitmap = await this.effectChain.process(frame, interpolatedEffects);
             this.ctx2d.drawImage(bitmap, 0, 0, width, height);
           } catch (e) {
             console.warn('[PlaybackEngine] effect chain error:', e);
