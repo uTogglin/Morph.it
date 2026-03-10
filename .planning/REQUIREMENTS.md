@@ -23,8 +23,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 - [x] **KEYF-02**: Keyframe interpolation engine evaluates linear, bezier, and hold curves at arbitrary time points
 - [x] **KEYF-03**: User can add keyframes to any effect parameter (brightness, contrast, blur radius, etc.) at the current playhead position
 - [x] **KEYF-04**: Effect parameters interpolate smoothly between keyframes during playback and scrubbing
-- [ ] **KEYF-05**: User can view and edit keyframes in a visual graph editor with time on X-axis and value on Y-axis
-- [ ] **KEYF-06**: User can drag bezier curve handles in the graph editor to control easing between keyframes
+- [x] **KEYF-05**: User can view and edit keyframes in a visual graph editor with time on X-axis and value on Y-axis
+- [x] **KEYF-06**: User can drag bezier curve handles in the graph editor to control easing between keyframes
 - [x] **KEYF-07**: Keyframe data is included in project serialization and survives undo/redo via structuredClone
 
 ### Text Tool
@@ -42,9 +42,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Compositing
 
-- [ ] **COMP-01**: User can create adjustment layer tracks that apply their effect stack to all clips on tracks beneath
-- [ ] **COMP-02**: Adjustment layers appear on the timeline with definable start time and duration
-- [ ] **COMP-03**: Compositing order is: video clips (bottom to top) → adjustment layer effects → text overlays on top
+- [x] **COMP-01**: User can create adjustment layer tracks that apply their effect stack to all clips on tracks beneath
+- [x] **COMP-02**: Adjustment layers appear on the timeline with definable start time and duration
+- [x] **COMP-03**: Compositing order is: video clips (bottom to top) → adjustment layer effects → text overlays on top
 
 ### Audio
 
@@ -110,8 +110,8 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | KEYF-02 | Phase 2 | Complete |
 | KEYF-03 | Phase 2 | Complete |
 | KEYF-04 | Phase 2 | Complete |
-| KEYF-05 | Phase 2 | Pending |
-| KEYF-06 | Phase 2 | Pending |
+| KEYF-05 | Phase 2 | Complete |
+| KEYF-06 | Phase 2 | Complete |
 | KEYF-07 | Phase 2 | Complete |
 | TEXT-01 | Phase 3 | Pending |
 | TEXT-02 | Phase 3 | Pending |
@@ -123,9 +123,9 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | TEXT-08 | Phase 3 | Pending |
 | TEXT-09 | Phase 3 | Pending |
 | TEXT-10 | Phase 3 | Pending |
-| COMP-01 | Phase 2 | Pending |
-| COMP-02 | Phase 2 | Pending |
-| COMP-03 | Phase 2 | Pending |
+| COMP-01 | Phase 2 | Complete |
+| COMP-02 | Phase 2 | Complete |
+| COMP-03 | Phase 2 | Complete |
 | AUDI-01 | Phase 4 | Pending |
 | AUDI-02 | Phase 4 | Pending |
 | AUDI-03 | Phase 4 | Pending |

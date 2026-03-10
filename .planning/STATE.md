@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 02-keyframe-engine-compositing 02-02-PLAN.md
-last_updated: "2026-03-10T22:35:25.884Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-03-10T22:46:43.092Z"
 last_activity: 2026-03-10 — Roadmap created, STATE.md initialized
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 8
   percent: 0
 ---
 
@@ -57,6 +57,9 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-effects-foundation P04 | 5 | 1 tasks | 3 files |
 | Phase 02-keyframe-engine-compositing P01 | 20 | 3 tasks | 4 files |
 | Phase 02-keyframe-engine-compositing P02 | 5 | 2 tasks | 3 files |
+| Phase 02-keyframe-engine-compositing P03 | 3 | 2 tasks | 6 files |
+| Phase 02 P04 | 5 | 2 tasks | 3 files |
+| Phase 02-keyframe-engine-compositing P04 | 25 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -87,6 +90,11 @@ Recent decisions affecting current work:
 - [Phase 02-keyframe-engine-compositing]: Bezier time-axis p1/p2 clamped to [0,1] in Newton-Raphson solver — prevents divergence with DaVinci-style free handles
 - [Phase 02-keyframe-engine-compositing]: fast path for static effects: spread-clone only when tracks match effectId prefix — avoids structuredClone overhead on every frame
 - [Phase 02-keyframe-engine-compositing]: Empty keyframe track cleanup: splice from clip.keyframeTracks when last keyframe removed — keeps data model lean
+- [Phase 02-keyframe-engine-compositing]: EffectChain.process() widened to VideoFrame | ImageBitmap — ImageBitmap uses .width/.height resolved via 'displayWidth' in frame check
+- [Phase 02-keyframe-engine-compositing]: Two-phase compositing: video tracks (bottom-to-top) then adjustment layer pass on ImageBitmap snapshot; text goes on top in Phase 3
+- [Phase 02-keyframe-engine-compositing]: Exporter uses offscreen.transferToImageBitmap() (zero-copy) for adjustment layer snapshot rather than createImageBitmap(offscreen) (copy)
+- [Phase 02-keyframe-engine-compositing]: Proxy over TimelineState: GraphEditorPanel created synchronously but tlController loads async — Proxy delegates to tlController.state once available, defaults before that
+- [Phase 02-keyframe-engine-compositing]: Proxy over TimelineState: GraphEditorPanel created synchronously but tlController loads async — Proxy delegates to tlController.state once available, defaults before that
 
 ### Pending Todos
 
@@ -100,6 +108,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T22:35:25.881Z
-Stopped at: Completed 02-keyframe-engine-compositing 02-02-PLAN.md
+Last session: 2026-03-10T22:46:43.089Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None

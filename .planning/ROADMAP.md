@@ -13,7 +13,7 @@ This milestone transforms Morph.it from a functional prototype into a profession
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Effects Foundation** - Working transform + LUT shaders, RGBA16F FBOs, effect reorder/toggle (completed 2026-03-10)
-- [ ] **Phase 2: Keyframe Engine + Compositing** - Keyframe data model, interpolation engine, graph editor, adjustment layers
+- [x] **Phase 2: Keyframe Engine + Compositing** - Keyframe data model, interpolation engine, graph editor, adjustment layers (completed 2026-03-10)
 - [ ] **Phase 3: Text Tool** - Text clips on timeline with Fontsource fonts, live editing, animation via keyframes
 - [ ] **Phase 4: Audio, Export, and Polish** - Audio fades/crossfades, WYSIWYG export, effect/text presets
 
@@ -44,7 +44,7 @@ Plans:
   3. User can create an adjustment layer track with a defined time range, apply effects to it, and those effects are applied to all video clips on tracks beneath it in the preview
   4. Project with keyframes survives save/load and undo/redo without data loss or type errors
   5. Compositing order in preview is: video tracks (bottom to top) → adjustment layer pass → text overlays (even before text clips exist)
-**Plans:** 2/4 plans executed
+**Plans:** 4/4 plans complete
 Plans:
 - [ ] 02-01-PLAN.md — Keyframe data model + interpolation engine (TDD)
 - [ ] 02-02-PLAN.md — Wire keyframe evaluation into PlaybackEngine/Exporter + inspector toggle
@@ -61,7 +61,12 @@ Plans:
   3. User can drag the text position in the preview canvas, and change font size, color, opacity, and alignment via the inspector panel
   4. User can add keyframes to text position, scale, rotation, and opacity, and the text animates correctly between them during playback
   5. User can apply a preset animation (fade in/out, slide in/out, typewriter) to a text clip and see it play back correctly
-**Plans**: TBD
+**Plans:** 4 plans
+Plans:
+- [ ] 03-01-PLAN.md — TextClip data model + evaluateTextProp + TextRenderer (TDD)
+- [ ] 03-02-PLAN.md — Fontsource font picker + caching + preset text animations (TDD)
+- [ ] 03-03-PLAN.md — PlaybackEngine/Exporter text compositing + timeline rendering + snapping
+- [ ] 03-04-PLAN.md — Text inspector panel + edit overlay + canvas drag + full editor-page.ts wiring
 
 ### Phase 4: Audio, Export, and Polish
 **Goal**: Audio clips have visual fade controls, the export produces WYSIWYG output matching the preview, and effect/text presets are saveable
@@ -82,6 +87,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Effects Foundation | 4/4 | Complete   | 2026-03-10 |
-| 2. Keyframe Engine + Compositing | 2/4 | In Progress|  |
-| 3. Text Tool | 0/TBD | Not started | - |
+| 2. Keyframe Engine + Compositing | 4/4 | Complete   | 2026-03-10 |
+| 3. Text Tool | 0/4 | Planning complete | - |
 | 4. Audio, Export, and Polish | 0/TBD | Not started | - |
