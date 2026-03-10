@@ -20,6 +20,8 @@ import { clipActiveAt, clipSourceTime, adjustmentClipActiveAt } from './types.ts
 import { EffectChain } from './EffectChain.ts';
 import { ClipDecoderPool } from './ClipDecoder.ts';
 import { evaluateEffectParam } from './KeyframeEngine.ts';
+import { TextRenderer } from './TextRenderer.ts';
+import { textClipActiveAt } from './TextClip.ts';
 
 export interface ExportOptions {
   /** Target bitrate in bits/s. Default: width * height * fps * 0.07 */
@@ -62,8 +64,9 @@ export class Exporter {
     const totalFrames   = Math.ceil(duration * frameRate);
     const frameDuration = 1_000_000 / frameRate; // microseconds per frame
 
-    const effectChain = new EffectChain(width, height, onWarning);
-    const decoders    = new ClipDecoderPool();
+    const effectChain  = new EffectChain(width, height, onWarning);
+    const decoders     = new ClipDecoderPool();
+    const textRenderer = new TextRenderer(width, height);
 
     // Pre-seed decoders for all video clips
     for (const track of project.tracks.filter(t => t.kind === 'video')) {
@@ -165,6 +168,18 @@ export class Exporter {
           ctx2d.clearRect(0, 0, width, height);
           ctx2d.drawImage(compositeBitmap, 0, 0, width, height);
           compositeBitmap.close();
+        }
+
+        // Phase 3: Text overlays — final compositing pass (on top of everything)
+        const textTracks = project.tracks.filter(tr => tr.kind === 'text' && !tr.muted);
+        for (const track of textTracks) {
+          for (const textClip of track.textClips ?? []) {
+            if (!textClipActiveAt(textClip, t)) continue;
+            const clipRelT = t - textClip.timelineStart;
+            const bitmap = textRenderer.render(textClip, clipRelT);
+            ctx2d.drawImage(bitmap, 0, 0);
+            bitmap.close();
+          }
         }
 
         const frameForEncoder = new VideoFrame(offscreen, {

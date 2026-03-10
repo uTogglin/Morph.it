@@ -20,6 +20,8 @@ import { evaluateEffectParam } from './KeyframeEngine.ts';
 import { ClipDecoder, ClipDecoderPool } from './ClipDecoder.ts';
 import type { TrackAudioConfig } from './AudioMixer.ts';
 import { AudioMixer } from './AudioMixer.ts';
+import { TextRenderer } from './TextRenderer.ts';
+import { textClipActiveAt } from './TextClip.ts';
 
 export type EngineState = 'idle' | 'playing' | 'paused' | 'seeking';
 
@@ -42,6 +44,7 @@ export class PlaybackEngine {
   private decoders: ClipDecoderPool;
   private mixer: AudioMixer;
   private opts: PlaybackEngineOptions;
+  private _textRenderer: TextRenderer;
 
   private state: EngineState = 'idle';
   private currentTime = 0;            // seconds on timeline
@@ -74,9 +77,10 @@ export class PlaybackEngine {
     if (!ctx) throw new Error('PlaybackEngine: could not get 2D context from canvas');
     this.ctx2d = ctx;
 
-    this.effectChain = new EffectChain(project.width, project.height, opts.onWarning);
-    this.decoders    = new ClipDecoderPool();
-    this.mixer       = new AudioMixer();
+    this.effectChain   = new EffectChain(project.width, project.height, opts.onWarning);
+    this.decoders      = new ClipDecoderPool();
+    this.mixer         = new AudioMixer();
+    this._textRenderer = new TextRenderer(canvas.width, canvas.height);
 
     // Pre-register all tracks in the mixer
     this.syncTracksToMixer();
@@ -283,8 +287,8 @@ export class PlaybackEngine {
       const { width, height } = this.project;
       // Guard: assigning canvas.width/height (even to the same value) clears the
       // backing store on most browsers — skip when dimensions haven't changed.
-      if (this.canvas.width  !== width)  this.canvas.width  = width;
-      if (this.canvas.height !== height) this.canvas.height = height;
+      if (this.canvas.width  !== width)  { this.canvas.width  = width;  this._textRenderer.resize(width, height); }
+      if (this.canvas.height !== height) { this.canvas.height = height; this._textRenderer.resize(width, height); }
       this.ctx2d.clearRect(0, 0, width, height);
 
       for (const track of this.videoTracks()) {
@@ -350,6 +354,18 @@ export class PlaybackEngine {
         this.ctx2d.clearRect(0, 0, width, height);
         this.ctx2d.drawImage(compositeBitmap, 0, 0, width, height);
         compositeBitmap.close();
+      }
+
+      // Phase 3: Text overlays — final compositing pass (on top of everything)
+      const textTracks = this.project.tracks.filter(t => t.kind === 'text' && !t.muted);
+      for (const track of textTracks) {
+        for (const textClip of track.textClips ?? []) {
+          if (!textClipActiveAt(textClip, this.currentTime)) continue;
+          const clipRelT = this.currentTime - textClip.timelineStart;
+          const bitmap = this._textRenderer.render(textClip, clipRelT);
+          this.ctx2d.drawImage(bitmap, 0, 0);
+          bitmap.close();
+        }
       }
     } finally {
       this._rendering = false;
