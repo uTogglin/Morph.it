@@ -534,7 +534,7 @@ function showToolView(tool: "convert" | "compress" | "image" | "speech" | "summa
   } else if (tool === "editor") {
     editorPage.classList.remove("hidden");
     pageEl = editorPage;
-    initEditorPage();
+    try { initEditorPage(); } catch (err) { console.error('[editor] init failed:', err); }
   } else if (tool === "convert") {
     pageEl = document.getElementById("file-area");
   }

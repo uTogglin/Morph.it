@@ -306,6 +306,7 @@ void main() {
 // The coordinate scaling avoids clamping artifacts at LUT edges.
 const FRAG_LUT = /* glsl */ `#version 300 es
 precision mediump float;
+precision mediump sampler3D;
 uniform sampler2D u_tex;
 uniform sampler3D u_lut;
 uniform float u_opacity;
@@ -402,9 +403,10 @@ export class EffectChain {
       ['u_strength','u_midpoint','u_roundness','u_feather','u_aspect']);
     this.buildProgram('crop',         VERT, FRAG_CROP,
       ['u_left','u_right','u_top','u_bottom']);
-    this.buildProgram('transform',    VERT, FRAG_TRANSFORM,
+    // Non-essential programs — degrade gracefully if GPU rejects them
+    this.tryBuildProgram('transform', VERT, FRAG_TRANSFORM,
       ['u_tx','u_ty','u_sx','u_sy','u_rot','u_ax','u_ay']);
-    this.buildProgram('lut',          VERT, FRAG_LUT,
+    this.tryBuildProgram('lut',       VERT, FRAG_LUT,
       ['u_lut','u_opacity','u_lut_size']);
   }
 
@@ -718,6 +720,16 @@ export class EffectChain {
     }
 
     this.programs.set(name, { prog, vao, buf, uniforms });
+  }
+
+  /** Like buildProgram but logs a warning instead of throwing on failure. */
+  private tryBuildProgram(name: string, vert: string, frag: string, uniformNames: string[]): void {
+    try {
+      this.buildProgram(name, vert, frag, uniformNames);
+    } catch (err) {
+      console.warn(`[EffectChain] ${name} shader unavailable:`, err);
+      this.onWarning?.(`${name} effect unavailable on this GPU`);
+    }
   }
 
   private compileShader(type: number, src: string): WebGLShader {
