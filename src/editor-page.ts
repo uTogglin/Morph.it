@@ -223,7 +223,9 @@ export function initEditorPage(): void {
 
   // ── Inspector panels ─────────────────────────────────────────────────────
 
-  gradingPanel = new ColorGradingPanel(inspectorBody, (clip: Clip) => {
+  const gradingContainer = document.createElement('div');
+  inspectorBody.appendChild(gradingContainer);
+  gradingPanel = new ColorGradingPanel(gradingContainer, (clip: Clip) => {
     if (!project || !engine) return;
     if (!panelDirty) { snapshot(); panelDirty = true; }
     // Speed changes alter timeline layout — always recompute duration
@@ -239,7 +241,9 @@ export function initEditorPage(): void {
     graphEditor?.show(clip, property);
   });
 
-  audioPanel = new AudioTrackPanel(inspectorBody, engine.audioMixer, (trackId: string) => {
+  const audioContainer = document.createElement('div');
+  inspectorBody.appendChild(audioContainer);
+  audioPanel = new AudioTrackPanel(audioContainer, engine.audioMixer, (trackId: string) => {
     if (!project || !engine) return;
     if (!panelDirty) { snapshot(); panelDirty = true; }
     project.modifiedAt = Date.now();
@@ -822,7 +826,7 @@ export function initEditorPage(): void {
       onStateChange(s: EngineState)      { syncPlayPauseButtons(s); },
     });
     if (audioPanel) {
-      audioPanel = new AudioTrackPanel(inspectorBody, engine.audioMixer, (tid: string) => {
+      audioPanel = new AudioTrackPanel(audioContainer, engine.audioMixer, (tid: string) => {
         if (!project || !engine) return;
         if (!panelDirty) { snapshot(); panelDirty = true; }
         project.modifiedAt = Date.now();

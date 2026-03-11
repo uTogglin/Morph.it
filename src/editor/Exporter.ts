@@ -84,20 +84,11 @@ export class Exporter {
     // into the encoder's dead async stack (which produces an unhandled rejection).
     let encodeError: unknown = null;
 
-    const encoder = new VideoEncoder({
-      output: (chunk) => videoChunks.push(chunk),
-      error:  (e) => { encodeError = e; },
-    });
-
-    encoder.configure({
-      codec,
-      width,
-      height,
-      bitrate,
-      framerate: frameRate,
-      hardwareAcceleration: 'prefer-hardware',
-      latencyMode: 'quality',
-    });
+    const encoder = await createConfiguredEncoder(
+      (chunk) => videoChunks.push(chunk),
+      (e) => { encodeError = e; },
+      { codec, width, height, bitrate, framerate: frameRate },
+    );
 
     const offscreen = new OffscreenCanvas(width, height);
     const ctx2d     = offscreen.getContext('2d')!;
@@ -272,6 +263,43 @@ async function pickVideoCodec(
     } catch { /* try next */ }
   }
   throw new Error('No supported video encoder found (VP9 or VP8 required).');
+}
+
+// ── Encoder creation with hardware → software fallback ───────────────────────
+
+async function createConfiguredEncoder(
+  output: (chunk: EncodedVideoChunk) => void,
+  error: (e: DOMException) => void,
+  config: { codec: string; width: number; height: number; bitrate: number; framerate: number },
+): Promise<VideoEncoder> {
+  // Try hardware acceleration first, then fall back to software.
+  // Some systems report codec support via isConfigSupported but fail to
+  // instantiate the platform encoder, producing "Encoder creation error".
+  const accelerationModes: HardwareAcceleration[] = ['prefer-hardware', 'prefer-software'];
+
+  for (const hw of accelerationModes) {
+    const encoder = new VideoEncoder({ output, error });
+    const fullConfig: VideoEncoderConfig = {
+      ...config,
+      hardwareAcceleration: hw,
+      latencyMode: 'quality',
+    };
+    try {
+      encoder.configure(fullConfig);
+      // configure() is async internally — yield to let the error callback fire
+      // if the platform encoder can't be created.
+      await new Promise(r => setTimeout(r, 0));
+      if (encoder.state === 'configured') return encoder;
+      // Encoder moved to 'closed' — clean up and try next mode
+      if (encoder.state !== 'closed') encoder.close();
+    } catch {
+      if (encoder.state !== 'closed') encoder.close();
+    }
+  }
+
+  throw new Error(
+    'Failed to create video encoder. Your browser may not support encoding at this resolution.',
+  );
 }
 
 // ── Audio mix (OfflineAudioContext) ───────────────────────────────────────────
