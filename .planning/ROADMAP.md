@@ -61,7 +61,7 @@ Plans:
   3. User can drag the text position in the preview canvas, and change font size, color, opacity, and alignment via the inspector panel
   4. User can add keyframes to text position, scale, rotation, and opacity, and the text animates correctly between them during playback
   5. User can apply a preset animation (fade in/out, slide in/out, typewriter) to a text clip and see it play back correctly
-**Plans:** 5 plans (4 complete + 1 gap closure)
+**Plans:** 5/5 plans complete
 Plans:
 - [x] 03-01-PLAN.md — TextClip data model + evaluateTextProp + TextRenderer (TDD)
 - [x] 03-02-PLAN.md — Fontsource font picker + caching + preset text animations (TDD)
@@ -89,5 +89,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Effects Foundation | 4/4 | Complete   | 2026-03-10 |
 | 2. Keyframe Engine + Compositing | 4/4 | Complete   | 2026-03-10 |
-| 3. Text Tool | 4/5 | Gap closure | - |
+| 3. Text Tool | 5/5 | Complete   | 2026-03-11 |
 | 4. Audio, Export, and Polish | 0/TBD | Not started | - |
