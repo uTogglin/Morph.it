@@ -189,6 +189,13 @@ export class Exporter {
           displayHeight: height,
         });
 
+        // Guard: if encoder errored/closed asynchronously, stop immediately
+        if (encoder.state !== 'configured') {
+          frameForEncoder.close();
+          if (encodeError) throw encodeError;
+          throw new Error('VideoEncoder entered unexpected state: ' + encoder.state);
+        }
+
         const keyframe = i % (frameRate * 2) === 0;
         encoder.encode(frameForEncoder, { keyFrame: keyframe });
         frameForEncoder.close();
@@ -198,6 +205,11 @@ export class Exporter {
         // QuotaExceededError which would otherwise go to the error callback.
         if (encoder.encodeQueueSize > 10) {
           await new Promise<void>(r => encoder.addEventListener('dequeue', () => r(), { once: true }));
+          // Re-check after waiting — encoder may have errored during backpressure wait
+          if (encoder.state !== 'configured') {
+            if (encodeError) throw encodeError;
+            throw new Error('VideoEncoder closed during backpressure wait');
+          }
         }
 
         // Video encoding is ~80 % of the total work budget
