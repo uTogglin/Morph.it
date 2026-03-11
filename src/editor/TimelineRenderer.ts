@@ -80,6 +80,7 @@ export class TimelineRenderer {
     scrollX: 0,
     scrollY: 0,
     selectedClipIds: new Set(),
+    selectedTextClipId: null,
     playheadTime: 0,
   };
 
