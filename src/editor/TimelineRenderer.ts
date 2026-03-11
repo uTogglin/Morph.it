@@ -581,9 +581,10 @@ export class TimelineRenderer {
     ctx.fillStyle = COLOR_CLIP_TEXT;
     this.fillRoundRect(x1, y, w, h, CLIP_CORNER_RADIUS);
 
-    // Border
-    ctx.strokeStyle = 'rgba(245,158,11,0.9)';
-    ctx.lineWidth   = 1;
+    // Border — highlight when selected
+    const isSelected = state.selectedTextClipId === textClip.id;
+    ctx.strokeStyle = isSelected ? COLOR_CLIP_SELECTED_BORDER : 'rgba(245,158,11,0.9)';
+    ctx.lineWidth   = isSelected ? 2 : 1;
     this.strokeRoundRect(x1, y, w, h, CLIP_CORNER_RADIUS);
 
     // Text content label

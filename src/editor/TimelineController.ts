@@ -1,5 +1,6 @@
 import type { Project, Clip } from './types.ts';
 import { clipTimelineDuration } from './types.ts';
+import type { TextClip } from './TextClip.ts';
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ export interface TimelineState {
   scrollX: number;        // horizontal scroll offset in seconds
   scrollY: number;        // vertical scroll offset in pixels
   selectedClipIds: Set<string>;
+  selectedTextClipId: string | null;
   playheadTime: number;   // current playhead position in seconds
 }
 
@@ -26,6 +28,7 @@ type HitKind =
   | { kind: 'clipBody';        clip: Clip; trackIndex: number }
   | { kind: 'clipLeftHandle';  clip: Clip; trackIndex: number }
   | { kind: 'clipRightHandle'; clip: Clip; trackIndex: number }
+  | { kind: 'textClipBody';    textClip: TextClip; trackIndex: number }
   | { kind: 'emptyTrack';      trackIndex: number }
   | { kind: 'trackHeader';     trackIndex: number }
   | { kind: 'none' };
@@ -50,6 +53,8 @@ export interface TimelineCallbacks {
   onSelectionChanged?: (selectedIds: Set<string>) => void;
   /** Fired when the zoom level changes (pixels per second). */
   onZoomChange?: (pixelsPerSecond: number) => void;
+  /** Fired when a text clip is clicked in the timeline. */
+  onTextClipSelected?: (textClipId: string) => void;
   /** Fired just before a clip move or trim drag begins — use to take an undo snapshot. */
   onBeforeChange?: () => void;
   onChange?: () => void;
@@ -67,6 +72,7 @@ export class TimelineController {
     scrollX: 0,
     scrollY: 0,
     selectedClipIds: new Set(),
+    selectedTextClipId: null,
     playheadTime: 0,
   };
 
@@ -124,6 +130,7 @@ export class TimelineController {
 
   selectClips(ids: Set<string>): void {
     this.state.selectedClipIds = new Set(ids);
+    this.state.selectedTextClipId = null;
     this.callbacks.onSelectionChanged?.(new Set(ids));
     this.callbacks.onChange?.();
   }
@@ -266,6 +273,16 @@ export class TimelineController {
       return { kind: 'clipBody', clip, trackIndex };
     }
 
+    // Check text clips
+    const textClips = track.textClips ?? [];
+    for (let i = textClips.length - 1; i >= 0; i--) {
+      const tc = textClips[i];
+      const tcEnd = tc.timelineStart + tc.duration;
+      if (time >= tc.timelineStart && time <= tcEnd) {
+        return { kind: 'textClipBody', textClip: tc, trackIndex };
+      }
+    }
+
     return { kind: 'emptyTrack', trackIndex };
   }
 
@@ -371,6 +388,7 @@ export class TimelineController {
 
       case 'clipBody': {
         this.callbacks.onBeforeChange?.();
+        this.state.selectedTextClipId = null;
         // Seek playhead to clicked position
         const clipClickTime = Math.max(0, this.timeAt(px));
         this.state.playheadTime = clipClickTime;
@@ -427,8 +445,24 @@ export class TimelineController {
         break;
       }
 
+      case 'textClipBody': {
+        // Seek playhead to clicked position
+        const textClickTime = Math.max(0, this.timeAt(px));
+        this.state.playheadTime = textClickTime;
+        this.callbacks.onSeek?.(textClickTime);
+        // Clear regular clip selection, set text clip selection
+        this.state.selectedClipIds = new Set();
+        this.state.selectedTextClipId = hit.textClip.id;
+        this.callbacks.onSelectionChanged?.(new Set());
+        // Notify text clip selection
+        this.callbacks.onTextClipSelected?.(hit.textClip.id);
+        this.callbacks.onChange?.();
+        break;
+      }
+
       case 'emptyTrack':
       case 'none': {
+        this.state.selectedTextClipId = null;
         if (!e.shiftKey) {
           this.state.selectedClipIds = new Set();
           this.callbacks.onSelectionChanged?.(new Set());

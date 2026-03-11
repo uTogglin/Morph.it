@@ -80,14 +80,19 @@ export class TextInspectorPanel {
     title.textContent = 'Text Clip';
     panel.appendChild(title);
 
-    // Content (read-only display)
+    // Content (editable textarea)
     panel.appendChild(this._section('Content', (() => {
-      const div = document.createElement('div');
-      div.style.cssText =
-        'background:#222;border:1px solid #333;border-radius:4px;padding:6px;font-size:13px;color:#bbb;white-space:pre-wrap;word-break:break-all;max-height:60px;overflow-y:auto';
-      div.textContent = clip.content || '(empty)';
-      div.title = 'Edit text by double-clicking in the preview canvas';
-      return div;
+      const textarea = document.createElement('textarea');
+      textarea.style.cssText =
+        INPUT_STYLE + ';resize:vertical;min-height:40px;max-height:80px;font-size:13px;white-space:pre-wrap';
+      textarea.value = clip.content || '';
+      textarea.placeholder = 'Enter text...';
+      textarea.rows = 2;
+      textarea.addEventListener('input', () => {
+        clip.content = textarea.value;
+        this.onChange(clip);
+      });
+      return textarea;
     })()));
 
     // Font family + datalist

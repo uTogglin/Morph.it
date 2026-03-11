@@ -265,7 +265,7 @@ export function initEditorPage(): void {
       }
       // Fallback defaults before tlController loads
       const defaults: Record<string, unknown> = {
-        zoom: 100, scrollX: 0, scrollY: 0, playheadTime: 0, selectedClipIds: new Set(),
+        zoom: 100, scrollX: 0, scrollY: 0, playheadTime: 0, selectedClipIds: new Set(), selectedTextClipId: null,
       };
       return defaults[prop];
     },
@@ -356,6 +356,21 @@ export function initEditorPage(): void {
           );
           // Hide graph editor when no clip is selected
           if (!clipId) graphEditor?.hide();
+        },
+        onTextClipSelected(textClipId: string) {
+          if (!project) return;
+          for (const track of project.tracks) {
+            if (track.kind === 'text' && track.textClips) {
+              const clip = track.textClips.find(c => c.id === textClipId);
+              if (clip) {
+                selectedTextClipId = clip.id;
+                selectedClipId = null;
+                panelDirty = false;
+                showTextInspector(clip);
+                return;
+              }
+            }
+          }
         },
         onChange() {
           if (tlRenderer && tlController) {
