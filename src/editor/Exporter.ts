@@ -18,7 +18,7 @@
 import type { Project, Clip } from './types.ts';
 import { clipActiveAt, clipSourceTime, adjustmentClipActiveAt } from './types.ts';
 import { EffectChain } from './EffectChain.ts';
-import { ClipDecoderPool, ClipDecoder } from './ClipDecoder.ts';
+import { ExportDecoderPool, ExportDecoder } from './ExportDecoder.ts';
 import { evaluateEffectParam } from './KeyframeEngine.ts';
 import { TextRenderer } from './TextRenderer.ts';
 import { textClipActiveAt } from './TextClip.ts';
@@ -65,15 +65,17 @@ export class Exporter {
     const frameDuration = 1_000_000 / frameRate; // microseconds per frame
 
     const effectChain  = new EffectChain(width, height, onWarning);
-    const decoders     = new ClipDecoderPool();
+    const decoders     = new ExportDecoderPool();
     const textRenderer = new TextRenderer(width, height);
 
-    // Pre-seed decoders for all video clips
+    // Pre-seed decoders for all video clips — ExportDecoder uses mp4box.js +
+    // WebCodecs VideoDecoder for MP4 files (~sub-ms/frame vs 16-50ms/frame
+    // with HTMLVideoElement seek).
     for (const track of project.tracks.filter(t => t.kind === 'video')) {
       for (const clip of track.clips) decoders.getOrCreate(clip.id, clip.sourceFile);
     }
 
-    // Wait for all decoders to be ready
+    // Wait for all decoders to be ready (demux + VideoDecoder init)
     const readyAll = project.tracks
       .filter(t => t.kind === 'video')
       .flatMap(t => t.clips.map(c => decoders.get(c.id)!.ready));
@@ -111,7 +113,7 @@ export class Exporter {
         ctx2d.clearRect(0, 0, width, height);
 
         // Collect active clips across all video tracks (preserving draw order)
-        const activeClips: { clip: Clip; decoder: ClipDecoder; srcTime: number }[] = [];
+        const activeClips: { clip: Clip; decoder: ExportDecoder; srcTime: number }[] = [];
         for (const track of project.tracks.filter(tr => tr.kind === 'video')) {
           if (track.muted) continue;
           for (const clip of track.clips) {
@@ -121,12 +123,13 @@ export class Exporter {
           }
         }
 
-        // Decode all active clips in parallel — this is the main speedup since
-        // seekTo() waits on the hardware decoder (~16-50ms per call).
+        // Decode all active clips in parallel via ExportDecoder.
+        // For MP4 files this uses WebCodecs VideoDecoder (sub-ms/frame).
+        // For other formats it falls back to HTMLVideoElement seek.
         const decoded = await Promise.all(
           activeClips.map(async ({ clip, decoder, srcTime }) => {
             try {
-              const frame = await decoder.seekTo(srcTime);
+              const frame = await decoder.getFrameAt(srcTime);
               return { clip, frame, srcTime };
             } catch { return null; }
           }),

@@ -72,6 +72,7 @@
     "imagetracer": "^0.2.2",
     "jszip": "^3.10.1",
     "mediabunny": "^1.34.5",
+    "mp4box": "^0.5.4",
     "meyda": "^5.6.3",
     "mime": "^4.1.0",
     "nanotar": "^0.3.0",
