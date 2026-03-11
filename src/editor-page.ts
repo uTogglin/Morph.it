@@ -12,10 +12,16 @@ import {
   ColorGradingPanel,
   GraphEditorPanel,
   Exporter,
+  createTextTrack,
+  createTextClip,
+  textClipActiveAt,
+  TextInspectorPanel,
+  TextEditOverlay,
   type Project,
   type Clip,
   type Track,
   type EngineState,
+  type TextClip,
 } from './editor/index.ts';
 
 // ── Toast notification ────────────────────────────────────────────────────────
@@ -53,9 +59,12 @@ let graphEditor     : GraphEditorPanel  | null = null;
 let audioPanel      : AudioTrackPanel   | null = null;
 let waveformCache   : WaveformCache     | null = null;
 let thumbnailCache  : ThumbnailCache    | null = null;
-let timelineZoom    = 100;
-let selectedClipId  : string | null = null;
-let exportAbort     : AbortController | null = null;
+let timelineZoom        = 100;
+let selectedClipId      : string | null = null;
+let selectedTextClipId  : string | null = null;
+let exportAbort         : AbortController | null = null;
+let textInspectorPanel  : TextInspectorPanel | null = null;
+let textEditOverlay     : TextEditOverlay    | null = null;
 
 // ── History (undo/redo) ───────────────────────────────────────────────────────
 
@@ -275,6 +284,46 @@ export function initEditorPage(): void {
     },
   );
 
+  // ── Text Inspector Panel ──────────────────────────────────────────────────
+  const textInspectorContainer = document.createElement('div');
+  inspectorBody.appendChild(textInspectorContainer);
+  textInspectorPanel = new TextInspectorPanel(
+    textInspectorContainer,
+    (clip: TextClip) => {
+      if (!project || !engine) return;
+      if (!panelDirty) { snapshot(); panelDirty = true; }
+      project.modifiedAt = Date.now();
+      engine.updateProject(project);
+      void engine.seekTo(engine.time);
+      tlRenderer?.render(engine.time);
+    },
+    project?.width ?? 1920,
+  );
+
+  // ── Text Edit Overlay ─────────────────────────────────────────────────────
+  textEditOverlay = new TextEditOverlay(previewCanvas);
+
+  // ── Text clip helpers ─────────────────────────────────────────────────────
+
+  function getSelectedTextClip(): TextClip | null {
+    if (!project || !selectedTextClipId) return null;
+    for (const track of project.tracks) {
+      if (track.kind !== 'text' || !track.textClips) continue;
+      const clip = track.textClips.find(c => c.id === selectedTextClipId);
+      if (clip) return clip;
+    }
+    return null;
+  }
+
+  function showTextInspector(clip: TextClip): void {
+    gradingPanel?.render(null);
+    textInspectorPanel?.show(clip);
+  }
+
+  function hideTextInspector(): void {
+    textInspectorPanel?.hide();
+  }
+
   // ── Lazy-load TimelineRenderer / TimelineController ───────────────────────
   (async () => {
     try {
@@ -380,6 +429,11 @@ export function initEditorPage(): void {
   function updateInspector(clipId: string | null): void {
     selectedClipId = clipId;
     panelDirty = false;
+
+    // Clear text selection when a non-text clip is selected
+    selectedTextClipId = null;
+    hideTextInspector();
+
     const found = getClipAndTrack(clipId);
     if (!found) {
       gradingPanel?.render(null);
@@ -826,6 +880,221 @@ export function initEditorPage(): void {
     if (tlRenderer && tlController) {
       tlRenderer.syncState(tlController.state);
       tlRenderer.render(engine?.time ?? 0);
+    }
+  });
+
+  // ── Add Text button ───────────────────────────────────────────────────────
+
+  const addTextBtn = document.getElementById('editor-add-text-btn') as HTMLButtonElement | null;
+  addTextBtn?.addEventListener('click', () => {
+    if (!project || !engine) return;
+    snapshot();
+
+    // Find or create a text track
+    let textTrack = project.tracks.find(t => t.kind === 'text' && !t.locked);
+    if (!textTrack) {
+      textTrack = createTextTrack('Text Track');
+      project.tracks.push(textTrack);
+    }
+
+    // Create a 3-second text clip at playhead position
+    const clipStart = engine.time;
+    const newClip   = createTextClip(textTrack.id, clipStart, 3, 'Text');
+    if (!textTrack.textClips) textTrack.textClips = [];
+    textTrack.textClips.push(newClip);
+
+    project.duration   = recomputeDuration(project);
+    project.modifiedAt = Date.now();
+
+    engine.updateProject(project);
+    if (tlController) tlController.setProject(project);
+    if (tlRenderer) {
+      tlRenderer.setProject(project);
+      tlRenderer.render(engine.time);
+    }
+    refreshDuration();
+    refreshTrackLabels();
+    checkEmptyState();
+
+    // Select the new text clip
+    selectedTextClipId = newClip.id;
+    showTextInspector(newClip);
+
+    showToast('Text clip added. Double-click the preview to edit text content.');
+  });
+
+  // ── Preview canvas: text clip drag-to-position and double-click to edit ───
+
+  let textDragActive   = false;
+  let textDragLastX    = 0;
+  let textDragLastY    = 0;
+  let textDragHadMove  = false;
+
+  // Convert a pointer event on the preview canvas to canvas-space coordinates.
+  function canvasPoint(e: PointerEvent): { cx: number; cy: number } {
+    const rect   = previewCanvas.getBoundingClientRect();
+    const scaleX = previewCanvas.width  / rect.width;
+    const scaleY = previewCanvas.height / rect.height;
+    return {
+      cx: (e.clientX - rect.left) * scaleX,
+      cy: (e.clientY - rect.top)  * scaleY,
+    };
+  }
+
+  // Whether a canvas point is inside the text clip's rough bounding box.
+  function hitTestTextClip(clip: TextClip, cx: number, cy: number): boolean {
+    const halfW = Math.max(clip.style.fontSize * clip.content.length * 0.5, 60);
+    const halfH = clip.style.fontSize;
+    return (
+      cx >= clip.x - halfW && cx <= clip.x + halfW &&
+      cy >= clip.y - halfH && cy <= clip.y + halfH
+    );
+  }
+
+  previewCanvas.addEventListener('pointerdown', (e: PointerEvent) => {
+    if (textEditOverlay?.isEditing) return;
+
+    const textClip = getSelectedTextClip();
+    if (!textClip || !engine) return;
+    if (!textClipActiveAt(textClip, engine.time)) return;
+
+    const { cx, cy } = canvasPoint(e);
+    if (!hitTestTextClip(textClip, cx, cy)) return;
+
+    textDragActive  = true;
+    textDragLastX   = e.clientX;
+    textDragLastY   = e.clientY;
+    textDragHadMove = false;
+    previewCanvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  previewCanvas.addEventListener('pointermove', (e: PointerEvent) => {
+    if (!textDragActive) return;
+    const textClip = getSelectedTextClip();
+    if (!textClip || !engine) return;
+
+    const rect   = previewCanvas.getBoundingClientRect();
+    const scaleX = previewCanvas.width  / rect.width;
+    const scaleY = previewCanvas.height / rect.height;
+    const dx = (e.clientX - textDragLastX) * scaleX;
+    const dy = (e.clientY - textDragLastY) * scaleY;
+
+    textDragLastX = e.clientX;
+    textDragLastY = e.clientY;
+    textDragHadMove = true;
+
+    textClip.x += dx;
+    textClip.y += dy;
+
+    // Throttle re-render to rAF
+    requestAnimationFrame(() => {
+      if (!engine) return;
+      engine.updateProject(project!);
+      void engine.seekTo(engine.time);
+      tlRenderer?.render(engine.time);
+      textInspectorPanel?.update(textClip);
+    });
+
+    e.preventDefault();
+  });
+
+  previewCanvas.addEventListener('pointerup', (e: PointerEvent) => {
+    if (!textDragActive) return;
+    textDragActive = false;
+    if (textDragHadMove) {
+      // Commit drag to undo history
+      snapshot();
+      if (project) project.modifiedAt = Date.now();
+    }
+    e.preventDefault();
+  });
+
+  // Double-click on preview canvas: enter in-place text edit mode
+  previewCanvas.addEventListener('dblclick', (e: MouseEvent) => {
+    if (!engine) return;
+    const textClip = getSelectedTextClip();
+    if (!textClip) return;
+    if (!textClipActiveAt(textClip, engine.time)) return;
+
+    const rect = previewCanvas.getBoundingClientRect();
+    const scaleX = previewCanvas.width  / rect.width;
+    const scaleY = previewCanvas.height / rect.height;
+    const cx = (e.clientX - rect.left) * scaleX;
+    const cy = (e.clientY - rect.top)  * scaleY;
+
+    if (!hitTestTextClip(textClip, cx, cy)) return;
+
+    if (!textEditOverlay) return;
+    void textEditOverlay.startEdit(textClip, (newContent: string) => {
+      if (!project || !engine) return;
+      snapshot();
+      textClip.content = newContent;
+      project.modifiedAt = Date.now();
+      engine.updateProject(project);
+      void engine.seekTo(engine.time);
+      tlRenderer?.render(engine.time);
+      textInspectorPanel?.show(textClip);
+    });
+  });
+
+  // ── Delete text clips via keyboard ────────────────────────────────────────
+  // (Augment existing Delete/Backspace handler above with text clip support)
+  // Text clip deletion is handled in the keydown listener as part of a
+  // dedicated check that fires before deleteSelectedClips():
+  // We patch the keydown handler below by listening on a separate handler.
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !isInputFocused()) {
+      if (textEditOverlay?.isEditing) return;
+      const textClip = getSelectedTextClip();
+      if (!textClip || !project || !engine) return;
+
+      e.stopImmediatePropagation(); // prevent deleteSelectedClips from also firing
+      snapshot();
+
+      for (const track of project.tracks) {
+        if (track.kind === 'text' && track.textClips) {
+          track.textClips = track.textClips.filter(c => c.id !== textClip.id);
+        }
+      }
+
+      selectedTextClipId = null;
+      hideTextInspector();
+
+      project.duration   = recomputeDuration(project);
+      project.modifiedAt = Date.now();
+
+      engine.updateProject(project);
+      if (tlController) tlController.setProject(project);
+      if (tlRenderer) {
+        tlRenderer.setProject(project);
+        tlRenderer.render(engine.time);
+      }
+      refreshDuration();
+    }
+  }, true); // capture phase so we can stopImmediatePropagation
+
+  // ── Text clip timeline click selection ────────────────────────────────────
+  // TimelineController emits hits via onSelectionChanged(ids). Text clips
+  // have their own id namespace. We listen on a custom event the timeline
+  // controller dispatches: 'editor:textclipselect' with { textClipId }.
+  // If the TimelineController does not yet support text clip hit-testing,
+  // we also handle clicks on the timeline canvas directly here via a fallback.
+  timelineCanvas.addEventListener('editor:textclipselect' as 'click', (e: Event) => {
+    const detail = (e as CustomEvent).detail as { textClipId: string } | undefined;
+    if (!detail?.textClipId || !project) return;
+
+    for (const track of project.tracks) {
+      if (track.kind === 'text' && track.textClips) {
+        const clip = track.textClips.find(c => c.id === detail.textClipId);
+        if (clip) {
+          selectedTextClipId = clip.id;
+          selectedClipId = null; // deselect video/audio clips
+          panelDirty = false;
+          showTextInspector(clip);
+          return;
+        }
+      }
     }
   });
 
