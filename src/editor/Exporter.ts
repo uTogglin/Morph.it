@@ -18,7 +18,7 @@
 import type { Project, Clip } from './types.ts';
 import { clipActiveAt, clipSourceTime, adjustmentClipActiveAt } from './types.ts';
 import { EffectChain } from './EffectChain.ts';
-import { ClipDecoderPool } from './ClipDecoder.ts';
+import { ClipDecoderPool, ClipDecoder } from './ClipDecoder.ts';
 import { evaluateEffectParam } from './KeyframeEngine.ts';
 import { TextRenderer } from './TextRenderer.ts';
 import { textClipActiveAt } from './TextClip.ts';
@@ -90,6 +90,14 @@ export class Exporter {
       { codec, width, height, bitrate, framerate: frameRate },
     );
 
+    // Start audio mix early — it runs on a separate OfflineAudioContext and
+    // can execute in parallel with the video encoding loop.
+    const audioMixPromise = renderAudioMix(project, signal).catch(e => {
+      if (e instanceof DOMException && e.name === 'AbortError') throw e;
+      console.warn('[Exporter] Audio mix failed, falling back to video-only:', e);
+      return null;
+    });
+
     const offscreen = new OffscreenCanvas(width, height);
     const ctx2d     = offscreen.getContext('2d')!;
 
@@ -102,33 +110,45 @@ export class Exporter {
 
         ctx2d.clearRect(0, 0, width, height);
 
+        // Collect active clips across all video tracks (preserving draw order)
+        const activeClips: { clip: Clip; decoder: ClipDecoder; srcTime: number }[] = [];
         for (const track of project.tracks.filter(tr => tr.kind === 'video')) {
           if (track.muted) continue;
           for (const clip of track.clips) {
             if (!clipActiveAt(clip, t)) continue;
             const decoder = decoders.get(clip.id);
-            if (!decoder) continue;
+            if (decoder) activeClips.push({ clip, decoder, srcTime: clipSourceTime(clip, t) });
+          }
+        }
 
-            const srcTime = clipSourceTime(clip, t);
+        // Decode all active clips in parallel — this is the main speedup since
+        // seekTo() waits on the hardware decoder (~16-50ms per call).
+        const decoded = await Promise.all(
+          activeClips.map(async ({ clip, decoder, srcTime }) => {
             try {
-              const clipFrame = await decoder.seekTo(srcTime);
-              // Always close the VideoFrame when done — it pins GPU memory until closed.
-              try {
-                // Evaluate keyframe interpolation for each effect (fast path: skip clone
-                // when no keyframe tracks reference that effect).
-                const clipRelT = srcTime - clip.sourceStart;
-                const interpolatedEffects = clip.effects.map(e =>
-                  clip.keyframeTracks.some(kt => kt.property.startsWith(e.id + '.'))
-                    ? { ...e, params: evaluateEffectParam(e, clip, clipRelT) }
-                    : e
-                );
-                const bitmap = await effectChain.process(clipFrame, interpolatedEffects);
-                ctx2d.drawImage(bitmap, 0, 0, width, height);
-                bitmap.close();
-              } finally {
-                clipFrame.close();
-              }
-            } catch { /* skip clip on error */ }
+              const frame = await decoder.seekTo(srcTime);
+              return { clip, frame, srcTime };
+            } catch { return null; }
+          }),
+        );
+
+        // Process effects and composite in track order (must be serial for
+        // correct layer ordering, but decoding already happened in parallel).
+        for (const entry of decoded) {
+          if (!entry) continue;
+          const { clip, frame, srcTime } = entry;
+          try {
+            const clipRelT = srcTime - clip.sourceStart;
+            const interpolatedEffects = clip.effects.map(e =>
+              clip.keyframeTracks.some(kt => kt.property.startsWith(e.id + '.'))
+                ? { ...e, params: evaluateEffectParam(e, clip, clipRelT) }
+                : e
+            );
+            const bitmap = await effectChain.process(frame, interpolatedEffects);
+            ctx2d.drawImage(bitmap, 0, 0, width, height);
+            bitmap.close();
+          } finally {
+            frame.close();
           }
         }
 
@@ -206,7 +226,7 @@ export class Exporter {
         // Video encoding is ~80 % of the total work budget
         onProgress?.((i + 1) / totalFrames * 0.8);
 
-        if (i % 30 === 0) await yieldToMain();
+        if (i % 60 === 0) await yieldToMain();
       }
 
       await encoder.flush();
@@ -219,18 +239,17 @@ export class Exporter {
 
     if (videoChunks.length === 0) throw new Error('Encoder produced no output chunks.');
 
-    // ── Audio mix + encode ────────────────────────────────────────────────────
+    // ── Audio mix + encode (mix already started in parallel) ─────────────────
     let audioChunks: EncodedAudioChunk[] | null = null;
     try {
       onProgress?.(0.82);
-      const audioBuffer = await renderAudioMix(project, signal);
+      const audioBuffer = await audioMixPromise;
       if (audioBuffer) {
         onProgress?.(0.88);
         audioChunks = await encodeOpus(audioBuffer, sampleRate, signal);
       }
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') throw e;
-      // Audio pipeline failed — fall back to video-only silently
       console.warn('[Exporter] Audio skipped:', e);
       audioChunks = null;
     }
