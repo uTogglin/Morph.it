@@ -31,11 +31,11 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **TEXT-01**: User can create a text clip on the timeline with a defined start time and duration
 - [x] **TEXT-02**: Text clip appears as a distinct clip type on a text track in the timeline
-- [ ] **TEXT-03**: User can edit text content in-place with a live preview over the video canvas
+- [x] **TEXT-03**: User can edit text content in-place with a live preview over the video canvas
 - [x] **TEXT-04**: User can search and select fonts from the Fontsource API with weight/style variants
 - [x] **TEXT-05**: Downloaded fonts are cached locally (IndexedDB or font cache) to avoid re-downloading
-- [ ] **TEXT-06**: User can adjust text size, color, opacity, and alignment
-- [ ] **TEXT-07**: User can drag text position in the preview canvas
+- [x] **TEXT-06**: User can adjust text size, color, opacity, and alignment
+- [x] **TEXT-07**: User can drag text position in the preview canvas
 - [x] **TEXT-08**: Text clips snap to existing video and audio clip edges on the timeline
 - [x] **TEXT-09**: User can animate text position, scale, rotation, and opacity via keyframes
 - [x] **TEXT-10**: User can apply preset text animations (fade in/out, slide in/out, typewriter)
@@ -115,11 +115,11 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | KEYF-07 | Phase 2 | Complete |
 | TEXT-01 | Phase 3 | Complete |
 | TEXT-02 | Phase 3 | Complete |
-| TEXT-03 | Phase 3 | Pending |
+| TEXT-03 | Phase 3 | Complete |
 | TEXT-04 | Phase 3 | Complete |
 | TEXT-05 | Phase 3 | Complete |
-| TEXT-06 | Phase 3 | Pending |
-| TEXT-07 | Phase 3 | Pending |
+| TEXT-06 | Phase 3 | Complete |
+| TEXT-07 | Phase 3 | Complete |
 | TEXT-08 | Phase 3 | Complete |
 | TEXT-09 | Phase 3 | Complete |
 | TEXT-10 | Phase 3 | Complete |

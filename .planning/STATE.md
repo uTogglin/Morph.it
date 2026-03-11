@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-03-10T23:55:43.499Z"
+stopped_at: "Checkpoint 03-04 Task 3: human-verify"
+last_updated: "2026-03-11T00:03:12.966Z"
 last_activity: 2026-03-10 — Roadmap created, STATE.md initialized
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
   percent: 0
 ---
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03-text-tool P01 | 12 | 2 tasks | 5 files |
 | Phase 03-text-tool P02 | 3 | 2 tasks | 5 files |
 | Phase 03-text-tool P03 | 15 | 2 tasks | 4 files |
+| Phase 03-text-tool P04 | 7 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -106,6 +107,8 @@ Recent decisions affecting current work:
 - [Phase 03-text-tool]: fetchFontsourceList() caches full API response in module-level variable — repeated calls don't hit network again
 - [Phase 03-text-tool]: Text overlay compositing order fixed as video->adjustment->text in both PlaybackEngine and Exporter for WYSIWYG guarantee
 - [Phase 03-text-tool]: snap() now iterates track.clips, track.adjustmentClips, and track.textClips for edge candidates — adjustment clips were previously omitted
+- [Phase 03-text-tool]: Fabric.js dynamically imported inside TextEditOverlay.startEdit() — bundle code-split friendly
+- [Phase 03-text-tool]: Capture-phase keydown listener for text clip delete — stopImmediatePropagation prevents existing deleteSelectedClips from double-firing
 
 ### Pending Todos
 
@@ -119,6 +122,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T23:55:43.496Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-03-11T00:03:12.963Z
+Stopped at: Checkpoint 03-04 Task 3: human-verify
 Resume file: None
