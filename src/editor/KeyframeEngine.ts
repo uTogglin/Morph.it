@@ -133,7 +133,7 @@ export function evaluateEffectParam(
   }
 
   // Clone params to avoid mutating the stored static values
-  const params = structuredClone(effect.params) as Record<string, unknown>;
+  const params = structuredClone(effect.params) as unknown as Record<string, unknown>;
 
   for (const track of matchingTracks) {
     const field = track.property.slice(prefix.length);

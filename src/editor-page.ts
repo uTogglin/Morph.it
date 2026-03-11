@@ -261,7 +261,7 @@ export function initEditorPage(): void {
   const liveTimelineState = new Proxy({} as import('./editor/TimelineController.ts').TimelineState, {
     get(_target, prop: string) {
       if (tlController) {
-        return (tlController.state as Record<string, unknown>)[prop];
+        return (tlController.state as unknown as Record<string, unknown>)[prop];
       }
       // Fallback defaults before tlController loads
       const defaults: Record<string, unknown> = {
