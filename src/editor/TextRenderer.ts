@@ -15,8 +15,10 @@ export class TextRenderer {
   /**
    * Render a TextClip at a given clip-relative time.
    *
-   * Keyframe-animated properties (x, y, scaleX, scaleY, rotation, opacity) are
-   * resolved via evaluateTextProp; clip defaults are used when no track exists.
+   * Keyframe-animated properties (x, y, scaleX, scaleY, rotation, opacity,
+   * charReveal) are resolved via evaluateTextProp; clip defaults are used when
+   * no track exists. charReveal (typewriter preset) slices clip.content to the
+   * first Math.round(charReveal) characters before rendering.
    *
    * Returns an ImageBitmap (zero-copy from transferToImageBitmap).
    */
@@ -33,6 +35,7 @@ export class TextRenderer {
     const scaleY  = evaluateTextProp(clip, 'scaleY', clipRelativeT)  ?? clip.scaleY;
     const rotation = evaluateTextProp(clip, 'rotation', clipRelativeT) ?? clip.rotation;
     const opacity = evaluateTextProp(clip, 'opacity', clipRelativeT) ?? clip.style.opacity;
+    const charReveal = evaluateTextProp(clip, 'charReveal', clipRelativeT);
 
     const { style } = clip;
 
@@ -61,10 +64,19 @@ export class TextRenderer {
     ctx.textAlign = style.align;
     ctx.textBaseline = 'middle';
 
-    // Render each line
-    const lines = clip.content.split('\n');
+    // Apply typewriter character reveal if a charReveal track is active
+    let displayContent = clip.content;
+    if (charReveal !== null) {
+      const charCount = Math.max(0, Math.round(charReveal));
+      displayContent = clip.content.slice(0, charCount);
+    }
+
+    // Render each line — totalHeight uses full clip.content line count so
+    // vertical layout does not shift as characters are progressively revealed.
+    const lines = displayContent.split('\n');
     const lineHeight = style.fontSize * 1.2;
-    const totalHeight = lineHeight * lines.length;
+    const totalLines = clip.content.split('\n').length;
+    const totalHeight = lineHeight * totalLines;
     const startY = -((totalHeight - lineHeight) / 2);
 
     for (let i = 0; i < lines.length; i++) {
