@@ -61,12 +61,13 @@ Plans:
   3. User can drag the text position in the preview canvas, and change font size, color, opacity, and alignment via the inspector panel
   4. User can add keyframes to text position, scale, rotation, and opacity, and the text animates correctly between them during playback
   5. User can apply a preset animation (fade in/out, slide in/out, typewriter) to a text clip and see it play back correctly
-**Plans:** 4/4 plans complete
+**Plans:** 5 plans (4 complete + 1 gap closure)
 Plans:
-- [ ] 03-01-PLAN.md — TextClip data model + evaluateTextProp + TextRenderer (TDD)
-- [ ] 03-02-PLAN.md — Fontsource font picker + caching + preset text animations (TDD)
-- [ ] 03-03-PLAN.md — PlaybackEngine/Exporter text compositing + timeline rendering + snapping
-- [ ] 03-04-PLAN.md — Text inspector panel + edit overlay + canvas drag + full editor-page.ts wiring
+- [x] 03-01-PLAN.md — TextClip data model + evaluateTextProp + TextRenderer (TDD)
+- [x] 03-02-PLAN.md — Fontsource font picker + caching + preset text animations (TDD)
+- [x] 03-03-PLAN.md — PlaybackEngine/Exporter text compositing + timeline rendering + snapping
+- [x] 03-04-PLAN.md — Text inspector panel + edit overlay + canvas drag + full editor-page.ts wiring
+- [ ] 03-05-PLAN.md — Gap closure: typewriter charReveal rendering in TextRenderer
 
 ### Phase 4: Audio, Export, and Polish
 **Goal**: Audio clips have visual fade controls, the export produces WYSIWYG output matching the preview, and effect/text presets are saveable
@@ -88,5 +89,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Effects Foundation | 4/4 | Complete   | 2026-03-10 |
 | 2. Keyframe Engine + Compositing | 4/4 | Complete   | 2026-03-10 |
-| 3. Text Tool | 4/4 | Complete   | 2026-03-11 |
+| 3. Text Tool | 4/5 | Gap closure | - |
 | 4. Audio, Export, and Polish | 0/TBD | Not started | - |

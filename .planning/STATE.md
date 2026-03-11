@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: "Checkpoint 03-04 Task 3: human-verify"
-last_updated: "2026-03-11T00:03:12.966Z"
+stopped_at: Completed 03-04-PLAN.md — Phase 03-text-tool complete
+last_updated: "2026-03-11T17:22:50.611Z"
 last_activity: 2026-03-10 — Roadmap created, STATE.md initialized
 progress:
   total_phases: 4
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03-text-tool P02 | 3 | 2 tasks | 5 files |
 | Phase 03-text-tool P03 | 15 | 2 tasks | 4 files |
 | Phase 03-text-tool P04 | 7 | 2 tasks | 5 files |
+| Phase 03-text-tool P04 | 7 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,8 @@ Recent decisions affecting current work:
 - [Phase 03-text-tool]: snap() now iterates track.clips, track.adjustmentClips, and track.textClips for edge candidates — adjustment clips were previously omitted
 - [Phase 03-text-tool]: Fabric.js dynamically imported inside TextEditOverlay.startEdit() — bundle code-split friendly
 - [Phase 03-text-tool]: Capture-phase keydown listener for text clip delete — stopImmediatePropagation prevents existing deleteSelectedClips from double-firing
+- [Phase 03-text-tool]: Fabric.js dynamically imported inside startEdit() — avoids top-level import overhead and keeps bundle code-split friendly
+- [Phase 03-text-tool]: Capture-phase keydown listener for text clip delete — stopImmediatePropagation() prevents the existing deleteSelectedClips() from firing when a text clip is selected
 
 ### Pending Todos
 
@@ -122,6 +125,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T00:03:12.963Z
-Stopped at: Checkpoint 03-04 Task 3: human-verify
+Last session: 2026-03-11T17:22:50.608Z
+Stopped at: Completed 03-04-PLAN.md — Phase 03-text-tool complete
 Resume file: None

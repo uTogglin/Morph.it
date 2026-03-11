@@ -215,6 +215,64 @@ describe('evaluateTextProp', () => {
   });
 });
 
+// ── evaluateTextProp charReveal ───────────────────────────────────────────────
+
+describe('evaluateTextProp charReveal', () => {
+  test('returns interpolated charReveal value from a charReveal keyframe track', () => {
+    const clip = createTextClip('track-1', 0, 5, 'Hello World'); // 11 chars
+    clip.keyframeTracks.push(
+      makeKeyframeTrack('charReveal', [
+        makeKeyframe(0, 0, 'linear'),
+        makeKeyframe(2, 11, 'linear'),
+      ]),
+    );
+    // At t=1 (midpoint), linear interpolation: 0 + 0.5*11 = 5.5
+    const result = evaluateTextProp(clip, 'charReveal', 1);
+    expect(result).not.toBeNull();
+    expect(result).toBeCloseTo(5.5, 4);
+  });
+
+  test('returns 0 at clip start when charReveal keyframe starts at 0', () => {
+    const clip = createTextClip('track-1', 0, 5, 'Hello');
+    clip.keyframeTracks.push(
+      makeKeyframeTrack('charReveal', [
+        makeKeyframe(0, 0, 'linear'),
+        makeKeyframe(2, 5, 'linear'),
+      ]),
+    );
+    const result = evaluateTextProp(clip, 'charReveal', 0);
+    expect(result).not.toBeNull();
+    expect(result).toBeCloseTo(0, 5);
+  });
+
+  test('returns content.length at end of animation when charReveal reaches content.length', () => {
+    const clip = createTextClip('track-1', 0, 5, 'Hello');
+    clip.keyframeTracks.push(
+      makeKeyframeTrack('charReveal', [
+        makeKeyframe(0, 0, 'linear'),
+        makeKeyframe(2, 5, 'linear'),
+      ]),
+    );
+    const result = evaluateTextProp(clip, 'charReveal', 2);
+    expect(result).not.toBeNull();
+    expect(result).toBeCloseTo(5, 5);
+  });
+
+  test('returns null when no charReveal track exists', () => {
+    const clip = createTextClip('track-1', 0, 5, 'Hello');
+    // no keyframe tracks at all
+    expect(evaluateTextProp(clip, 'charReveal', 1)).toBeNull();
+  });
+
+  test('returns null when other tracks exist but not charReveal', () => {
+    const clip = createTextClip('track-1', 0, 5, 'Hello');
+    clip.keyframeTracks.push(
+      makeKeyframeTrack('opacity', [makeKeyframe(0, 1)]),
+    );
+    expect(evaluateTextProp(clip, 'charReveal', 1)).toBeNull();
+  });
+});
+
 // ── createTextTrack ───────────────────────────────────────────────────────────
 
 describe('createTextTrack', () => {
