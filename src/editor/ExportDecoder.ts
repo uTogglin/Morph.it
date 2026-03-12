@@ -248,7 +248,7 @@ export class ExportDecoder {
       this.nextDecodeIndex = kf;
 
       // Need to reset the decoder for a new keyframe sequence
-      if (this.decoder && this.decoder.state !== 'closed') {
+      if (this.decoder && (this.decoder.state as string) !== 'closed') {
         this.decoder.reset();
         this.decoder.configure(this.decoderConfig!);
       }
