@@ -18,7 +18,7 @@
 import type { Project, Clip } from './types.ts';
 import { clipActiveAt, clipSourceTime, adjustmentClipActiveAt } from './types.ts';
 import { EffectChain } from './EffectChain.ts';
-import { ExportDecoderPool, ExportDecoder } from './ExportDecoder.ts';
+import { ExportDecoderPool } from './ExportDecoder.ts';
 import { evaluateEffectParam } from './KeyframeEngine.ts';
 import { TextRenderer } from './TextRenderer.ts';
 import { textClipActiveAt } from './TextClip.ts';
@@ -68,28 +68,17 @@ export class Exporter {
     const decoders     = new ExportDecoderPool();
     const textRenderer = new TextRenderer(width, height);
 
-    // Pre-seed decoders for all video clips — ExportDecoder uses mp4box.js +
-    // WebCodecs VideoDecoder for MP4 files (~sub-ms/frame vs 16-50ms/frame
-    // with HTMLVideoElement seek).
-    for (const track of project.tracks.filter(t => t.kind === 'video')) {
-      for (const clip of track.clips) decoders.getOrCreate(clip.id, clip.sourceFile);
-    }
-
-    // Wait for all decoders to be ready (demux + VideoDecoder init)
-    const readyAll = project.tracks
-      .filter(t => t.kind === 'video')
-      .flatMap(t => t.clips.map(c => decoders.get(c.id)!.ready));
-    await Promise.all(readyAll);
+    const encoderConfig = { codec, width, height, bitrate, framerate: frameRate };
 
     const videoChunks: EncodedVideoChunk[] = [];
     // Capture encoder errors so we can re-throw after flush rather than throwing
     // into the encoder's dead async stack (which produces an unhandled rejection).
     let encodeError: unknown = null;
 
-    const encoder = await createConfiguredEncoder(
+    let encoder = await createConfiguredEncoder(
       (chunk) => videoChunks.push(chunk),
       (e) => { encodeError = e; },
-      { codec, width, height, bitrate, framerate: frameRate },
+      encoderConfig,
     );
 
     // Start audio mix early — it runs on a separate OfflineAudioContext and
@@ -103,6 +92,13 @@ export class Exporter {
     const offscreen = new OffscreenCanvas(width, height);
     const ctx2d     = offscreen.getContext('2d')!;
 
+    // Track consecutive decode failures for early abort
+    let consecutiveDecodeFailures = 0;
+    const MAX_DECODE_FAILURES = 5;
+
+    // Time-based yield instead of fixed frame interval
+    let lastYieldTime = performance.now();
+
     try {
       for (let i = 0; i < totalFrames; i++) {
         if (signal?.aborted) throw new DOMException('Export aborted', 'AbortError');
@@ -110,30 +106,57 @@ export class Exporter {
         const t           = i / frameRate;
         const timestampUs = Math.round(i * frameDuration);
 
+        // Yield to main thread based on elapsed time (not fixed frame count)
+        // to avoid blocking the UI while minimizing unnecessary context switches.
+        if (performance.now() - lastYieldTime > 50) {
+          await yieldToMain();
+          lastYieldTime = performance.now();
+          // Check encoder health after yielding — errors may have fired
+          if (encodeError) throw encodeError;
+        }
+
         ctx2d.clearRect(0, 0, width, height);
 
-        // Collect active clips across all video tracks (preserving draw order)
-        const activeClips: { clip: Clip; decoder: ExportDecoder; srcTime: number }[] = [];
+        // Collect active clips across all video tracks (preserving draw order).
+        // Decoders are created lazily and capped at 3 concurrent to stay
+        // within browser GPU codec session limits.
+        const activeClips: { clip: Clip; srcTime: number }[] = [];
         for (const track of project.tracks.filter(tr => tr.kind === 'video')) {
           if (track.muted) continue;
           for (const clip of track.clips) {
             if (!clipActiveAt(clip, t)) continue;
-            const decoder = decoders.get(clip.id);
-            if (decoder) activeClips.push({ clip, decoder, srcTime: clipSourceTime(clip, t) });
+            activeClips.push({ clip, srcTime: clipSourceTime(clip, t) });
           }
         }
 
-        // Decode all active clips in parallel via ExportDecoder.
-        // For MP4 files this uses WebCodecs VideoDecoder (sub-ms/frame).
-        // For other formats it falls back to HTMLVideoElement seek.
-        const decoded = await Promise.all(
-          activeClips.map(async ({ clip, decoder, srcTime }) => {
-            try {
-              const frame = await decoder.getFrameAt(srcTime);
-              return { clip, frame, srcTime };
-            } catch { return null; }
-          }),
-        );
+        // Decode active clips with limited concurrency (batches of 2).
+        // Each batch awaits before starting the next to prevent GPU saturation.
+        const decoded: ({ clip: Clip; frame: VideoFrame; srcTime: number } | null)[] = [];
+        const DECODE_BATCH = 2;
+        for (let di = 0; di < activeClips.length; di += DECODE_BATCH) {
+          const batch = activeClips.slice(di, di + DECODE_BATCH);
+          const results = await Promise.all(
+            batch.map(async ({ clip, srcTime }) => {
+              try {
+                const decoder = await decoders.getOrCreateReady(clip.id, clip.sourceFile);
+                const frame = await decoder.getFrameAt(srcTime);
+                consecutiveDecodeFailures = 0;
+                return { clip, frame, srcTime };
+              } catch (e) {
+                consecutiveDecodeFailures++;
+                console.warn('[Exporter] Decode failed for clip', clip.id, e);
+                if (consecutiveDecodeFailures >= MAX_DECODE_FAILURES) {
+                  throw new Error(
+                    `Export failed: ${MAX_DECODE_FAILURES} consecutive decode failures. ` +
+                    `Last error: ${e instanceof Error ? e.message : e}`,
+                  );
+                }
+                return null;
+              }
+            }),
+          );
+          decoded.push(...results);
+        }
 
         // Process effects and composite in track order (must be serial for
         // correct layer ordering, but decoding already happened in parallel).
@@ -203,16 +226,39 @@ export class Exporter {
           displayHeight: height,
         });
 
-        // Guard: if encoder errored/closed asynchronously, stop immediately
+        // Guard: if encoder errored/closed asynchronously, attempt recovery
         if (encoder.state !== 'configured') {
           frameForEncoder.close();
-          if (encodeError) throw encodeError;
-          throw new Error('VideoEncoder entered unexpected state: ' + encoder.state);
+
+          const recovered = await recoverEncoder(
+            encoderConfig,
+            (chunk) => videoChunks.push(chunk),
+            (e) => { encodeError = e; },
+          );
+          if (!recovered) {
+            if (encodeError) throw encodeError;
+            throw new Error('VideoEncoder failed and could not be recovered');
+          }
+          encoder = recovered;
+          encodeError = null;
+
+          // Re-create the frame and encode with a forced keyframe after recovery
+          const retryFrame = new VideoFrame(offscreen, {
+            timestamp:    timestampUs,
+            duration:     Math.round(frameDuration),
+            displayWidth:  width,
+            displayHeight: height,
+          });
+          encoder.encode(retryFrame, { keyFrame: true });
+          retryFrame.close();
+        } else {
+          const keyframe = i % (frameRate * 2) === 0;
+          encoder.encode(frameForEncoder, { keyFrame: keyframe });
+          frameForEncoder.close();
         }
 
-        const keyframe = i % (frameRate * 2) === 0;
-        encoder.encode(frameForEncoder, { keyFrame: keyframe });
-        frameForEncoder.close();
+        // Check for async encoder errors immediately after encode
+        if (encodeError) throw encodeError;
 
         // Backpressure: if the encoder queue is building up (slow hardware encoder),
         // wait for a dequeue event before submitting more frames to avoid a
@@ -228,8 +274,6 @@ export class Exporter {
 
         // Video encoding is ~80 % of the total work budget
         onProgress?.((i + 1) / totalFrames * 0.8);
-
-        if (i % 60 === 0) await yieldToMain();
       }
 
       await encoder.flush();
@@ -287,7 +331,7 @@ async function pickVideoCodec(
   throw new Error('No supported video encoder found (VP9 or VP8 required).');
 }
 
-// ── Encoder creation with hardware → software fallback ───────────────────────
+// ── Encoder creation with test-frame verification ─────────────────────────────
 
 async function createConfiguredEncoder(
   output: (chunk: EncodedVideoChunk) => void,
@@ -297,22 +341,49 @@ async function createConfiguredEncoder(
   // Try hardware acceleration first, then fall back to software.
   // Some systems report codec support via isConfigSupported but fail to
   // instantiate the platform encoder, producing "Encoder creation error".
+  // A single setTimeout(0) is insufficient to detect this — GPU driver
+  // initialization is non-deterministic. Instead, we encode a test frame
+  // and flush to force full platform encoder initialization.
   const accelerationModes: HardwareAcceleration[] = ['prefer-hardware', 'prefer-software'];
 
   for (const hw of accelerationModes) {
-    const encoder = new VideoEncoder({ output, error });
+    let configError: DOMException | null = null;
     const fullConfig: VideoEncoderConfig = {
       ...config,
       hardwareAcceleration: hw,
       latencyMode: 'quality',
     };
+
+    // Phase 1: Verify with a throw-away encoder + test frame
+    const testEncoder = new VideoEncoder({
+      output: () => {},
+      error: (e) => { configError = e; },
+    });
+    try {
+      testEncoder.configure(fullConfig);
+      const testCanvas = new OffscreenCanvas(config.width, config.height);
+      const testFrame = new VideoFrame(testCanvas, { timestamp: 0 });
+      testEncoder.encode(testFrame, { keyFrame: true });
+      testFrame.close();
+      await testEncoder.flush();
+
+      if (configError || testEncoder.state !== 'configured') {
+        if (testEncoder.state !== 'closed') testEncoder.close();
+        continue;
+      }
+      testEncoder.close();
+    } catch {
+      if (testEncoder.state !== 'closed') testEncoder.close();
+      continue;
+    }
+
+    // Phase 2: Test passed — create the real encoder with same config.
+    // The test encoder is fully closed, freeing the GPU codec slot.
+    const encoder = new VideoEncoder({ output, error });
     try {
       encoder.configure(fullConfig);
-      // configure() is async internally — yield to let the error callback fire
-      // if the platform encoder can't be created.
       await new Promise(r => setTimeout(r, 0));
       if (encoder.state === 'configured') return encoder;
-      // Encoder moved to 'closed' — clean up and try next mode
       if (encoder.state !== 'closed') encoder.close();
     } catch {
       if (encoder.state !== 'closed') encoder.close();
@@ -322,6 +393,28 @@ async function createConfiguredEncoder(
   throw new Error(
     'Failed to create video encoder. Your browser may not support encoding at this resolution.',
   );
+}
+
+// ── Encoder recovery ──────────────────────────────────────────────────────────
+
+async function recoverEncoder(
+  config: { codec: string; width: number; height: number; bitrate: number; framerate: number },
+  output: (chunk: EncodedVideoChunk) => void,
+  error: (e: DOMException) => void,
+  maxRetries = 3,
+): Promise<VideoEncoder | null> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    // Back off to let GPU resources be freed
+    await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
+    try {
+      const encoder = await createConfiguredEncoder(output, error, config);
+      console.info(`[Exporter] Encoder recovered on attempt ${attempt + 1}`);
+      return encoder;
+    } catch {
+      console.warn(`[Exporter] Encoder recovery attempt ${attempt + 1} failed`);
+    }
+  }
+  return null;
 }
 
 // ── Audio mix (OfflineAudioContext) ───────────────────────────────────────────

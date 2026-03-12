@@ -32,6 +32,7 @@ export class ExportDecoder {
   private _disposed = false;
   private _useFallback = false;
   private _file: File;
+  private _error: Error | null = null;
 
   // Fallback: HTMLVideoElement for non-MP4 files
   private fallbackVideo: HTMLVideoElement | null = null;
@@ -48,6 +49,7 @@ export class ExportDecoder {
 
   get ready(): Promise<void> { return this._ready; }
   get duration(): number { return this._duration; }
+  get error(): Error | null { return this._error; }
 
   private async init(file: File): Promise<void> {
     // Try mp4box.js demux for MP4/MOV files
@@ -172,6 +174,7 @@ export class ExportDecoder {
       },
       error: (e: DOMException) => {
         console.error('[ExportDecoder] VideoDecoder error:', e);
+        this._error = e;
       },
     });
     this.decoder.configure(this.decoderConfig);
@@ -205,21 +208,31 @@ export class ExportDecoder {
    * Caller MUST close the returned frame.
    */
   async getFrameAt(timeSeconds: number): Promise<VideoFrame> {
+    if (this._error) throw this._error;
     if (this._useFallback) return this.getFrameFallback(timeSeconds);
     return this.getFrameFast(timeSeconds);
   }
 
   private async getFrameFast(timeSeconds: number): Promise<VideoFrame> {
+    // Check decoder health before attempting decode
+    if (this._error) throw this._error;
+    if (!this.decoder || this.decoder.state === 'closed') {
+      throw new Error('VideoDecoder is closed');
+    }
+
     const targetUs = Math.round(timeSeconds * 1_000_000);
     const sampleIdx = this.findSampleIndex(targetUs);
     if (sampleIdx < 0) throw new Error(`No sample for t=${timeSeconds}`);
 
     const targetTimestamp = this.samples[sampleIdx].timestamp;
 
-    // Check if already decoded
+    // Check if already decoded — consume from cache (zero-copy for sequential export)
     const cached = this.decodedFrames.get(targetTimestamp);
     if (cached) {
-      return new VideoFrame(cached, { timestamp: cached.timestamp });
+      const clone = new VideoFrame(cached, { timestamp: cached.timestamp });
+      cached.close();
+      this.decodedFrames.delete(targetTimestamp);
+      return clone;
     }
 
     // Need to decode up to this sample
@@ -244,6 +257,7 @@ export class ExportDecoder {
     // Decode from nextDecodeIndex through sampleIdx
     for (let i = this.nextDecodeIndex; i <= sampleIdx; i++) {
       if (this._disposed) throw new Error('Disposed');
+      if (this._error) throw this._error;
       const sample = this.samples[i];
       this.decoder!.decode(new EncodedVideoChunk({
         type: sample.isKeyframe ? 'key' : 'delta',
@@ -252,8 +266,8 @@ export class ExportDecoder {
         data: sample.data,
       }));
 
-      // Backpressure
-      if (this.decoder!.decodeQueueSize > 30) {
+      // Backpressure — reduced threshold to prevent GPU memory spikes
+      if (this.decoder!.decodeQueueSize > 10) {
         await this.decoder!.flush();
       }
     }
@@ -266,7 +280,11 @@ export class ExportDecoder {
 
     const frame = this.decodedFrames.get(targetTimestamp);
     if (!frame) throw new Error(`Decode failed for sample ${sampleIdx}`);
-    return new VideoFrame(frame, { timestamp: frame.timestamp });
+    // Consume from cache — caller owns the clone, original is freed
+    const clone = new VideoFrame(frame, { timestamp: frame.timestamp });
+    frame.close();
+    this.decodedFrames.delete(targetTimestamp);
+    return clone;
   }
 
   private getFrameFallback(timeSeconds: number): Promise<VideoFrame> {
@@ -342,25 +360,48 @@ export class ExportDecoder {
 }
 
 // ── ExportDecoderPool ─────────────────────────────────────────────────────────
+// Manages concurrent VideoDecoder instances with an LRU eviction policy.
+// Caps active decoders to stay within browser GPU codec session limits.
 
 export class ExportDecoderPool {
   private pool = new Map<string, ExportDecoder>();
+  private usageOrder: string[] = [];
+  private maxConcurrent: number;
 
-  get(clipId: string): ExportDecoder | undefined {
-    return this.pool.get(clipId);
+  constructor(maxConcurrent = 3) {
+    this.maxConcurrent = maxConcurrent;
   }
 
-  getOrCreate(clipId: string, file: File): ExportDecoder {
+  /** Get or lazily create a decoder, evicting the LRU decoder if at capacity. */
+  async getOrCreateReady(clipId: string, file: File): Promise<ExportDecoder> {
     let decoder = this.pool.get(clipId);
-    if (!decoder) {
-      decoder = new ExportDecoder(file);
-      this.pool.set(clipId, decoder);
+    if (decoder) {
+      this.touch(clipId);
+      await decoder.ready;
+      return decoder;
     }
+    // Evict least-recently-used decoder if at capacity
+    while (this.pool.size >= this.maxConcurrent) {
+      const oldest = this.usageOrder.shift()!;
+      this.pool.get(oldest)?.dispose();
+      this.pool.delete(oldest);
+    }
+    decoder = new ExportDecoder(file);
+    this.pool.set(clipId, decoder);
+    this.usageOrder.push(clipId);
+    await decoder.ready;
     return decoder;
+  }
+
+  private touch(clipId: string): void {
+    const idx = this.usageOrder.indexOf(clipId);
+    if (idx >= 0) this.usageOrder.splice(idx, 1);
+    this.usageOrder.push(clipId);
   }
 
   disposeAll(): void {
     for (const decoder of this.pool.values()) decoder.dispose();
     this.pool.clear();
+    this.usageOrder = [];
   }
 }
