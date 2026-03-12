@@ -96,6 +96,15 @@ export class Exporter {
     let consecutiveDecodeFailures = 0;
     const MAX_DECODE_FAILURES = 5;
 
+    // Backpressure threshold — kept low to avoid overflowing hardware encoder
+    // internal queues (some VP9 HW encoders cap at 4–8 pending frames).
+    const BACKPRESSURE_THRESHOLD = 4;
+
+    // Periodic flush interval — prevents unbounded internal reference-frame
+    // accumulation in long exports that can exhaust GPU memory around 80%.
+    const FLUSH_INTERVAL_FRAMES = Math.round(frameRate * 30); // every ~30 s
+    let framesSinceFlush = 0;
+
     // Time-based yield instead of fixed frame interval
     let lastYieldTime = performance.now();
 
@@ -219,6 +228,31 @@ export class Exporter {
           }
         }
 
+        // ── Backpressure: wait BEFORE creating the next frame ──────────────
+        // Check queue depth before encoding so we never push the encoder past
+        // its internal limit.  Hardware VP9 encoders may have as few as 4–8
+        // pending-frame slots; exceeding them triggers "Encoder creation error".
+        // The previous code checked AFTER encode — by then the queue was already
+        // overfull and the damage was done.
+        if (encoder.state === 'configured' && encoder.encodeQueueSize >= BACKPRESSURE_THRESHOLD) {
+          await new Promise<void>((resolve) => {
+            // Timeout prevents hanging forever if the encoder dies silently
+            // between adding the listener and the event firing.  Without this,
+            // a dead encoder leaves the export promise permanently pending.
+            const timer = setTimeout(() => {
+              encoder.removeEventListener('dequeue', onDequeue);
+              resolve(); // will be caught by state check below
+            }, 5000);
+            const onDequeue = () => { clearTimeout(timer); resolve(); };
+            encoder.addEventListener('dequeue', onDequeue, { once: true });
+          });
+          // Re-check after waiting — encoder may have errored during backpressure wait
+          if (encoder.state !== 'configured') {
+            if (encodeError) throw encodeError;
+            throw new Error('VideoEncoder closed during backpressure wait');
+          }
+        }
+
         const frameForEncoder = new VideoFrame(offscreen, {
           timestamp:    timestampUs,
           duration:     Math.round(frameDuration),
@@ -229,6 +263,15 @@ export class Exporter {
         // Guard: if encoder errored/closed asynchronously, attempt recovery
         if (encoder.state !== 'configured') {
           frameForEncoder.close();
+
+          // Close the dead encoder BEFORE recovery to free its GPU codec slot.
+          // Without this, recovery attempts compete with the dead encoder for
+          // limited GPU codec sessions, causing all retries to fail.
+          if (encoder.state !== 'closed') encoder.close();
+
+          // Temporarily shrink the decoder pool to free GPU codec slots for
+          // encoder recovery. The decoders will be lazily re-created on demand.
+          decoders.releaseAll();
 
           const recovered = await recoverEncoder(
             encoderConfig,
@@ -241,6 +284,7 @@ export class Exporter {
           }
           encoder = recovered;
           encodeError = null;
+          framesSinceFlush = 0;
 
           // Re-create the frame and encode with a forced keyframe after recovery
           const retryFrame = new VideoFrame(offscreen, {
@@ -252,25 +296,35 @@ export class Exporter {
           encoder.encode(retryFrame, { keyFrame: true });
           retryFrame.close();
         } else {
-          const keyframe = i % (frameRate * 2) === 0;
+          // Keyframe every 1 second (reduced from 2s) to limit the number of
+          // reference frames the hardware encoder must maintain simultaneously.
+          // VP9 HW encoders typically have ~8 reference frame slots; at 30fps
+          // with a 2s interval that's 60 delta frames — dangerously close to
+          // exhausting internal buffers on long exports.
+          const keyframe = i % frameRate === 0;
           encoder.encode(frameForEncoder, { keyFrame: keyframe });
           frameForEncoder.close();
+          framesSinceFlush++;
+
+          // Periodic flush at a longer interval to drain the hardware encoder's
+          // internal pipeline and release accumulated reference frame buffers.
+          // Without this, VP9 hardware encoders accumulate internal state over
+          // thousands of frames and eventually crash with "Encoder creation
+          // error" around 80% of long exports.
+          //
+          // Flushing every ~30s of content (FLUSH_INTERVAL_FRAMES) costs <1ms
+          // on modern GPUs and ensures internal state never grows unbounded.
+          // The flush is placed at keyframe boundaries so the encoder's
+          // reference frame set is at its smallest.
+          if (keyframe && framesSinceFlush >= FLUSH_INTERVAL_FRAMES) {
+            await encoder.flush();
+            framesSinceFlush = 0;
+            if (encodeError) throw encodeError;
+          }
         }
 
         // Check for async encoder errors immediately after encode
         if (encodeError) throw encodeError;
-
-        // Backpressure: if the encoder queue is building up (slow hardware encoder),
-        // wait for a dequeue event before submitting more frames to avoid a
-        // QuotaExceededError which would otherwise go to the error callback.
-        if (encoder.encodeQueueSize > 10) {
-          await new Promise<void>(r => encoder.addEventListener('dequeue', () => r(), { once: true }));
-          // Re-check after waiting — encoder may have errored during backpressure wait
-          if (encoder.state !== 'configured') {
-            if (encodeError) throw encodeError;
-            throw new Error('VideoEncoder closed during backpressure wait');
-          }
-        }
 
         // Video encoding is ~80 % of the total work budget
         onProgress?.((i + 1) / totalFrames * 0.8);
@@ -396,6 +450,17 @@ async function createConfiguredEncoder(
 }
 
 // ── Encoder recovery ──────────────────────────────────────────────────────────
+// Recovery uses a lightweight path that differs from createConfiguredEncoder:
+//
+// 1. NO test encoder — the test encoder doubles GPU allocation during the exact
+//    moment when GPU resources are exhausted (the reason we're recovering).
+// 2. Software-first — hardware acceleration clearly just failed, so try software
+//    mode first; only fall back to hardware if the failure was transient.
+// 3. 'realtime' latency mode — avoids quality-mode's internal frame buffering
+//    which adds GPU/memory pressure during recovery.
+// 4. Polling-based configure check — a single setTimeout(0) tick is not enough
+//    to detect async encoder creation failures. We poll at short intervals
+//    for up to 500ms per attempt.
 
 async function recoverEncoder(
   config: { codec: string; width: number; height: number; bitrate: number; framerate: number },
@@ -403,16 +468,53 @@ async function recoverEncoder(
   error: (e: DOMException) => void,
   maxRetries = 3,
 ): Promise<VideoEncoder | null> {
+  // Software first since hardware just failed; hardware as fallback
+  // in case the failure was transient (e.g. momentary GPU memory spike).
+  const recoveryModes: HardwareAcceleration[] = ['prefer-software', 'prefer-hardware'];
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    // Back off to let GPU resources be freed
-    await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
-    try {
-      const encoder = await createConfiguredEncoder(output, error, config);
-      console.info(`[Exporter] Encoder recovered on attempt ${attempt + 1}`);
-      return encoder;
-    } catch {
-      console.warn(`[Exporter] Encoder recovery attempt ${attempt + 1} failed`);
+    // Exponential backoff: 100ms, 200ms, 400ms — GPU driver needs time to
+    // fully release codec sessions after close().
+    await new Promise(r => setTimeout(r, 100 * Math.pow(2, attempt)));
+
+    for (const hw of recoveryModes) {
+      let configError: DOMException | null = null;
+      const encoder = new VideoEncoder({
+        output,
+        error: (e) => { configError = e; error(e); },
+      });
+
+      try {
+        encoder.configure({
+          ...config,
+          hardwareAcceleration: hw,
+          // 'realtime' reduces internal buffering pressure compared to
+          // 'quality' which can hold multiple frames in GPU memory.
+          latencyMode: 'realtime',
+        });
+
+        // Poll for configure to settle — GPU driver initialization is
+        // non-deterministic and a single microtask tick is insufficient.
+        // Check every 50ms for up to 500ms.
+        let settled = false;
+        for (let tick = 0; tick < 10; tick++) {
+          await new Promise(r => setTimeout(r, 50));
+          if (configError || encoder.state === 'closed') break;
+          if (encoder.state === 'configured') { settled = true; break; }
+        }
+
+        if (settled && !configError && encoder.state === 'configured') {
+          console.info(
+            `[Exporter] Encoder recovered on attempt ${attempt + 1} (${hw})`,
+          );
+          return encoder;
+        }
+        if (encoder.state !== 'closed') encoder.close();
+      } catch {
+        if (encoder.state !== 'closed') encoder.close();
+      }
     }
+    console.warn(`[Exporter] Encoder recovery attempt ${attempt + 1} failed`);
   }
   return null;
 }

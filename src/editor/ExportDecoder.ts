@@ -399,6 +399,16 @@ export class ExportDecoderPool {
     this.usageOrder.push(clipId);
   }
 
+  /**
+   * Release all decoders to free GPU codec slots (e.g. during encoder recovery).
+   * Unlike disposeAll(), decoders will be lazily re-created on next access.
+   */
+  releaseAll(): void {
+    for (const decoder of this.pool.values()) decoder.dispose();
+    this.pool.clear();
+    this.usageOrder = [];
+  }
+
   disposeAll(): void {
     for (const decoder of this.pool.values()) decoder.dispose();
     this.pool.clear();
