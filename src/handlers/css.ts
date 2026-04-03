@@ -47,6 +47,7 @@ class cssHandler implements FormatHandler {
       let css: string;
 
       if (inputFormat.internal === "less") {
+        // @ts-ignore — less has no type declarations
         const less = await import("less");
         const { css: compiled } = await less.default.render(source);
         css = compiled;
