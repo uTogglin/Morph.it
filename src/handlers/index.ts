@@ -61,6 +61,18 @@ import comicsHandler from "./comics.ts";
 import terrariaWldHandler from "./terrariawld.ts";
 import ArchiveHandler from "./archive.ts";
 import heicHandler from "./heic.ts";
+import aperturePictureHandler from "./aperturePicture.ts";
+import cybergrindHandler from "./cybergrindHandler.ts";
+import opusMagnumHandler from "./opusMagnum.ts";
+import xcursorHandler from "./xcursor.ts";
+import harHandler from "./har.ts";
+import piskelHandler from "./piskel.ts";
+import cssHandler from "./css.ts";
+import configHandler from "./config.ts";
+import wabtHandler from "./wabtHandler.ts";
+import chessjsHandler from "./chessjs.ts";
+import fenToJsonHandler from "./fenToJson.ts";
+import TypstHandler from "./typst.ts";
 
 const handlers: FormatHandler[] = [];
 try { handlers.push(new svgTraceHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
@@ -127,5 +139,17 @@ try { handlers.push(new comicsHandler()) } catch (e) { console.warn("Failed to i
 try { handlers.push(new terrariaWldHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
 try { handlers.push(new ArchiveHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
 try { handlers.push(new heicHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new aperturePictureHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new cybergrindHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new opusMagnumHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new xcursorHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new harHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new piskelHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new cssHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new configHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new wabtHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new chessjsHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new fenToJsonHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
+try { handlers.push(new TypstHandler()) } catch (e) { console.warn("Failed to init handler:", e); };
 
 export default handlers;

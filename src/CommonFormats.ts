@@ -357,6 +357,28 @@ const CommonFormats = {
         "cr3",
         "image/x-canon-cr3",
         Category.IMAGE
+    ),
+    // additional formats
+    CSS: new FormatDefinition(
+        "CSS Stylesheet",
+        "css",
+        "css",
+        "text/css",
+        Category.CODE
+    ),
+    WMV: new FormatDefinition(
+        "Windows Media Video",
+        "wmv",
+        "wmv",
+        "video/x-ms-asf",
+        Category.VIDEO
+    ),
+    TYPST: new FormatDefinition(
+        "Typst Document",
+        "typst",
+        "typ",
+        "text/typst",
+        [Category.DOCUMENT, Category.TEXT]
     )
 }
 
