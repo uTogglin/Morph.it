@@ -5,6 +5,11 @@
     "to": "application/x-navi-animation(ani)"
   },
   {
+    "handler": "fenToJson",
+    "from": "application/json(json)",
+    "to": "application/vnd.chess-fen(fen)"
+  },
+  {
     "handler": "FFmpeg",
     "from": "image/gif(gif)",
     "to": "audio/ogg(ogg)"
