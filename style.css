@@ -2768,6 +2768,9 @@ body[data-tool="quick-image"] #convert-button { display: none !important; }
   flex-wrap: wrap;
   align-items: center;
   min-width: auto;
+  flex-basis: 100%;
+  justify-content: flex-end;
+  gap: 10px;
 }
 /* BG mode toggle */
 .qi-bg-row {

@@ -4112,8 +4112,11 @@ ui.qiRemoveBg?.addEventListener("click", async () => {
 // Open in full editor
 ui.qiOpenEditor?.addEventListener("click", async () => {
   if (!qiImageBytes) return;
+  const ext = qiFileName.split(".").pop()?.toLowerCase() || "png";
+  const mimeMap: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", tiff: "image/tiff", tif: "image/tiff", ico: "image/x-icon" };
+  const mime = mimeMap[ext] || "image/png";
   showToolView("image");
-  await imgLoadFiles([new File([qiImageBytes as BlobPart], qiFileName)]);
+  imgLoadFiles([new File([qiImageBytes as BlobPart], qiFileName, { type: mime })]);
 });
 
 // AI Edit
