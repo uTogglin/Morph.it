@@ -2769,6 +2769,93 @@ body[data-tool="quick-image"] #convert-button { display: none !important; }
   align-items: center;
   min-width: auto;
 }
+/* BG mode toggle */
+.qi-bg-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.qi-btn-toggle {
+  font-size: 0.78rem;
+  padding: 6px 12px;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* Settings panel */
+.qi-settings-group {
+  flex-basis: 100% !important;
+  min-width: 100% !important;
+}
+#qi-settings-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 0 0;
+}
+#qi-settings-panel.hidden { display: none; }
+.qi-setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 200px;
+  min-width: 180px;
+}
+.qi-setting-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.qi-setting-row input {
+  padding: 8px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  background: var(--bg-color);
+  color: var(--text-main);
+  font-size: 0.85rem;
+}
+.qi-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+.qi-hint a { color: var(--accent); }
+/* Home card sub-buttons */
+.home-card-sub-buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  z-index: 2;
+}
+.home-card-sub {
+  padding: 6px 18px;
+  border: 1px solid var(--input-border);
+  border-radius: 50px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all var(--transition);
+  background: var(--bg-color);
+}
+.home-card-sub:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+/* Toolbar responsive stacking */
+@media (max-width: 640px) {
+  #qi-toolbar {
+    flex-direction: column;
+  }
+  .qi-tool-group {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+  .qi-ai-row {
+    flex-direction: column;
+  }
+}
 
 /* =========================================
    9c. TEXT & SPEECH PAGE

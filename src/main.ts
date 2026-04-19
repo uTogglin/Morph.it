@@ -357,6 +357,7 @@ const ui = {
   qiLockRatio: document.querySelector("#qi-lock-ratio") as HTMLInputElement,
   qiResizeApply: document.querySelector("#qi-resize-apply") as HTMLButtonElement,
   qiRemoveBg: document.querySelector("#qi-remove-bg") as HTMLButtonElement,
+  qiBgMode: document.querySelector("#qi-bg-mode") as HTMLButtonElement,
   qiOpenEditor: document.querySelector("#qi-open-editor") as HTMLButtonElement,
   qiAiPrompt: document.querySelector("#qi-ai-prompt") as HTMLInputElement,
   qiAiEdit: document.querySelector("#qi-ai-edit") as HTMLButtonElement,
@@ -365,6 +366,10 @@ const ui = {
   qiDownload: document.querySelector("#qi-download") as HTMLButtonElement,
   qiReset: document.querySelector("#qi-reset") as HTMLButtonElement,
   qiFileInput: document.querySelector("#qi-file-input") as HTMLInputElement,
+  qiSettingsToggle: document.querySelector("#qi-settings-toggle") as HTMLButtonElement,
+  qiSettingsPanel: document.querySelector("#qi-settings-panel") as HTMLDivElement,
+  qiBgApiKey: document.querySelector("#qi-bg-api-key") as HTMLInputElement,
+  qiOpenrouterKey: document.querySelector("#qi-openrouter-key") as HTMLInputElement,
 
   applyAllToggle: document.querySelector("#apply-all-toggle") as HTMLButtonElement,
   // Speech settings panel
@@ -584,9 +589,17 @@ document.getElementById("recent-clear")?.addEventListener("click", () => {
 // Back button
 ui.backToHome.addEventListener("click", showHomePage);
 
-// Home card clicks
+// Home card clicks — sub-buttons get priority, otherwise fall through to card's data-tool
 for (const card of document.querySelectorAll<HTMLButtonElement>(".home-card")) {
-  card.addEventListener("click", () => {
+  card.addEventListener("click", (e) => {
+    // Check if a sub-button was clicked
+    const sub = (e.target as HTMLElement).closest(".home-card-sub") as HTMLElement | null;
+    if (sub && sub.dataset.tool) {
+      e.stopPropagation();
+      const tool = sub.dataset.tool as "convert" | "compress" | "image" | "quick-image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor";
+      showToolView(tool);
+      return;
+    }
     const tool = card.dataset.tool as "convert" | "compress" | "image" | "quick-image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor";
     if (tool) showToolView(tool);
   });
@@ -4159,6 +4172,42 @@ ui.qiDownload?.addEventListener("click", () => {
 
 // Reset / New Image
 ui.qiReset?.addEventListener("click", () => qiResetState());
+
+// BG mode toggle
+function qiUpdateBgModeLabel() {
+  if (ui.qiBgMode) ui.qiBgMode.textContent = bgMode === "local" ? "Local" : "remove.bg";
+}
+qiUpdateBgModeLabel();
+ui.qiBgMode?.addEventListener("click", () => {
+  bgMode = bgMode === "local" ? "api" : "local";
+  qiUpdateBgModeLabel();
+  try { localStorage.setItem("convert-bg-mode", bgMode); } catch {}
+  // Sync the main settings panel too
+  if (ui.bgModeToggle) ui.bgModeToggle.textContent = bgMode === "local" ? "Mode: Local" : "Mode: remove.bg API";
+  updateBgUI();
+});
+
+// Settings panel toggle
+ui.qiSettingsToggle?.addEventListener("click", () => {
+  ui.qiSettingsPanel?.classList.toggle("hidden");
+});
+
+// Sync QI settings inputs from stored values
+if (ui.qiBgApiKey) ui.qiBgApiKey.value = bgApiKey;
+if (ui.qiOpenrouterKey) ui.qiOpenrouterKey.value = openrouterApiKey;
+
+ui.qiBgApiKey?.addEventListener("input", () => {
+  bgApiKey = ui.qiBgApiKey.value.trim();
+  try { localStorage.setItem("convert-bg-api-key", bgApiKey); } catch {}
+  // Sync the main settings input
+  if (ui.bgApiKeyInput) ui.bgApiKeyInput.value = bgApiKey;
+});
+ui.qiOpenrouterKey?.addEventListener("input", () => {
+  openrouterApiKey = ui.qiOpenrouterKey.value.trim();
+  try { localStorage.setItem("convert-openrouter-key", openrouterApiKey); } catch {}
+  // Sync the main settings input
+  if (ui.openrouterApiKeyInput) ui.openrouterApiKeyInput.value = openrouterApiKey;
+});
 
 // Bridge: iframe inpaint tool → parent runInpainting() → iframe result
 window.addEventListener("message", async (e) => {

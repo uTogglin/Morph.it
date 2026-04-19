@@ -143,7 +143,7 @@
           <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
-      <button class="home-card" data-tool="image">
+      <button class="home-card" data-tool="quick-image">
         <div class="home-card-icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -153,28 +153,12 @@
         </div>
         <div class="home-card-content">
           <h3>Image Tools</h3>
-          <p>Remove backgrounds, rescale, and strip metadata.</p>
+          <p>Remove backgrounds, resize, AI-edit, and batch process images.</p>
         </div>
-        <span class="home-card-tag">Batch edit</span>
-        <span class="home-card-arrow">
-          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
-        </span>
-      </button>
-      <button class="home-card" data-tool="quick-image">
-        <div class="home-card-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M15 3h6v6"></path>
-            <path d="M10 14L21 3"></path>
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-            <polyline points="21 15 16 10 5 21"></polyline>
-          </svg>
+        <div class="home-card-sub-buttons">
+          <span class="home-card-sub" data-tool="quick-image">Simple</span>
+          <span class="home-card-sub" data-tool="image">Advanced</span>
         </div>
-        <div class="home-card-content">
-          <h3>Quick Edit</h3>
-          <p>Preview, resize, remove backgrounds, and AI-edit images from files, URLs, or clipboard.</p>
-        </div>
-        <span class="home-card-tag">Simple editor</span>
         <span class="home-card-arrow">
           <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
@@ -873,13 +857,16 @@
           <!-- Background removal -->
           <div class="qi-tool-group">
             <span class="qi-tool-label">Background Removal</span>
-            <button id="qi-remove-bg" class="qi-btn">Remove Background</button>
+            <div class="qi-bg-row">
+              <button id="qi-remove-bg" class="qi-btn">Remove Background</button>
+              <button id="qi-bg-mode" class="qi-btn qi-btn-toggle">Local</button>
+            </div>
           </div>
 
           <!-- AI tools -->
           <div class="qi-tool-group">
             <span class="qi-tool-label">AI Tools</span>
-            <button id="qi-open-editor" class="qi-btn">Open in Full Editor</button>
+            <button id="qi-open-editor" class="qi-btn">Open in Advanced Editor</button>
             <div class="qi-ai-row">
               <input type="text" id="qi-ai-prompt" placeholder="Describe changes (e.g. 'make it a cartoon')">
               <button id="qi-ai-edit" class="qi-btn">AI Edit</button>
@@ -897,6 +884,26 @@
               Download
             </button>
             <button id="qi-reset" class="qi-btn">New Image</button>
+          </div>
+
+          <!-- Settings -->
+          <div class="qi-tool-group qi-settings-group">
+            <button id="qi-settings-toggle" class="qi-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </button>
+            <div id="qi-settings-panel" class="hidden">
+              <div class="qi-setting-row">
+                <label class="qi-setting-label">remove.bg API Key</label>
+                <input type="password" id="qi-bg-api-key" placeholder="remove.bg API key" autocomplete="off">
+                <p class="qi-hint">Get a free key at <a href="https://www.remove.bg/api" target="_blank" rel="noopener">remove.bg/api</a></p>
+              </div>
+              <div class="qi-setting-row">
+                <label class="qi-setting-label">OpenRouter API Key</label>
+                <input type="password" id="qi-openrouter-key" placeholder="OpenRouter API key" autocomplete="off">
+                <p class="qi-hint">Get a key at <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">openrouter.ai</a></p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
