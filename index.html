@@ -160,6 +160,25 @@
           <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
         </span>
       </button>
+      <button class="home-card" data-tool="quick-image">
+        <div class="home-card-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 3h6v6"></path>
+            <path d="M10 14L21 3"></path>
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+        </div>
+        <div class="home-card-content">
+          <h3>Quick Edit</h3>
+          <p>Preview, resize, remove backgrounds, and AI-edit images from files, URLs, or clipboard.</p>
+        </div>
+        <span class="home-card-tag">Simple editor</span>
+        <span class="home-card-arrow">
+          <svg width="20" height="20"><use href="#icon-arrow-right"/></svg>
+        </span>
+      </button>
 
       <button class="home-card" data-tool="speech">
         <div class="home-card-icon">
@@ -798,6 +817,92 @@
     </div>
 
     <input id="img-file-input" type="file" accept="image/*,.heif,.heic" style="display:none">
+  </section>
+
+  <!-- Quick Image Editor page -->
+  <section id="quick-image-page" class="tool-page hidden">
+    <div class="tool-page-header">
+      <h2>Quick Edit</h2>
+    </div>
+
+    <div id="qi-container">
+      <!-- Drop / paste / URL zone (empty state) -->
+      <div id="qi-drop-zone">
+        <svg class="img-drop-icon" width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+        <span class="img-drop-text">Drop image here</span>
+        <span class="img-drop-sub">or click to browse &middot; paste from clipboard &middot; load from URL</span>
+        <span class="img-drop-formats">PNG, JPG, WebP, GIF, SVG, HEIC, BMP, TIFF and more</span>
+        <div id="qi-url-row">
+          <input type="text" id="qi-url-input" placeholder="https://example.com/photo.jpg" autocomplete="off">
+          <button id="qi-url-load" class="qi-btn-sm">Load</button>
+        </div>
+        <button id="qi-paste-btn" class="qi-btn-sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          Paste from clipboard
+        </button>
+      </div>
+
+      <!-- Editor workspace (hidden until image loaded) -->
+      <div id="qi-workspace" class="hidden">
+        <div id="qi-preview-wrap">
+          <canvas id="qi-canvas"></canvas>
+          <div id="qi-dimensions"></div>
+        </div>
+
+        <!-- Tool bar -->
+        <div id="qi-toolbar">
+          <!-- Resize -->
+          <div class="qi-tool-group">
+            <span class="qi-tool-label">Resize</span>
+            <div class="qi-size-row">
+              <input type="number" id="qi-resize-w" placeholder="Width" min="1">
+              <span class="qi-size-x">&times;</span>
+              <input type="number" id="qi-resize-h" placeholder="Height" min="1">
+              <label class="qi-lock-label" title="Lock aspect ratio">
+                <input type="checkbox" id="qi-lock-ratio" checked>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </label>
+            </div>
+            <button id="qi-resize-apply" class="qi-btn">Apply Resize</button>
+          </div>
+
+          <!-- Background removal -->
+          <div class="qi-tool-group">
+            <span class="qi-tool-label">Background Removal</span>
+            <button id="qi-remove-bg" class="qi-btn">Remove Background</button>
+          </div>
+
+          <!-- AI tools -->
+          <div class="qi-tool-group">
+            <span class="qi-tool-label">AI Tools</span>
+            <button id="qi-open-editor" class="qi-btn">Open in Full Editor</button>
+            <div class="qi-ai-row">
+              <input type="text" id="qi-ai-prompt" placeholder="Describe changes (e.g. 'make it a cartoon')">
+              <button id="qi-ai-edit" class="qi-btn">AI Edit</button>
+            </div>
+            <div class="qi-ai-row">
+              <input type="text" id="qi-ai-gen-prompt" placeholder="Describe an image to generate">
+              <button id="qi-ai-generate" class="qi-btn">Generate</button>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="qi-tool-group qi-actions">
+            <button id="qi-download" class="qi-btn qi-btn-accent">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download
+            </button>
+            <button id="qi-reset" class="qi-btn">New Image</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <input id="qi-file-input" type="file" accept="image/*,.heif,.heic" style="display:none">
   </section>
 
 

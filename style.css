@@ -615,6 +615,7 @@ textarea:focus-visible {
 /* #format-containers: only shown for "convert" tool */
 body[data-tool="compress"] #format-containers,
 body[data-tool="image"] #format-containers,
+body[data-tool="quick-image"] #format-containers,
 body[data-tool="video"] #format-containers,
 body[data-tool="speech"] #format-containers,
 body[data-tool="summarize"] #format-containers,
@@ -2375,6 +2376,12 @@ body[data-tool="image"] #archive-panel { display: none !important; }
 body[data-tool="image"] #output-tray { display: none !important; }
 body[data-tool="image"] #convert-button { display: none !important; }
 
+/* Hide shared areas on quick-image page */
+body[data-tool="quick-image"] #file-area { display: none !important; }
+body[data-tool="quick-image"] #archive-panel { display: none !important; }
+body[data-tool="quick-image"] #output-tray { display: none !important; }
+body[data-tool="quick-image"] #convert-button { display: none !important; }
+
 /* img-page-header removed — image page now uses shared .tool-page-header */
 
 /* ── Editor container: drop zone + miniPaint iframe + action bar ── */
@@ -2539,6 +2546,228 @@ body[data-tool="image"] #convert-button { display: none !important; }
 .img-action-btn.disabled {
   filter: grayscale(1) opacity(0.5);
   pointer-events: none;
+}
+
+/* =========================================
+   9b-2. QUICK IMAGE EDITOR PAGE
+   ========================================= */
+#qi-container {
+  position: relative;
+  z-index: 1;
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+}
+#qi-drop-zone {
+  width: 100%;
+  min-height: calc(100vh - 220px);
+  border: 2px dashed var(--dashed-border);
+  border-radius: var(--radius);
+  background: var(--surface-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: all var(--transition);
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+#qi-drop-zone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+  transition: opacity var(--transition);
+  opacity: 1;
+}
+#qi-drop-zone:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-color));
+}
+#qi-drop-zone:hover::before { opacity: 0; }
+#qi-drop-zone:hover .img-drop-icon {
+  color: var(--accent);
+  opacity: 0.7;
+  transform: scale(1.05);
+}
+#qi-drop-zone.hidden { display: none; }
+#qi-url-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  width: 100%;
+  max-width: 420px;
+}
+#qi-url-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  background: var(--bg-color);
+  color: var(--text-main);
+  font-size: 0.85rem;
+}
+.qi-btn-sm {
+  padding: 8px 16px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  background: var(--surface-color);
+  color: var(--text-main);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.qi-btn-sm:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* Workspace */
+#qi-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+#qi-workspace.hidden { display: none; }
+#qi-preview-wrap {
+  position: relative;
+  background: var(--surface-color);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  max-height: 70vh;
+}
+/* Transparent checkerboard for images with alpha */
+#qi-preview-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-conic-gradient(rgba(128,128,128,0.15) 0% 25%, transparent 0% 50%) 0 0 / 16px 16px;
+  pointer-events: none;
+}
+#qi-canvas {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+}
+#qi-dimensions {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-color) 85%, transparent);
+  padding: 2px 8px;
+  border-radius: 4px;
+  z-index: 2;
+}
+/* Toolbar */
+#qi-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px;
+  background: var(--surface-color);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+}
+.qi-tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 200px;
+  min-width: 180px;
+}
+.qi-tool-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.qi-size-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.qi-size-row input {
+  width: 80px;
+  padding: 6px 8px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  background: var(--bg-color);
+  color: var(--text-main);
+  font-size: 0.85rem;
+}
+.qi-size-x { color: var(--text-muted); font-weight: 600; }
+.qi-lock-label {
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+}
+.qi-lock-label input { display: none; }
+.qi-lock-label input:checked + svg { color: var(--accent); }
+.qi-ai-row {
+  display: flex;
+  gap: 6px;
+}
+.qi-ai-row input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius);
+  background: var(--bg-color);
+  color: var(--text-main);
+  font-size: 0.85rem;
+}
+.qi-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--input-border);
+  border-radius: 50px;
+  background: var(--surface-color);
+  color: var(--text-main);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.qi-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.qi-btn-accent {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px var(--accent-dim);
+}
+.qi-btn-accent:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--accent-dim);
+  background: var(--accent);
+  color: white;
+}
+.qi-actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: auto;
 }
 
 /* =========================================

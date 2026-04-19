@@ -344,6 +344,27 @@ const ui = {
   imgInpaintModelToggle: document.querySelector("#inpaint-model-toggle") as HTMLButtonElement,
   imgInpaintFeatherToggle: document.querySelector("#inpaint-feather-toggle") as HTMLButtonElement,
   openrouterApiKeyInput: document.querySelector("#openrouter-api-key") as HTMLInputElement,
+  // Quick Image Editor UI
+  qiDropZone: document.querySelector("#qi-drop-zone") as HTMLDivElement,
+  qiUrlInput: document.querySelector("#qi-url-input") as HTMLInputElement,
+  qiUrlLoad: document.querySelector("#qi-url-load") as HTMLButtonElement,
+  qiPasteBtn: document.querySelector("#qi-paste-btn") as HTMLButtonElement,
+  qiWorkspace: document.querySelector("#qi-workspace") as HTMLDivElement,
+  qiCanvas: document.querySelector("#qi-canvas") as HTMLCanvasElement,
+  qiDimensions: document.querySelector("#qi-dimensions") as HTMLDivElement,
+  qiResizeW: document.querySelector("#qi-resize-w") as HTMLInputElement,
+  qiResizeH: document.querySelector("#qi-resize-h") as HTMLInputElement,
+  qiLockRatio: document.querySelector("#qi-lock-ratio") as HTMLInputElement,
+  qiResizeApply: document.querySelector("#qi-resize-apply") as HTMLButtonElement,
+  qiRemoveBg: document.querySelector("#qi-remove-bg") as HTMLButtonElement,
+  qiOpenEditor: document.querySelector("#qi-open-editor") as HTMLButtonElement,
+  qiAiPrompt: document.querySelector("#qi-ai-prompt") as HTMLInputElement,
+  qiAiEdit: document.querySelector("#qi-ai-edit") as HTMLButtonElement,
+  qiAiGenPrompt: document.querySelector("#qi-ai-gen-prompt") as HTMLInputElement,
+  qiAiGenerate: document.querySelector("#qi-ai-generate") as HTMLButtonElement,
+  qiDownload: document.querySelector("#qi-download") as HTMLButtonElement,
+  qiReset: document.querySelector("#qi-reset") as HTMLButtonElement,
+  qiFileInput: document.querySelector("#qi-file-input") as HTMLInputElement,
 
   applyAllToggle: document.querySelector("#apply-all-toggle") as HTMLButtonElement,
   // Speech settings panel
@@ -449,12 +470,13 @@ function formatTimeAgo(ts: number) {
 
 // ── Home page / tool navigation ──────────────────────────────────────────────
 /** Which tool view is active, or null when on the home page */
-let activeTool: "convert" | "compress" | "image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor" | null = null;
+let activeTool: "convert" | "compress" | "image" | "quick-image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor" | null = null;
 let ocrTool: { stopTts: () => void };
 let speechTool: { stopTts: () => void };
 
 const compressPage = document.querySelector("#compress-page") as HTMLElement;
 const imagePage = document.querySelector("#image-page") as HTMLElement;
+const quickImagePage = document.querySelector("#quick-image-page") as HTMLElement;
 const speechPage = document.querySelector("#speech-page") as HTMLElement;
 const summarizePage = document.querySelector("#summarize-page") as HTMLElement;
 const ocrPage = document.querySelector("#ocr-page") as HTMLElement;
@@ -465,6 +487,7 @@ function showHomePage() {
   // Clean up tool state when navigating away
   if (activeTool === "compress") compressResetState();
   if (activeTool === "image") imgResetState();
+  if (activeTool === "quick-image") qiResetState();
   if (activeTool === "ocr") ocrTool.stopTts();
   if (activeTool === "speech") speechTool.stopTts();
   activeTool = null;
@@ -474,6 +497,7 @@ function showHomePage() {
   ui.backToHome.classList.add("hidden");
   compressPage.classList.add("hidden");
   imagePage.classList.add("hidden");
+  quickImagePage.classList.add("hidden");
   speechPage.classList.add("hidden");
   summarizePage.classList.add("hidden");
   ocrPage.classList.add("hidden");
@@ -483,10 +507,11 @@ function showHomePage() {
   renderRecentFiles();
 }
 
-function showToolView(tool: "convert" | "compress" | "image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor") {
+function showToolView(tool: "convert" | "compress" | "image" | "quick-image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor") {
   // Clean up tool state when switching away
   if (activeTool === "compress" && tool !== "compress") compressResetState();
   if (activeTool === "image" && tool !== "image") imgResetState();
+  if (activeTool === "quick-image" && tool !== "quick-image") qiResetState();
   if (activeTool === "ocr" && tool !== "ocr") ocrTool.stopTts();
   if (activeTool === "speech" && tool !== "speech") speechTool.stopTts();
   activeTool = tool;
@@ -497,6 +522,7 @@ function showToolView(tool: "convert" | "compress" | "image" | "speech" | "summa
 
   compressPage.classList.add("hidden");
   imagePage.classList.add("hidden");
+  quickImagePage.classList.add("hidden");
   speechPage.classList.add("hidden");
   summarizePage.classList.add("hidden");
   ocrPage.classList.add("hidden");
@@ -519,6 +545,9 @@ function showToolView(tool: "convert" | "compress" | "image" | "speech" | "summa
     imagePage.classList.remove("hidden");
     pageEl = imagePage;
     syncImageSettingsUI();
+  } else if (tool === "quick-image") {
+    quickImagePage.classList.remove("hidden");
+    pageEl = quickImagePage;
   } else if (tool === "speech") {
     speechPage.classList.remove("hidden");
     pageEl = speechPage;
@@ -558,7 +587,7 @@ ui.backToHome.addEventListener("click", showHomePage);
 // Home card clicks
 for (const card of document.querySelectorAll<HTMLButtonElement>(".home-card")) {
   card.addEventListener("click", () => {
-    const tool = card.dataset.tool as "convert" | "compress" | "image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor";
+    const tool = card.dataset.tool as "convert" | "compress" | "image" | "quick-image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor";
     if (tool) showToolView(tool);
   });
 }
@@ -3888,6 +3917,248 @@ ui.imgFileInput?.addEventListener("change", () => {
     ui.imgFileInput.value = "";
   }
 });
+
+// ── Quick Image Editor ──────────────────────────────────────────────────────
+let qiImageBytes: Uint8Array | null = null;
+let qiOrigW = 0;
+let qiOrigH = 0;
+let qiAspect = 1;
+let qiFileName = "image.png";
+
+function qiResetState() {
+  qiImageBytes = null;
+  qiOrigW = 0;
+  qiOrigH = 0;
+  qiAspect = 1;
+  qiFileName = "image.png";
+  ui.qiDropZone?.classList.remove("hidden");
+  ui.qiWorkspace?.classList.add("hidden");
+  ui.qiResizeW && (ui.qiResizeW.value = "");
+  ui.qiResizeH && (ui.qiResizeH.value = "");
+  ui.qiAiPrompt && (ui.qiAiPrompt.value = "");
+  ui.qiAiGenPrompt && (ui.qiAiGenPrompt.value = "");
+  ui.qiUrlInput && (ui.qiUrlInput.value = "");
+}
+
+function qiShowImage(bytes: Uint8Array) {
+  qiImageBytes = bytes;
+  const blob = new Blob([bytes as BlobPart]);
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    qiOrigW = img.naturalWidth;
+    qiOrigH = img.naturalHeight;
+    qiAspect = qiOrigW / qiOrigH;
+    const c = ui.qiCanvas;
+    c.width = qiOrigW;
+    c.height = qiOrigH;
+    c.getContext("2d")!.drawImage(img, 0, 0);
+    ui.qiDimensions.textContent = `${qiOrigW} × ${qiOrigH}`;
+    ui.qiResizeW.value = String(qiOrigW);
+    ui.qiResizeH.value = String(qiOrigH);
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+  ui.qiDropZone?.classList.add("hidden");
+  ui.qiWorkspace?.classList.remove("hidden");
+}
+
+async function qiLoadFile(file: File) {
+  const buf = await file.arrayBuffer();
+  qiFileName = file.name;
+  qiShowImage(new Uint8Array(buf));
+}
+
+async function qiLoadFromUrl(url: string) {
+  try {
+    window.showPopup(`<p style="text-align:center;padding:24px">Loading image…</p>`);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const buf = await resp.arrayBuffer();
+    window.hidePopup();
+    const parts = url.split("/");
+    qiFileName = parts[parts.length - 1]?.split("?")[0] || "image.png";
+    qiShowImage(new Uint8Array(buf));
+  } catch (err: any) {
+    window.hidePopup();
+    window.showPopup(`<p style="text-align:center;padding:24px;color:var(--error)">Failed to load image: ${err.message}</p>`);
+    setTimeout(() => window.hidePopup(), 3000);
+  }
+}
+
+async function qiLoadFromClipboard() {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imgType = item.types.find((t) => t.startsWith("image/"));
+      if (imgType) {
+        const blob = await item.getType(imgType);
+        const buf = await blob.arrayBuffer();
+        qiFileName = "clipboard.png";
+        qiShowImage(new Uint8Array(buf));
+        return;
+      }
+    }
+    window.showPopup(`<p style="text-align:center;padding:24px">No image found in clipboard</p>`);
+    setTimeout(() => window.hidePopup(), 2000);
+  } catch {
+    window.showPopup(`<p style="text-align:center;padding:24px;color:var(--error)">Cannot read clipboard. Please allow clipboard access.</p>`);
+    setTimeout(() => window.hidePopup(), 3000);
+  }
+}
+
+// Drop zone events
+ui.qiDropZone?.addEventListener("click", () => ui.qiFileInput?.click());
+ui.qiDropZone?.addEventListener("dragover", (e) => e.preventDefault());
+ui.qiDropZone?.addEventListener("drop", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const file = e.dataTransfer?.files?.[0];
+  if (file) qiLoadFile(file);
+});
+
+// Global paste when quick-image is active
+window.addEventListener("paste", (e) => {
+  if (activeTool !== "quick-image") return;
+  const file = (e as ClipboardEvent).clipboardData?.files?.[0];
+  if (file && file.type.startsWith("image/")) {
+    e.preventDefault();
+    qiLoadFile(file);
+  }
+});
+
+// File input
+ui.qiFileInput?.addEventListener("change", () => {
+  const f = ui.qiFileInput.files?.[0];
+  if (f) { qiLoadFile(f); ui.qiFileInput.value = ""; }
+});
+
+// URL load
+ui.qiUrlLoad?.addEventListener("click", () => {
+  const url = ui.qiUrlInput.value.trim();
+  if (url) qiLoadFromUrl(url);
+});
+ui.qiUrlInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { const url = ui.qiUrlInput.value.trim(); if (url) qiLoadFromUrl(url); }
+});
+
+// Paste button
+ui.qiPasteBtn?.addEventListener("click", () => qiLoadFromClipboard());
+
+// Resize: lock aspect ratio
+ui.qiResizeW?.addEventListener("input", () => {
+  if (ui.qiLockRatio.checked && qiAspect) {
+    const w = parseInt(ui.qiResizeW.value) || 0;
+    if (w > 0) ui.qiResizeH.value = String(Math.round(w / qiAspect));
+  }
+});
+ui.qiResizeH?.addEventListener("input", () => {
+  if (ui.qiLockRatio.checked && qiAspect) {
+    const h = parseInt(ui.qiResizeH.value) || 0;
+    if (h > 0) ui.qiResizeW.value = String(Math.round(h * qiAspect));
+  }
+});
+
+// Apply resize
+ui.qiResizeApply?.addEventListener("click", async () => {
+  if (!qiImageBytes) return;
+  const w = parseInt(ui.qiResizeW.value) || 0;
+  const h = parseInt(ui.qiResizeH.value) || 0;
+  if (w < 1 || h < 1) return;
+  window.showPopup(`<p style="text-align:center;padding:24px">Resizing…</p>`);
+  try {
+    const ext = qiFileName.split(".").pop()?.toLowerCase() || "png";
+    const resized = await resizeImageBytes(qiImageBytes, ext, w, h);
+    window.hidePopup();
+    qiShowImage(resized);
+  } catch (err: any) {
+    window.hidePopup();
+    window.showPopup(`<p style="text-align:center;padding:24px;color:var(--error)">Resize failed: ${err.message}</p>`);
+    setTimeout(() => window.hidePopup(), 3000);
+  }
+});
+
+// Remove background
+ui.qiRemoveBg?.addEventListener("click", async () => {
+  if (!qiImageBytes) return;
+  window.showPopup(`<p style="text-align:center;padding:24px">Removing background…</p>`);
+  try {
+    const ext = qiFileName.split(".").pop()?.toLowerCase() || "png";
+    const f: FileData = { name: qiFileName, bytes: qiImageBytes };
+    const result = bgMode === "api" ? await removeBgViaApi(f.bytes, ext) : await removeBgLocal(f, ext);
+    window.hidePopup();
+    qiFileName = qiFileName.replace(/\.[^.]+$/, ".png");
+    qiShowImage(result);
+  } catch (err: any) {
+    window.hidePopup();
+    window.showPopup(`<p style="text-align:center;padding:24px;color:var(--error)">Background removal failed: ${err.message}</p>`);
+    setTimeout(() => window.hidePopup(), 3000);
+  }
+});
+
+// Open in full editor
+ui.qiOpenEditor?.addEventListener("click", async () => {
+  if (!qiImageBytes) return;
+  showToolView("image");
+  await imgLoadFiles([new File([qiImageBytes as BlobPart], qiFileName)]);
+});
+
+// AI Edit
+ui.qiAiEdit?.addEventListener("click", async () => {
+  if (!qiImageBytes) return;
+  const prompt = ui.qiAiPrompt.value.trim();
+  if (!prompt) { ui.qiAiPrompt.focus(); return; }
+  window.showPopup(`<p style="text-align:center;padding:24px">AI editing…</p>`);
+  try {
+    const inputBuf = qiImageBytes.buffer.slice(
+      qiImageBytes.byteOffset,
+      qiImageBytes.byteOffset + qiImageBytes.byteLength,
+    ) as ArrayBuffer;
+    const result = await generateImageViaOpenRouter(
+      prompt, inpaintModel, `${qiOrigW}x${qiOrigH}`, false, qiOrigW, qiOrigH, inputBuf,
+    );
+    window.hidePopup();
+    qiShowImage(result);
+  } catch (err: any) {
+    window.hidePopup();
+    window.showPopup(`<p style="text-align:center;padding:24px;color:var(--error)">AI edit failed: ${err.message}</p>`);
+    setTimeout(() => window.hidePopup(), 3000);
+  }
+});
+
+// AI Generate
+ui.qiAiGenerate?.addEventListener("click", async () => {
+  const prompt = ui.qiAiGenPrompt.value.trim();
+  if (!prompt) { ui.qiAiGenPrompt.focus(); return; }
+  window.showPopup(`<p style="text-align:center;padding:24px">Generating image…</p>`);
+  try {
+    const result = await generateImageViaOpenRouter(
+      prompt, inpaintModel, "1024x1024", true, 1024, 1024,
+    );
+    window.hidePopup();
+    qiFileName = "generated.png";
+    qiShowImage(result);
+  } catch (err: any) {
+    window.hidePopup();
+    window.showPopup(`<p style="text-align:center;padding:24px;color:var(--error)">Generation failed: ${err.message}</p>`);
+    setTimeout(() => window.hidePopup(), 3000);
+  }
+});
+
+// Download
+ui.qiDownload?.addEventListener("click", () => {
+  if (!qiImageBytes) return;
+  const blob = new Blob([qiImageBytes as BlobPart]);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = qiFileName;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// Reset / New Image
+ui.qiReset?.addEventListener("click", () => qiResetState());
 
 // Bridge: iframe inpaint tool → parent runInpainting() → iframe result
 window.addEventListener("message", async (e) => {
