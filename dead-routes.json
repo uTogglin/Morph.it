@@ -55,6 +55,21 @@
     "to": "video/webm(webm)"
   },
   {
+    "handler": "font",
+    "from": "font/ttf(ttf)",
+    "to": "font/otf(otf)"
+  },
+  {
+    "handler": "font",
+    "from": "font/ttf(ttf)",
+    "to": "font/woff2(woff2)"
+  },
+  {
+    "handler": "font",
+    "from": "font/ttf(ttf)",
+    "to": "image/svg+xml(svg)"
+  },
+  {
     "handler": "ImageMagick",
     "from": "image/bmp(bmp)",
     "to": "application/pdf(pocketmod)"
