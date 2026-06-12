@@ -2102,22 +2102,26 @@ let _inBatchMode = false;
 // ── Dynamic Memory Detection ──────────────────────────────────────────────
 let _maxAllocSize: number | null = null;
 
-/** Detect the browser's maximum allocatable ArrayBuffer size via binary search */
+/**
+ * Estimate the browser's practical maximum ArrayBuffer size.
+ * NOTE: We deliberately do NOT probe by allocating real buffers — calling
+ * `new ArrayBuffer(mid)` with multi-GB sizes in a binary search commits huge
+ * amounts of memory and freezes/crashes the tab (especially during video→gif
+ * conversions). Instead we derive a conservative estimate from the reported
+ * device memory, which is instant and allocation-free.
+ */
 function detectMaxAllocSize(): number {
   if (_maxAllocSize !== null) return _maxAllocSize;
-  let low = 1024 * 1024; // 1MB min
-  let high = 4 * 1024 * 1024 * 1024; // 4GB max
-  while (high - low > 1024 * 1024) {
-    const mid = Math.floor((low + high) / 2);
-    try {
-      new ArrayBuffer(mid);
-      low = mid;
-    } catch {
-      high = mid;
-    }
-  }
-  _maxAllocSize = low;
-  return low;
+  // navigator.deviceMemory is in GiB (rounded, capped at 8 by the spec).
+  const deviceMemGiB = (navigator as any).deviceMemory as number | undefined;
+  const gib = 1024 * 1024 * 1024;
+  // Default to 4 GiB of system memory when unknown, then assume a single
+  // ArrayBuffer can use ~25% of it before the browser refuses / thrashes.
+  const totalBytes = (typeof deviceMemGiB === "number" && deviceMemGiB > 0
+    ? deviceMemGiB
+    : 4) * gib;
+  _maxAllocSize = Math.max(256 * 1024 * 1024, Math.floor(totalBytes * 0.25));
+  return _maxAllocSize;
 }
 
 /** Check whether files might exceed available memory; returns false if user declines */
