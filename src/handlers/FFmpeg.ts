@@ -7,7 +7,7 @@ import type { LogEvent } from "@ffmpeg/ffmpeg";
 import mime from "mime";
 import normalizeMimeType from "../normalizeMimeType.ts";
 import CommonFormats from "src/CommonFormats.ts";
-import { cdnUrl } from "../cdn.ts";
+import { cdnUrlPreload, cdnUrlSync } from "../cdn.ts";
 
 class FFmpegHandler implements FormatHandler {
 
@@ -49,8 +49,10 @@ class FFmpegHandler implements FormatHandler {
 
   async loadFFmpeg () {
     if (!this.#ffmpeg) return;
+    // Use the URL pre-resolved during init() — avoids a network HEAD request
+    // (via cdnUrl) on every reload, which happens before each conversion.
     return await this.#ffmpeg.load({
-      coreURL: await cdnUrl("ffmpegCore")
+      coreURL: cdnUrlSync("ffmpegCore")
     });
   }
   terminateFFmpeg () {
@@ -98,6 +100,10 @@ class FFmpegHandler implements FormatHandler {
   }
 
   async init () {
+
+    // Resolve the FFmpeg core URL once, so every later reloadFFmpeg() can read
+    // it synchronously via cdnUrlSync() instead of re-probing the CDN.
+    await cdnUrlPreload("ffmpegCore");
 
     this.#ffmpeg = new FFmpeg();
     await this.loadFFmpeg();
