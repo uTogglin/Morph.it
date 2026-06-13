@@ -20,6 +20,49 @@ function isGpuDeviceLost(err: any): boolean {
   return /external instance|device.*lost|lost.*device|gpubuffer|mapasync|webgpu|gpu device|out of memory/.test(msg);
 }
 
+// When the GPU device is lost mid-inference, onnxruntime-web's pending
+// GPUBuffer.mapAsync() calls reject in a DETACHED promise that our awaited
+// generate() never sees — so generate() can hang forever instead of throwing
+// (the "Uncaught (in promise) AbortError" in the console). Catch that unhandled
+// rejection globally and use it to abort the in-flight GPU generation so we can
+// fall back to CPU.
+let gpuLostReject: ((e: any) => void) | null = null;
+(self as any).addEventListener?.("unhandledrejection", (ev: any) => {
+  if (!isGpuDeviceLost(ev?.reason)) return;
+  ev.preventDefault?.(); // we're handling it — keep the console clean
+  const reason = ev?.reason;
+  gpuLostReject?.(reason instanceof Error ? reason : new Error(reason?.message || "GPU device lost"));
+});
+
+/** Reject if `p` doesn't settle within `ms`. */
+function withTimeout<T>(p: Promise<T>, ms: number, msg: string): Promise<T> {
+  let timer: any;
+  const t = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(msg)), ms); });
+  return Promise.race([p, t]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
+/**
+ * Run one GPU generation, but abort if the WebGPU device is lost (signalled via
+ * the global unhandled-rejection handler above) or if it stalls — either way a
+ * device-loss error is thrown so the caller can fall back to CPU. Generations
+ * run one at a time, so a single shared `gpuLostReject` slot is safe.
+ */
+async function gpuGenerate(model: any, text: string, voice: string, speed: number): Promise<any> {
+  const gen = model.generate(text, { voice, speed });
+  gen.catch(() => {}); // if we abandon it, don't let a late rejection go unhandled
+  let timer: any;
+  const lost = new Promise<never>((_, reject) => {
+    gpuLostReject = reject;
+    timer = setTimeout(() => reject(new Error("GPU generation stalled — device may be lost")), 60000);
+  });
+  try {
+    return await Promise.race([gen, lost]);
+  } finally {
+    clearTimeout(timer);
+    gpuLostReject = null;
+  }
+}
+
 /**
  * Load the Kokoro model on the given (or auto-detected) device.
  *
@@ -84,7 +127,7 @@ async function ensureWasm(): Promise<any> {
 async function reviveGpu(): Promise<boolean> {
   try {
     ctx.postMessage({ type: "progress", pct: 0, msg: "Retrying on GPU…" });
-    const { model, device } = await loadKokoro(); // auto-detect
+    const { model, device } = await withTimeout(loadKokoro(), 60000, "GPU model reload timed out — device may be lost");
     if (device === "webgpu") { gpuModel = model; return true; }
     // No GPU available right now — keep what we loaded as the CPU fallback.
     if (!wasmModel) wasmModel = model;
@@ -114,7 +157,7 @@ async function generateChunk(text: string, voice: string, speed: number): Promis
 
   if (useGpu && gpuModel) {
     try {
-      const out = await gpuModel.generate(text, { voice, speed });
+      const out = await gpuGenerate(gpuModel, text, voice, speed);
       gpuStrikes = 0; // a healthy GPU run clears the strike counter
       return out;
     } catch (err: any) {
