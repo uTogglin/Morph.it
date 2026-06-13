@@ -2526,27 +2526,102 @@ async function stripImageMetadata(bytes: Uint8Array, ext: string): Promise<Uint8
 /** Image formats a canvas can faithfully re-encode (lossless metadata strip) */
 const canvasStripExts = new Set(["png", "jpg", "jpeg", "webp"]);
 
-/** Apply metadata stripping to all image files if privacy mode is on */
+/** OOXML (ZIP-based Office) formats whose docProps hold metadata */
+const ooxmlExts = new Set(["docx", "xlsx", "pptx", "docm", "xlsm", "pptm"]);
+
+/** OpenDocument (ZIP-based) formats whose meta.xml holds metadata */
+const odfExts = new Set(["odt", "ods", "odp", "odg", "ott", "ots", "otp"]);
+
+/** Minimal empty OOXML core properties — replaces docProps/core.xml */
+const EMPTY_OOXML_CORE =
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n` +
+  `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" ` +
+  `xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" ` +
+  `xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"></cp:coreProperties>`;
+
+/** Minimal empty ODF document metadata — replaces meta.xml */
+const EMPTY_ODF_META =
+  `<?xml version="1.0" encoding="UTF-8"?>\n` +
+  `<office:document-meta xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" ` +
+  `xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" ` +
+  `xmlns:dc="http://purl.org/dc/elements/1.1/" office:version="1.2"><office:meta/></office:document-meta>`;
+
+/** Strip PDF Info dictionary + XMP metadata via pdf-lib */
+async function stripPdfMetadata(bytes: Uint8Array): Promise<Uint8Array> {
+  const { PDFDocument, PDFName } = await import("pdf-lib");
+  // updateMetadata:false stops pdf-lib from re-stamping its own Producer/ModDate
+  const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+  doc.setTitle("");
+  doc.setAuthor("");
+  doc.setSubject("");
+  doc.setKeywords([]);
+  doc.setProducer("");
+  doc.setCreator("");
+  const epoch = new Date(0);
+  doc.setCreationDate(epoch);
+  doc.setModificationDate(epoch);
+  // Drop the XMP metadata stream from the catalog if present
+  try { doc.catalog.delete(PDFName.of("Metadata")); } catch {}
+  return await doc.save();
+}
+
+/** Strip OOXML metadata: clear docProps/core.xml, drop custom.xml, blank app.xml identity fields */
+async function stripOoxmlMetadata(bytes: Uint8Array): Promise<Uint8Array> {
+  const zip = await JSZip.loadAsync(bytes);
+  if (zip.file("docProps/core.xml")) zip.file("docProps/core.xml", EMPTY_OOXML_CORE);
+  zip.remove("docProps/custom.xml");
+  const app = zip.file("docProps/app.xml");
+  if (app) {
+    let xml = await app.async("string");
+    xml = xml
+      .replace(/<Company>[\s\S]*?<\/Company>/g, "<Company></Company>")
+      .replace(/<Manager>[\s\S]*?<\/Manager>/g, "<Manager></Manager>");
+    zip.file("docProps/app.xml", xml);
+  }
+  return await zip.generateAsync({ type: "uint8array" });
+}
+
+/** Strip ODF metadata: replace meta.xml, rebuilding so "mimetype" stays first and uncompressed */
+async function stripOdfMetadata(bytes: Uint8Array): Promise<Uint8Array> {
+  const src = await JSZip.loadAsync(bytes);
+  const out = new JSZip();
+  const mt = src.file("mimetype");
+  if (mt) out.file("mimetype", await mt.async("uint8array"), { compression: "STORE" });
+  for (const name of Object.keys(src.files)) {
+    if (name === "mimetype") continue;
+    const entry = src.files[name];
+    if (entry.dir) { out.folder(name); continue; }
+    if (name === "meta.xml") { out.file("meta.xml", EMPTY_ODF_META); continue; }
+    out.file(name, await entry.async("uint8array"));
+  }
+  return await out.generateAsync({ type: "uint8array" });
+}
+
+/** Apply metadata stripping to image and document files if privacy mode is on */
 async function applyMetadataStrip(files: FileData[]): Promise<FileData[]> {
   if (!privacyMode) return files;
   const result: FileData[] = [];
   for (const f of files) {
     const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-    if (canvasStripExts.has(ext)) {
-      const stripped = await stripImageMetadata(f.bytes, ext);
-      result.push({ name: f.name, bytes: stripped });
-    } else if (bgRemovalExts.has(ext)) {
-      // gif/avif/tiff/bmp: a canvas can't faithfully re-encode these (it would
-      // fall back to PNG under the wrong extension), so remux through FFmpeg
-      // (-map_metadata -1, -c copy) to strip metadata without corruption.
-      try {
-        const stripped = await stripMetadataViaFFmpeg(f.bytes, ext);
-        result.push({ name: f.name, bytes: stripped });
-      } catch (e) {
-        console.warn(`Could not strip metadata from "${f.name}" via FFmpeg; leaving file intact.`, e);
+    try {
+      if (canvasStripExts.has(ext)) {
+        result.push({ name: f.name, bytes: await stripImageMetadata(f.bytes, ext) });
+      } else if (bgRemovalExts.has(ext)) {
+        // gif/avif/tiff/bmp: a canvas can't faithfully re-encode these (it would
+        // fall back to PNG under the wrong extension), so remux through FFmpeg
+        // (-map_metadata -1, -c copy) to strip metadata without corruption.
+        result.push({ name: f.name, bytes: await stripMetadataViaFFmpeg(f.bytes, ext) });
+      } else if (ext === "pdf") {
+        result.push({ name: f.name, bytes: await stripPdfMetadata(f.bytes) });
+      } else if (ooxmlExts.has(ext)) {
+        result.push({ name: f.name, bytes: await stripOoxmlMetadata(f.bytes) });
+      } else if (odfExts.has(ext)) {
+        result.push({ name: f.name, bytes: await stripOdfMetadata(f.bytes) });
+      } else {
         result.push(f);
       }
-    } else {
+    } catch (e) {
+      console.warn(`Could not strip metadata from "${f.name}"; leaving file intact.`, e);
       result.push(f);
     }
   }
