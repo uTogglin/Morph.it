@@ -113,6 +113,12 @@ class ImageMagickHandler implements FormatHandler {
     const inputSettings = new MagickReadSettings();
     inputSettings.format = inputMagickFormat;
 
+    // Privacy mode: strip EXIF/GPS/ICC/XMP profiles + comments. ImageMagick
+    // copies these across by default, and applyMetadataStrip can't re-strip
+    // formats outside its allowlist (jxl, heic, jp2, tga, psd, …).
+    let stripMeta = false;
+    try { stripMeta = localStorage.getItem("convert-privacy") === "true"; } catch {}
+
 
     const bytes: Uint8Array = await new Promise(resolve => {
       MagickImageCollection.use(outputCollection => {
@@ -131,6 +137,7 @@ class ImageMagickHandler implements FormatHandler {
                 const geometry = new MagickGeometry(256, 256);
                 image.resize(geometry);
               }
+              if (stripMeta) image.strip();
               outputCollection.push(image);
             }
           });

@@ -2830,15 +2830,20 @@ export function initPdfEditorTool() {
         pdfPage.drawImage(pngImage, { x: 0, y: 0, width, height });
       }
 
-      // Strip all PDF metadata when redactions are present
+      // Strip all PDF metadata when redactions are present, or when privacy mode is on
       const hasAnyRedactions = [...pagesWithRedactions].some(id => id < 100000);
-      if (hasAnyRedactions) {
+      let privacyOn = false;
+      try { privacyOn = localStorage.getItem("convert-privacy") === "true"; } catch {}
+      if (hasAnyRedactions || privacyOn) {
         outPdf.setTitle("");
         outPdf.setSubject("");
         outPdf.setAuthor("");
         outPdf.setKeywords([]);
         outPdf.setCreator("");
         outPdf.setProducer("");
+        const epoch = new Date(0);
+        outPdf.setCreationDate(epoch);
+        outPdf.setModificationDate(epoch);
         try {
           const catalog = outPdf.context.lookup(outPdf.context.trailerInfo.Root) as any;
           if (catalog?.delete) catalog.delete(PDFName.of("Metadata"));
