@@ -2,7 +2,7 @@ import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { cdnUrlPreload } from "./cdn.ts";
 import {
   PLAY_SVG, PAUSE_SVG,
-  formatTime, buildWordSpans, buildTimings,
+  formatTime, buildWordSpans, buildTimings, chunkTextForTTS,
   updateWordHighlight, buildSentenceTimings,
   type WordTiming, type SentenceTiming, type HighlightState,
 } from "./utils/tts-player.ts";
@@ -68,12 +68,26 @@ function createKokoroWorker() {
 }
 
 const kokoroProxy = {
-  generate(text: string, opts: { voice: string; speed: number }): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const id = ++kokoroGenId;
-      pendingGens.set(id, { resolve, reject });
-      kokoroWorker!.postMessage({ type: 'generate', id, text, voice: opts.voice, speed: opts.speed });
-    });
+  // Retry each chunk a couple of times: on a long document a single transient
+  // failure (GPU hiccup, a stray empty-audio result) would otherwise abort the
+  // whole job after most of the work is already done. The worker already falls
+  // back GPU→CPU internally, so a retry mostly covers the rare empty result.
+  async generate(text: string, opts: { voice: string; speed: number }): Promise<any> {
+    const MAX_ATTEMPTS = 3;
+    let lastErr: any;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        return await new Promise((resolve, reject) => {
+          const id = ++kokoroGenId;
+          pendingGens.set(id, { resolve, reject });
+          kokoroWorker!.postMessage({ type: 'generate', id, text, voice: opts.voice, speed: opts.speed });
+        });
+      } catch (err) {
+        lastErr = err;
+        if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 300 * attempt));
+      }
+    }
+    throw lastErr;
   }
 };
 
@@ -483,20 +497,10 @@ export function initSpeechTool() {
 
       console.log("[Kokoro TTS] Starting generation...", { voice, speed, textLength: text.length });
 
-      // Split text into sentence-sized chunks for generate()
-      // (stream() hangs on WebGPU, so we chunk manually)
-      const sentences = text.match(/.*?[.!?]+\s*|.+$/gs) || [text];
-      const chunks: string[] = [];
-      let current = "";
-      for (const s of sentences) {
-        if (current.length + s.length > 300 && current) {
-          chunks.push(current.trim());
-          current = s;
-        } else {
-          current += s;
-        }
-      }
-      if (current.trim()) chunks.push(current.trim());
+      // Split text into model-sized chunks for generate() (stream() hangs on
+      // WebGPU, so we chunk manually). chunkTextForTTS also hard-splits any
+      // single over-long sentence so long blocks don't truncate to empty audio.
+      const chunks = chunkTextForTTS(text);
 
       // Build word display from chunks (same source as buildTimings)
       const wordSpans = buildWordSpans(wordDisplay, chunks);

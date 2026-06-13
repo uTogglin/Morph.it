@@ -2,7 +2,7 @@ import { getKokoro, encodeWavFromChunks } from "./speech-tool.js";
 import { getOcrWorker, setOcrProgress } from "./ocr-worker.js";
 import {
   PLAY_SVG, PAUSE_SVG,
-  formatTime, buildWordSpans, buildTimings,
+  formatTime, buildWordSpans, buildTimings, chunkTextForTTS,
   updateWordHighlight, buildSentenceTimings,
   type WordTiming, type SentenceTiming, type HighlightState,
 } from "./utils/tts-player.ts";
@@ -337,14 +337,7 @@ export function initOcrTool() {
       const chunkMeta: Array<{ text: string; samples: number }> = [];
       let sampleRate = 24000;
 
-      const sentences = text.match(/.*?[.!?]+\s*|.+$/gs) || [text];
-      const chunks: string[] = [];
-      let cur = "";
-      for (const s of sentences) {
-        if (cur.length + s.length > 300 && cur) { chunks.push(cur.trim()); cur = s; }
-        else cur += s;
-      }
-      if (cur.trim()) chunks.push(cur.trim());
+      const chunks = chunkTextForTTS(text);
 
       const wordSpans = buildWordSpans(wordDisplay, chunks);
 

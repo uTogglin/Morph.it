@@ -30,6 +30,63 @@ export function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+// ── Split text into TTS-sized chunks ───────────────────────────────────────
+/**
+ * Split text into Kokoro-sized chunks.
+ *
+ * Sentences are grouped together up to ~`maxLen` characters. Critically, a
+ * single sentence longer than `maxLen` — run-on text, a long list, or OCR
+ * output with no terminal punctuation — is hard-split on word (then character)
+ * boundaries. Without this, an over-long chunk is silently truncated or returns
+ * empty audio from the model, which is the main reason long text blocks read
+ * back incompletely.
+ */
+export function chunkTextForTTS(text: string, maxLen = 300): string[] {
+  const sentences = text.match(/.*?[.!?]+\s*|.+$/gs) || [text];
+  const chunks: string[] = [];
+  let cur = "";
+  const flush = () => { const t = cur.trim(); if (t) chunks.push(t); cur = ""; };
+
+  for (const s of sentences) {
+    if (s.length > maxLen) {
+      // The sentence alone exceeds a whole chunk — flush what we have, then
+      // break the sentence down so no chunk overruns the model's input limit.
+      flush();
+      for (const piece of splitOversized(s, maxLen)) chunks.push(piece);
+    } else if (cur.length + s.length > maxLen && cur) {
+      flush();
+      cur = s;
+    } else {
+      cur += s;
+    }
+  }
+  flush();
+  return chunks.length ? chunks : [text.trim()].filter(Boolean);
+}
+
+/** Hard-split a single over-long run of text on word, then character, boundaries. */
+function splitOversized(s: string, maxLen: number): string[] {
+  const out: string[] = [];
+  let cur = "";
+  const flush = () => { const t = cur.trim(); if (t) out.push(t); cur = ""; };
+
+  for (const tok of s.split(/(\s+)/)) {
+    if (tok.length > maxLen) {
+      // A single token longer than a whole chunk (e.g. a long URL or an
+      // unspaced CJK run) — flush, then cut it into maxLen-sized pieces.
+      flush();
+      for (let i = 0; i < tok.length; i += maxLen) out.push(tok.slice(i, i + maxLen));
+    } else if (cur.length + tok.length > maxLen && cur.trim()) {
+      flush();
+      cur = tok;
+    } else {
+      cur += tok;
+    }
+  }
+  flush();
+  return out;
+}
+
 // ── Build word display with spans ──────────────────────────────────────────
 export function buildWordSpans(container: HTMLElement, chunks: string[]): HTMLSpanElement[] {
   container.innerHTML = "";

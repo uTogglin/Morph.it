@@ -2,7 +2,7 @@ import JSZip from "jszip";
 import { getKokoro, encodeWavFromChunks } from "./speech-tool.js";
 import {
   PLAY_SVG, PAUSE_SVG,
-  formatTime, buildWordSpans, buildTimings,
+  formatTime, buildWordSpans, buildTimings, chunkTextForTTS,
   updateWordHighlight,
   type WordTiming, type HighlightState,
 } from "./utils/tts-player.ts";
@@ -515,15 +515,8 @@ export function initSummarizeTool() {
       const chunkMeta: Array<{ text: string; samples: number }> = [];
       let sampleRate = 24000;
 
-      // Split into sentence-sized chunks
-      const sentences = text.match(/.*?[.!?]+\s*|.+$/gs) || [text];
-      const chunks: string[] = [];
-      let cur = "";
-      for (const s of sentences) {
-        if (cur.length + s.length > 300 && cur) { chunks.push(cur.trim()); cur = s; }
-        else cur += s;
-      }
-      if (cur.trim()) chunks.push(cur.trim());
+      // Split into model-sized chunks (hard-splits any over-long sentence too)
+      const chunks = chunkTextForTTS(text);
 
       const wordSpans = buildWordSpans(wordDisplay, chunks);
 
