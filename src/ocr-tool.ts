@@ -1,4 +1,4 @@
-import { getKokoro, encodeWav } from "./speech-tool.js";
+import { getKokoro, encodeWavFromChunks } from "./speech-tool.js";
 import { getOcrWorker, setOcrProgress } from "./ocr-worker.js";
 import {
   PLAY_SVG, PAUSE_SVG,
@@ -368,11 +368,6 @@ export function initOcrTool() {
       ttsProgressText.textContent = "Encoding audio...";
       ttsFreezeWarn.classList.add("hidden");
 
-      const total = audioChunks.reduce((s, c) => s + c.length, 0);
-      const full = new Float32Array(total);
-      let off = 0;
-      for (const c of audioChunks) { full.set(c, off); off += c.length; }
-
       wordTimings = buildTimings(chunkMeta, sampleRate, wordSpans);
       activeWordIdx = -1;
       activeSentenceIdx = -1;
@@ -380,7 +375,9 @@ export function initOcrTool() {
       // Build sentence timings from chunks
       sentenceTimings = buildSentenceTimings(chunkMeta, sampleRate);
 
-      const wavBlob = encodeWav(full, sampleRate);
+      // Encode straight from the chunks (releasing each as it's written) so a
+      // long document doesn't hold a second full-size copy and crash the tab.
+      const wavBlob = encodeWavFromChunks(audioChunks, sampleRate);
       if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
       ttsAudioUrl = URL.createObjectURL(wavBlob);
       ttsAudio.src = ttsAudioUrl;

@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { getKokoro, encodeWav } from "./speech-tool.js";
+import { getKokoro, encodeWavFromChunks } from "./speech-tool.js";
 import {
   PLAY_SVG, PAUSE_SVG,
   formatTime, buildWordSpans, buildTimings,
@@ -547,16 +547,13 @@ export function initSummarizeTool() {
       ttsProgressText.textContent = "Encoding audio...";
       ttsFreezeWarn.classList.add("hidden");
 
-      // Concatenate
-      const total = audioChunks.reduce((s, c) => s + c.length, 0);
-      const full = new Float32Array(total);
-      let off = 0;
-      for (const c of audioChunks) { full.set(c, off); off += c.length; }
-
       wordTimings = buildTimings(chunkMeta, sampleRate, wordSpans);
       activeWordIdx = -1;
 
-      const wavBlob = encodeWav(full, sampleRate);
+      // Encode straight from the chunks (releasing each as it's written) rather
+      // than concatenating into one big Float32Array first — halves peak memory
+      // so long recordings don't OOM-crash the tab.
+      const wavBlob = encodeWavFromChunks(audioChunks, sampleRate);
       if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
       ttsAudioUrl = URL.createObjectURL(wavBlob);
       ttsAudio.src = ttsAudioUrl;

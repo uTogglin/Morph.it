@@ -137,15 +137,13 @@ export function spokenWeight(word: string): number {
 }
 
 // ── WAV encoder for concatenated Float32Array chunks ───────────────────────
-export function encodeWav(samples: Float32Array, sampleRate: number): Blob {
+/** Write the 44-byte WAV / 16-bit-PCM-mono header into `view` for `totalSamples`. */
+function writeWavHeader(view: DataView, sampleRate: number, totalSamples: number) {
   const numChannels = 1;
   const bitsPerSample = 16;
   const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
   const blockAlign = numChannels * (bitsPerSample / 8);
-  const dataSize = samples.length * (bitsPerSample / 8);
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
+  const dataSize = totalSamples * (bitsPerSample / 8);
   // RIFF header
   writeString(view, 0, "RIFF");
   view.setUint32(4, 36 + dataSize, true);
@@ -162,6 +160,12 @@ export function encodeWav(samples: Float32Array, sampleRate: number): Blob {
   // data chunk
   writeString(view, 36, "data");
   view.setUint32(40, dataSize, true);
+}
+
+export function encodeWav(samples: Float32Array, sampleRate: number): Blob {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  writeWavHeader(view, sampleRate, samples.length);
 
   // Write PCM samples (float → 16-bit int)
   let offset = 44;
@@ -169,6 +173,38 @@ export function encodeWav(samples: Float32Array, sampleRate: number): Blob {
     const s = Math.max(-1, Math.min(1, samples[i]));
     view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
     offset += 2;
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+const EMPTY_F32 = new Float32Array(0);
+
+/**
+ * Encode a list of audio chunks straight to a WAV Blob, without first
+ * concatenating them into one giant Float32Array. Each chunk is dropped from
+ * the array as soon as it's written, so peak memory is roughly half that of
+ * the concatenate-then-encode approach. This is what keeps long recordings
+ * (e.g. reading a whole OCR'd document aloud) from OOM-crashing the tab.
+ *
+ * NOTE: empties the passed `chunks` array as a side effect.
+ */
+export function encodeWavFromChunks(chunks: Float32Array[], sampleRate: number): Blob {
+  let totalSamples = 0;
+  for (const c of chunks) totalSamples += c.length;
+
+  const buffer = new ArrayBuffer(44 + totalSamples * 2);
+  const view = new DataView(buffer);
+  writeWavHeader(view, sampleRate, totalSamples);
+
+  let offset = 44;
+  for (let ci = 0; ci < chunks.length; ci++) {
+    const c = chunks[ci];
+    for (let i = 0; i < c.length; i++) {
+      const s = Math.max(-1, Math.min(1, c[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+    chunks[ci] = EMPTY_F32; // release the source chunk for GC as we go
   }
   return new Blob([buffer], { type: "audio/wav" });
 }
@@ -507,15 +543,6 @@ export function initSpeechTool() {
       ttsProgressText.textContent = "Encoding audio...";
       freezeWarning.classList.add("hidden");
 
-      // Concatenate all chunks into one Float32Array
-      const totalSamples = audioChunks.reduce((sum, c) => sum + c.length, 0);
-      const fullAudio = new Float32Array(totalSamples);
-      let offset = 0;
-      for (const chunk of audioChunks) {
-        fullAudio.set(chunk, offset);
-        offset += chunk.length;
-      }
-
       // Build word timing map
       wordTimings = buildTimings(chunkMeta, sampleRate, wordSpans);
       activeWordIdx = -1;
@@ -524,8 +551,10 @@ export function initSpeechTool() {
       // Build sentence timings from chunks
       sentenceTimings = buildSentenceTimings(chunkMeta, sampleRate);
 
-      // Encode to WAV
-      currentWavBlob = encodeWav(fullAudio, sampleRate);
+      // Encode straight from the chunks (releasing each as it's written) rather
+      // than concatenating into one big Float32Array first — halves peak memory
+      // so long recordings don't OOM-crash the tab.
+      currentWavBlob = encodeWavFromChunks(audioChunks, sampleRate);
 
       // Load into audio player
       if (currentAudioUrl) URL.revokeObjectURL(currentAudioUrl);
