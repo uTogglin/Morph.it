@@ -21,7 +21,7 @@ ctx.onmessage = async (e: MessageEvent) => {
       ctx.postMessage({ type: "progress", pct: 0, msg: `Loading Kokoro model (${device})...` });
 
       let lastUpdate = 0;
-      tts = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
+      const loadModel = () => KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
         dtype: dtype as any,
         device: device as any,
         progress_callback: (info: any) => {
@@ -37,13 +37,33 @@ ctx.onmessage = async (e: MessageEvent) => {
         },
       });
 
+      // The model is large and downloaded as several shards; a single transient
+      // network blip shouldn't be fatal. Retry a few times with backoff before
+      // giving up — already-fetched shards come from cache, so retries resume
+      // quickly rather than restarting the whole download.
+      const MAX_ATTEMPTS = 3;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          tts = await loadModel();
+          break;
+        } catch (err: any) {
+          if (attempt >= MAX_ATTEMPTS) throw err;
+          ctx.postMessage({ type: "progress", pct: 0, msg: `Download failed — retrying (${attempt + 1}/${MAX_ATTEMPTS})…` });
+          await new Promise((r) => setTimeout(r, 1500 * attempt));
+        }
+      }
+
       // WebGPU fix: patch model.__call__ to force tensor readback to CPU
       patchWebGPUReadback(tts.model, device, "Kokoro Worker");
 
       console.log("[Kokoro Worker] Model loaded");
       ctx.postMessage({ type: "ready" });
     } catch (err: any) {
-      ctx.postMessage({ type: "error", message: err?.message || "Failed to load Kokoro model" });
+      const raw = err?.message || "Failed to load Kokoro model";
+      const friendly = /network|fetch|load failed|timed? ?out/i.test(raw)
+        ? "Network error downloading the TTS model. Check your connection and try again."
+        : raw;
+      ctx.postMessage({ type: "error", message: friendly });
     }
     return;
   }
