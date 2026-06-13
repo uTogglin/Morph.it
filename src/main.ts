@@ -4503,8 +4503,22 @@ ui.convertButton.onclick = async function () {
 
       // Image tools: processing now handled via miniPaint action bar
       {
-        for (const f of fileData) {
-          downloadFile(f.bytes, f.name);
+        if (fileData.length === 1) {
+          downloadFile(fileData[0].bytes, fileData[0].name);
+        } else if (archiveMultiOutput) {
+          const zip = new JSZip();
+          for (let i = 0; i < fileData.length; i++) {
+            zip.file(fileData[i].name, fileData[i].bytes);
+            if (i % 10 === 9) {
+              await new Promise(r => requestAnimationFrame(r));
+            }
+          }
+          const zipBytes = await zip.generateAsync({ type: "uint8array" });
+          downloadFile(zipBytes, "processed.zip");
+        } else {
+          for (const f of fileData) {
+            downloadFile(f.bytes, f.name);
+          }
         }
 
         const totalSize = fileData.reduce((s, f) => s + f.bytes.length, 0);
@@ -4513,6 +4527,7 @@ ui.convertButton.onclick = async function () {
           `<h2>Processed ${fileData.length} file${fileData.length !== 1 ? "s" : ""}!</h2>` +
           `<p>Total size: ${formatFileSize(totalSize)}</p>` +
           compressionHtml +
+          (fileData.length > 1 && archiveMultiOutput ? `<p>Results delivered as a ZIP archive.</p>` : ``) +
           `<button onclick="window.hidePopup()">OK</button>`
         );
       }
@@ -4834,8 +4849,22 @@ ui.convertButton.onclick = async function () {
 
         if (queueSuccessFiles.length > 0) {
           const processedQueueFiles = await applyToolProcessing(queueSuccessFiles);
-          for (const file of processedQueueFiles) {
-            downloadFile(file.bytes, file.name);
+          if (processedQueueFiles.length === 1) {
+            downloadFile(processedQueueFiles[0].bytes, processedQueueFiles[0].name);
+          } else if (archiveMultiOutput) {
+            const zip = new JSZip();
+            for (let i = 0; i < processedQueueFiles.length; i++) {
+              zip.file(processedQueueFiles[i].name, processedQueueFiles[i].bytes);
+              if (i % 10 === 9) {
+                await new Promise(r => requestAnimationFrame(r));
+              }
+            }
+            const zipBytes = await zip.generateAsync({ type: "uint8array" });
+            downloadFile(zipBytes, "converted.zip");
+          } else {
+            for (const file of processedQueueFiles) {
+              downloadFile(file.bytes, file.name);
+            }
           }
         } else if (queueFailures.length > 0) {
           window.showPopup(
@@ -5034,8 +5063,22 @@ ui.convertButton.onclick = async function () {
       }
 
       const processedSingleFiles = await applyToolProcessing(singleResults);
-      for (const file of processedSingleFiles) {
-        downloadFile(file.bytes, file.name);
+      if (processedSingleFiles.length === 1) {
+        downloadFile(processedSingleFiles[0].bytes, processedSingleFiles[0].name);
+      } else if (archiveMultiOutput) {
+        const zip = new JSZip();
+        for (let i = 0; i < processedSingleFiles.length; i++) {
+          zip.file(processedSingleFiles[i].name, processedSingleFiles[i].bytes);
+          if (i % 10 === 9) {
+            await new Promise(r => requestAnimationFrame(r));
+          }
+        }
+        const zipBytes = await zip.generateAsync({ type: "uint8array" });
+        downloadFile(zipBytes, "converted.zip");
+      } else {
+        for (const file of processedSingleFiles) {
+          downloadFile(file.bytes, file.name);
+        }
       }
 
       const singleTotalSize = processedSingleFiles.reduce((s, f) => s + f.bytes.length, 0);
@@ -5054,6 +5097,7 @@ ui.convertButton.onclick = async function () {
         compressionHtml +
         singleFailureHtml +
         singleSkippedHtml +
+        (processedSingleFiles.length > 1 && archiveMultiOutput ? `<p>Results delivered as a ZIP archive.</p>` : ``) +
         `<div class="popup-actions">` +
         getClipboardCopyHtml(processedSingleFiles, outputOption.format.mime) +
         `<button onclick="window.hidePopup()">OK</button>` +
