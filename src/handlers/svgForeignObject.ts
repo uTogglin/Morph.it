@@ -18,54 +18,63 @@ class svgForeignObjectHandler implements FormatHandler {
   }
 
   static async normalizeHTML (html: string) {
-    // To get the size of the input document, we need the
-    // browser to actually render it.
-    // Create a hidden "dummy" element on the DOM.
-    const dummy = document.createElement("div");
-    dummy.style.all = "initial";
-    dummy.style.visibility = "hidden";
-    dummy.style.position = "fixed";
-    document.body.appendChild(dummy);
+    // To get the size of the input document, we need the browser to actually
+    // render it. Render inside a sandboxed iframe with scripting DISABLED so
+    // hostile markup (e.g. `<img src=x onerror=...>`) can't execute during
+    // conversion. The sandbox grants "allow-same-origin" only — that lets us
+    // read the frame's document for measurement/serialization, while the absence
+    // of "allow-scripts" keeps inline event handlers and <script> tags inert.
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("sandbox", "allow-same-origin");
+    iframe.style.visibility = "hidden";
+    iframe.style.position = "fixed";
+    iframe.style.left = "-99999px";
+    iframe.style.top = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
 
-    // Add a DOM shadow to the dummy to "sterilize" it.
-    const shadow = dummy.attachShadow({ mode: "closed" });
-    const style = document.createElement("style");
-    style.textContent = ":host>div{display:flow-root;}";
-    shadow.appendChild(style);
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc) throw new Error("Could not access sandboxed iframe document.");
 
-    // Create a div within the shadow DOM to act as
-    // a container for our HTML payload.
-    const container = document.createElement("div");
-    container.innerHTML = html;
-    shadow.appendChild(container);
+      // Reset default margins; display:flow-root on the container so child
+      // margins are contained in the measured bounding box (matches the previous
+      // shadow-DOM behaviour). Built via DOM APIs to avoid deprecated document.write.
+      const style = doc.createElement("style");
+      style.textContent = "html,body{margin:0;padding:0;}#__svgfo{display:flow-root;}";
+      doc.head.appendChild(style);
 
-    // Wait for all images to finish loading. This is required for layout
-    // changes, not because we actually care about the image contents.
-    const images = container.querySelectorAll("img, video");
-    const promises = Array.from(images).map(image => new Promise(resolve => {
-      image.addEventListener("load", resolve);
-      image.addEventListener("loadeddata", resolve);
-      image.addEventListener("error", resolve);
-    }));
-    await Promise.all(promises);
+      const container = doc.createElement("div");
+      container.id = "__svgfo";
+      doc.body.appendChild(container);
+      container.innerHTML = html;
 
-    // Make sure the browser has had time to render.
-    // This is probably redundant due to the async calls above.
-    await new Promise(resolve => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(resolve);
+      // Wait for images/videos to finish loading so layout is final — but cap
+      // the wait so a hung resource can't stall the conversion. The listeners are
+      // registered from this (scripted) context; the iframe itself stays unscripted.
+      const media = container.querySelectorAll("img, video");
+      const mediaLoaded = Promise.all(Array.from(media).map(el => new Promise<void>(resolve => {
+        el.addEventListener("load", () => resolve());
+        el.addEventListener("loadeddata", () => resolve());
+        el.addEventListener("error", () => resolve());
+      })));
+      await Promise.race([mediaLoaded, new Promise(resolve => setTimeout(resolve, 3000))]);
+
+      // Make sure the browser has had time to render.
+      await new Promise(resolve => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(resolve);
+        });
       });
-    });
 
-    // Finally, get the bounding box of the input and serialize it to XML.
-    const bbox = container.getBoundingClientRect();
-    const serializer = new XMLSerializer();
-    const xml = serializer.serializeToString(container);
+      // Finally, get the bounding box of the input and serialize it to XML.
+      const bbox = container.getBoundingClientRect();
+      const xml = new XMLSerializer().serializeToString(container);
 
-    container.remove();
-    dummy.remove();
-
-    return { xml, bbox };
+      return { xml, bbox };
+    } finally {
+      iframe.remove();
+    }
   }
 
   async doConvert (
