@@ -704,6 +704,27 @@ async function showCompressPopup(html: string) {
   await yieldToBrowser();
 }
 
+/**
+ * Strip metadata from a file by remuxing through FFmpeg with -map_metadata -1.
+ * Uses -c copy so streams are passed through untouched (no re-encode) — lossless
+ * and preserves animation/quality. For image/container formats a canvas can't
+ * faithfully re-encode (gif, avif, tiff, bmp).
+ */
+export async function stripMetadataViaFFmpeg(bytes: Uint8Array, ext: string): Promise<Uint8Array> {
+  const ff = await getFFmpeg();
+  const inputName = "strip_input." + ext;
+  const outputName = "strip_output." + ext;
+  await ff.writeFile(inputName, bytes);
+  try {
+    await ffExec(["-hide_banner", "-y", "-i", inputName, "-map_metadata", "-1", "-c", "copy", outputName]);
+    const data = await ff.readFile(outputName);
+    return ensureUint8Array(data);
+  } finally {
+    try { await ff.deleteFile(inputName); } catch {}
+    try { await ff.deleteFile(outputName); } catch {}
+  }
+}
+
 export async function applyFileCompression(
   files: FileData[],
   targetBytes: number,

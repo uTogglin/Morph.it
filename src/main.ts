@@ -6,7 +6,7 @@ import { TraversionGraph, type DeadRoute } from "./TraversionGraph.js";
 import JSZip from "jszip";
 import { gzip as pakoGzip } from "pako";
 import { createTar } from "./handlers/archive.js";
-import { applyFileCompression } from "./compress.js";
+import { applyFileCompression, stripMetadataViaFFmpeg } from "./compress.js";
 
 import { generateSubtitles } from "./subtitle-generator.js";
 // The AI tools (speech, summarize, OCR, PDF editor, editor) and their heavy
@@ -2523,15 +2523,29 @@ async function stripImageMetadata(bytes: Uint8Array, ext: string): Promise<Uint8
   return new Uint8Array(await outBlob.arrayBuffer());
 }
 
+/** Image formats a canvas can faithfully re-encode (lossless metadata strip) */
+const canvasStripExts = new Set(["png", "jpg", "jpeg", "webp"]);
+
 /** Apply metadata stripping to all image files if privacy mode is on */
 async function applyMetadataStrip(files: FileData[]): Promise<FileData[]> {
   if (!privacyMode) return files;
   const result: FileData[] = [];
   for (const f of files) {
     const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-    if (bgRemovalExts.has(ext)) {
+    if (canvasStripExts.has(ext)) {
       const stripped = await stripImageMetadata(f.bytes, ext);
       result.push({ name: f.name, bytes: stripped });
+    } else if (bgRemovalExts.has(ext)) {
+      // gif/avif/tiff/bmp: a canvas can't faithfully re-encode these (it would
+      // fall back to PNG under the wrong extension), so remux through FFmpeg
+      // (-map_metadata -1, -c copy) to strip metadata without corruption.
+      try {
+        const stripped = await stripMetadataViaFFmpeg(f.bytes, ext);
+        result.push({ name: f.name, bytes: stripped });
+      } catch (e) {
+        console.warn(`Could not strip metadata from "${f.name}" via FFmpeg; leaving file intact.`, e);
+        result.push(f);
+      }
     } else {
       result.push(f);
     }
@@ -4346,7 +4360,11 @@ async function generateImageViaOpenRouter(
   // Build message content — multimodal if editing an existing image
   let userContent: any = prompt;
   if (inputImage) {
-    const bytes = new Uint8Array(inputImage);
+    let bytes: Uint8Array = new Uint8Array(inputImage);
+    // Privacy mode: strip metadata before the image leaves the device
+    if (privacyMode) {
+      try { bytes = await stripImageMetadata(bytes, "png"); } catch {}
+    }
     let b64 = "";
     // Convert to base64 in chunks to avoid call stack overflow
     const chunk = 8192;
