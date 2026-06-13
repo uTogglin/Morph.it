@@ -128,13 +128,31 @@ export function cdnUrlSync(key: AssetKey): string {
   return resolvedUrls.get(key) ?? CDN_MAP[key][CDN_MAP[key].length - 1];
 }
 
+/** In-flight resolution promises, so concurrent preloads share one HEAD probe. */
+const inflightResolves = new Map<AssetKey, Promise<string>>();
+
 /**
  * Pre-resolve a URL and cache it for synchronous access via cdnUrlSync().
+ *
+ * Idempotent: once resolved, repeat calls return the cached URL without
+ * re-probing the CDN. Concurrent calls for the same key share a single probe.
+ * This lets every consumer (FFmpeg reloads, compression, speech, subtitles…)
+ * resolve a given asset's URL at most once per session, app-wide.
  */
 export async function cdnUrlPreload(key: AssetKey): Promise<string> {
-  const url = await cdnUrl(key);
-  resolvedUrls.set(key, url);
-  return url;
+  const cached = resolvedUrls.get(key);
+  if (cached) return cached;
+
+  let inflight = inflightResolves.get(key);
+  if (!inflight) {
+    inflight = cdnUrl(key).then((url) => {
+      resolvedUrls.set(key, url);
+      inflightResolves.delete(key);
+      return url;
+    });
+    inflightResolves.set(key, inflight);
+  }
+  return inflight;
 }
 
 /**

@@ -1,6 +1,6 @@
 import type { FileData, FileFormat, FormatHandler } from "../FormatHandler.ts";
 import CommonFormats from "src/CommonFormats.ts";
-import { cdnFetch, cdnUrl } from "../cdn.ts";
+import { cdnFetch, cdnUrlPreload } from "../cdn.ts";
 import { buildWav } from "../utils/build-wav.ts";
 import { getBaseName } from "../utils/file-utils.ts";
 
@@ -102,7 +102,7 @@ class libopenmptHandler implements FormatHandler {
 
     // Load as a classic <script> tag so it is never run through Rollup/Vite's
     // module pipeline (which would break the Emscripten global-variable pattern).
-    const libopenmptJsUrl = await cdnUrl("libopenmptJs");
+    const libopenmptJsUrl = await cdnUrlPreload("libopenmptJs");
     await new Promise<void>((resolve, reject) => {
       const script = document.createElement("script");
       script.src = libopenmptJsUrl;

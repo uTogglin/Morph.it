@@ -1,7 +1,7 @@
 import type { FileData } from "./FormatHandler.ts";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import type { LogEvent } from "@ffmpeg/ffmpeg";
-import { cdnUrl } from "./cdn.ts";
+import { cdnUrlPreload } from "./cdn.ts";
 
 // ── Lazy FFmpeg instance for audio extraction ─────────────────────────────────
 let wavFFmpeg: FFmpeg | null = null;
@@ -9,7 +9,7 @@ let wavFFmpegReady: Promise<void> | null = null;
 
 async function getWavFFmpeg(): Promise<FFmpeg> {
   if (!wavFFmpeg) wavFFmpeg = new FFmpeg();
-  if (!wavFFmpegReady) wavFFmpegReady = wavFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
+  if (!wavFFmpegReady) wavFFmpegReady = wavFFmpeg.load({ coreURL: await cdnUrlPreload("ffmpegCore") }).then(() => {});
   await wavFFmpegReady;
   return wavFFmpeg;
 }
@@ -17,7 +17,7 @@ async function getWavFFmpeg(): Promise<FFmpeg> {
 async function reloadWavFFmpeg(): Promise<FFmpeg> {
   if (wavFFmpeg) wavFFmpeg.terminate();
   wavFFmpeg = new FFmpeg();
-  wavFFmpegReady = wavFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
+  wavFFmpegReady = wavFFmpeg.load({ coreURL: await cdnUrlPreload("ffmpegCore") }).then(() => {});
   await wavFFmpegReady;
   return wavFFmpeg;
 }

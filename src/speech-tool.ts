@@ -1,5 +1,5 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { cdnUrl } from "./cdn.ts";
+import { cdnUrlPreload } from "./cdn.ts";
 import {
   PLAY_SVG, PAUSE_SVG,
   formatTime, buildWordSpans, buildTimings,
@@ -13,7 +13,7 @@ let speechFFmpegReady: Promise<void> | null = null;
 
 async function getSpeechFFmpeg(): Promise<FFmpeg> {
   if (!speechFFmpeg) speechFFmpeg = new FFmpeg();
-  if (!speechFFmpegReady) speechFFmpegReady = speechFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
+  if (!speechFFmpegReady) speechFFmpegReady = speechFFmpeg.load({ coreURL: await cdnUrlPreload("ffmpegCore") }).then(() => {});
   await speechFFmpegReady;
   return speechFFmpeg;
 }

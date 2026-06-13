@@ -34,8 +34,8 @@ async function decodeWithFFmpeg(
   bytes: Uint8Array,
 ): Promise<{ samples: Float32Array; sampleRate: number; channels: number }> {
   const ffmpeg = new FFmpeg();
-  const { cdnUrl } = await import("../cdn.ts");
-  await ffmpeg.load({ coreURL: await cdnUrl("ffmpegCore") });
+  const { cdnUrlPreload } = await import("../cdn.ts");
+  await ffmpeg.load({ coreURL: await cdnUrlPreload("ffmpegCore") });
   await ffmpeg.writeFile("infile", bytes);
   // produce f32le raw samples with WAV header so we can parse sampleRate/channels
   try {

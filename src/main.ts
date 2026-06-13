@@ -9,11 +9,9 @@ import { createTar } from "./handlers/archive.js";
 import { applyFileCompression } from "./compress.js";
 
 import { generateSubtitles } from "./subtitle-generator.js";
-import { initSpeechTool } from "./speech-tool.js";
-import { initSummarizeTool } from "./summarize-tool.js";
-import { initOcrTool } from "./ocr-tool.js";
-import { initPdfEditorTool } from "./pdf-editor-tool.js";
-import { initEditorPage } from "./editor-page.js";
+// The AI tools (speech, summarize, OCR, PDF editor, editor) and their heavy
+// deps (e.g. @huggingface/transformers) are dynamically imported on first use
+// via ensureToolInit() — see below — to keep them out of the initial bundle.
 import { cachedFetch, requestPersistentStorage, showCachePrompt, clearModelCache, applyHfCachePolicy, getCacheStats, clearAllSiteData } from "./cached-fetch.js";
 import { cdnFetch } from "./cdn.js";
 
@@ -476,8 +474,8 @@ function formatTimeAgo(ts: number) {
 // ── Home page / tool navigation ──────────────────────────────────────────────
 /** Which tool view is active, or null when on the home page */
 let activeTool: "convert" | "compress" | "image" | "quick-image" | "speech" | "summarize" | "ocr" | "pdf-editor" | "editor" | null = null;
-let ocrTool: { stopTts: () => void };
-let speechTool: { stopTts: () => void };
+let ocrTool: { stopTts: () => void } | undefined;
+let speechTool: { stopTts: () => void } | undefined;
 
 const compressPage = document.querySelector("#compress-page") as HTMLElement;
 const imagePage = document.querySelector("#image-page") as HTMLElement;
@@ -488,13 +486,47 @@ const ocrPage = document.querySelector("#ocr-page") as HTMLElement;
 const pdfEditorPage = document.querySelector("#pdf-editor-page") as HTMLElement;
 const editorPage    = document.querySelector("#editor-page")     as HTMLElement;
 
+// ── Lazy AI-tool initialization ──────────────────────────────────────────────
+// Each tool module (and its heavy deps) is imported and initialized the first
+// time its view is opened, then memoized. This keeps speech/summarize/OCR/PDF/
+// editor code out of the initial bundle for users who never open those tools.
+const toolInitPromises = new Map<string, Promise<void>>();
+function ensureToolInit(tool: string): Promise<void> {
+  const existing = toolInitPromises.get(tool);
+  if (existing) return existing;
+  let p: Promise<void>;
+  switch (tool) {
+    case "speech":
+      p = import("./speech-tool.js").then(m => { speechTool = m.initSpeechTool(); });
+      break;
+    case "summarize":
+      p = import("./summarize-tool.js").then(m => { m.initSummarizeTool(); });
+      break;
+    case "ocr":
+      p = import("./ocr-tool.js").then(m => { ocrTool = m.initOcrTool(); });
+      break;
+    case "pdf-editor":
+      p = import("./pdf-editor-tool.js").then(m => { m.initPdfEditorTool(); });
+      break;
+    case "editor":
+      p = import("./editor-page.js").then(m => { m.initEditorPage(); });
+      break;
+    default:
+      return Promise.resolve();
+  }
+  // On failure, drop the memo so a later open can retry.
+  p = p.catch(err => { console.error(`[${tool}] init failed:`, err); toolInitPromises.delete(tool); });
+  toolInitPromises.set(tool, p);
+  return p;
+}
+
 function showHomePage() {
   // Clean up tool state when navigating away
   if (activeTool === "compress") compressResetState();
   if (activeTool === "image") imgResetState();
   if (activeTool === "quick-image") qiResetState();
-  if (activeTool === "ocr") ocrTool.stopTts();
-  if (activeTool === "speech") speechTool.stopTts();
+  if (activeTool === "ocr") ocrTool?.stopTts();
+  if (activeTool === "speech") speechTool?.stopTts();
   activeTool = null;
   document.body.classList.add("tool-view-hidden");
   document.body.removeAttribute("data-tool");
@@ -517,9 +549,11 @@ function showToolView(tool: "convert" | "compress" | "image" | "quick-image" | "
   if (activeTool === "compress" && tool !== "compress") compressResetState();
   if (activeTool === "image" && tool !== "image") imgResetState();
   if (activeTool === "quick-image" && tool !== "quick-image") qiResetState();
-  if (activeTool === "ocr" && tool !== "ocr") ocrTool.stopTts();
-  if (activeTool === "speech" && tool !== "speech") speechTool.stopTts();
+  if (activeTool === "ocr" && tool !== "ocr") ocrTool?.stopTts();
+  if (activeTool === "speech" && tool !== "speech") speechTool?.stopTts();
   activeTool = tool;
+  // Lazily load+init the tool module on first open (no-op for non-AI tools).
+  void ensureToolInit(tool);
   document.body.classList.remove("tool-view-hidden");
   document.body.setAttribute("data-tool", tool);
   ui.homePage.classList.add("hidden");
@@ -568,7 +602,6 @@ function showToolView(tool: "convert" | "compress" | "image" | "quick-image" | "
   } else if (tool === "editor") {
     editorPage.classList.remove("hidden");
     pageEl = editorPage;
-    try { initEditorPage(); } catch (err) { console.error('[editor] init failed:', err); }
   } else if (tool === "convert") {
     pageEl = document.getElementById("file-area");
   }
@@ -615,17 +648,8 @@ applyHfCachePolicy();
 // On first visit, ask user if they want to cache models locally.
 showCachePrompt();
 
-// Initialize speech tool
-speechTool = initSpeechTool();
-
-// Initialize summarize tool
-initSummarizeTool();
-
-// Initialize OCR tool
-ocrTool = initOcrTool();
-
-// Initialize PDF Editor tool
-initPdfEditorTool();
+// Speech, summarize, OCR and PDF-editor tools are initialized lazily on first
+// open via ensureToolInit() in showToolView() — no eager init at startup.
 
 // ── Speech settings panel ───────────────────────────────────────────────────
 // Restore saved values into settings selects
@@ -787,8 +811,8 @@ window.addEventListener("keydown", e => {
     // Priority 2: close TTS overlay (back to tool page)
     const ocrTtsOverlay = document.getElementById("ocr-tts-overlay");
     const speechTtsOverlay = document.getElementById("speech-tts-overlay");
-    if (activeTool === "ocr" && ocrTtsOverlay && !ocrTtsOverlay.classList.contains("hidden")) { ocrTool.stopTts(); return; }
-    if (activeTool === "speech" && speechTtsOverlay && !speechTtsOverlay.classList.contains("hidden")) { speechTool.stopTts(); return; }
+    if (activeTool === "ocr" && ocrTtsOverlay && !ocrTtsOverlay.classList.contains("hidden")) { ocrTool?.stopTts(); return; }
+    if (activeTool === "speech" && speechTtsOverlay && !speechTtsOverlay.classList.contains("hidden")) { speechTool?.stopTts(); return; }
     // Priority 3: go back to home from any tool page
     if (activeTool !== null) { showHomePage(); return; }
   }

@@ -2,7 +2,7 @@ import type { FileData } from "./FormatHandler.ts";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import type { LogEvent } from "@ffmpeg/ffmpeg";
 import { compressVideoWebCodecs, compressVideoVP9, isWebCodecsAvailable } from "./webcodecs-compress.ts";
-import { cdnUrl, cdnFetch } from "./cdn.ts";
+import { cdnUrlPreload, cdnFetch } from "./cdn.ts";
 
 const escHtml = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
@@ -45,7 +45,7 @@ let ffmpegReady: Promise<void> | null = null;
 
 async function getFFmpeg(): Promise<FFmpeg> {
   if (!compressFFmpeg) compressFFmpeg = new FFmpeg();
-  if (!ffmpegReady) ffmpegReady = compressFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
+  if (!ffmpegReady) ffmpegReady = compressFFmpeg.load({ coreURL: await cdnUrlPreload("ffmpegCore") }).then(() => {});
   await ffmpegReady;
   return compressFFmpeg;
 }
@@ -53,7 +53,7 @@ async function getFFmpeg(): Promise<FFmpeg> {
 async function reloadFFmpeg(): Promise<FFmpeg> {
   if (compressFFmpeg) compressFFmpeg.terminate();
   compressFFmpeg = new FFmpeg();
-  ffmpegReady = compressFFmpeg.load({ coreURL: await cdnUrl("ffmpegCore") }).then(() => {});
+  ffmpegReady = compressFFmpeg.load({ coreURL: await cdnUrlPreload("ffmpegCore") }).then(() => {});
   await ffmpegReady;
   return compressFFmpeg;
 }
